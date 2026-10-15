@@ -92,13 +92,11 @@ Measured against Baggins as it exists today:
 
 ## Extended (v1.x)
 
-- **search the bank while it is closed** — decided by issue #2, not by us. `C_Bank` has no item-reading
-  API, so bank contents come through the same container API as everything else: if the client keeps
-  answering bank container indices after the bank closes, this is nearly free (`FR-110`); if it does
-  not, it stays cut. **No snapshot either way** (`FR-109`)
-- **search alts, alt banks and the guild bank** by reading an existing maintained store when one is
-  installed — BagSync or Altoholic (which ships a Forever build). Never by building our own
-  (`FR-111`, `FR-112`)
+- **`BagsOfSortingAPI`** (`FR-113`): categories, rule trees, windows and sections exposed as plain
+  versioned data, so another addon — an alt-database addon — can classify *its* stored items with *our*
+  definitions instead of inventing its own
+- auto-sell of a designated trash category and/or greys at a vendor, gated and confirmable (`FR-65b`)
+- group bindings for dotted category families if real configs keep growing (`FR-11b`)
 
 ## Out of scope (v1) — named so nobody quietly adds them
 
@@ -117,10 +115,13 @@ Measured against Baggins as it exists today:
   feature on the roadmap — vendor buyback is limited, so anything that sells in bulk stays gated.
 - **A minimap icon.** Refused rather than deferred: the home is the Addon Compartment plus Options →
   AddOns, so LibDBIcon never enters the tree (`FR-123`).
-- **Persisting any inventory beyond the item cache.** No bank snapshot, no alt snapshot, no inventory
-  store (`FR-109`). Closed-bank search either reads containers the client already knows or does not
-  exist. A full "search everything offline" product is its **own addon** with its own persistence
-  (`docs/07` Q15).
+- **Offline search, in any form.** Not searching the bank while it is closed, not searching alts or alt
+  banks, not searching the guild bank. It ends in a trip to the bank anyway; it is incomplete the moment
+  the item turns out to be on another character; and "do I have this anywhere" is a database question
+  while this addon is a manipulation tool (`docs/07` Q15). What we ship instead is the classification,
+  as data another addon can use (`FR-113`).
+- **Persisting any inventory beyond the item cache** (`FR-109`). No bank snapshot, no alt snapshot, no
+  inventory store.
 - **Auctioning, mail, crafting queue integration.**
 - **Tooltip replacement.**
 - **Localization beyond enUS.**

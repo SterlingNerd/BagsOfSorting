@@ -278,44 +278,47 @@ and `## X-Wago-ID` already in the TOC. License: WTFPL (`LICENSE` at repo root, `
 
 ---
 
-## Q15 — How much inventory do we persist? — **DECIDED: none. The snapshot is deleted.**
+## Q15 — Offline search: bank while closed, alts, guild bank — **DECIDED: out of this addon entirely**
 
-Every earlier draft of this spec had a `snapshot` table for the bank, alts and guild bank. Checking the
-API removed the reason for it:
+Earlier drafts of this spec carried a `snapshot` table, a closed-bank search feature, and a plan to read
+BagSync or Altoholic. All three are deleted. Two things made that clear.
 
-- **`C_Bank` has no item-reading API.** Its entire surface is tabs, money and locks —
-  `FetchPurchasedBankTabIDs`, `FetchNumPurchasedBankTabs`, `FetchMaxNumBankTabs`,
-  `FetchDepositedMoney`, `AutoDepositItemsIntoBank`, `IsItemAllowedInBankType`, `CanUseBank`,
-  `CloseBankFrame`. Nothing returns an item.
-- **Bank contents therefore arrive through the container API** — the same
-  `C_Container.GetContainerItemLink(containerIndex, slotIndex)` we already call for backpack slots.
-  Harvesting the bank is the existing harvest loop pointed at different indices. There is no second
-  inventory system to build.
+**First, `C_Bank` reads no items.** Its entire surface is tabs, money and locks —
+`FetchPurchasedBankTabIDs`, `FetchNumPurchasedBankTabs`, `FetchMaxNumBankTabs`, `FetchDepositedMoney`,
+`AutoDepositItemsIntoBank`, `IsItemAllowedInBankType`, `CanUseBank`, `CloseBankFrame`,
+`UpdateBankTabSettings`. Bank contents arrive through the container API, exactly like backpack contents.
+So there was never a second inventory system to build — only a question of whether to *cache* one.
 
-So a snapshot bought exactly one thing: **searching the bank while it is closed.** That is not worth a
-store. Standing at the auction house, "you have 3 Linen Glyph in the bank (as of 20 minutes ago)" still
-ends with walking to the bank — the answer is not actionable, it only saves a walk. And it would be the
-one place in the design where we persist derived state we cannot validate, dragging in the
-staleness-honesty UI ("seen 4 min ago") that exists purely to stop us lying. Players already understand
-"bank search happens at the bank"; matching that model costs nothing and replacing it costs a subsystem.
+**Second, the feature does not survive contact with why you would want it.**
 
-**What replaces it is a flag, not a store:** *has the bank been opened this session*. Whether even that
-is needed is one check in issue #2 — if the client keeps answering bank container indices after the bank
-closes (which is why Bagnon-class addons can show bank items in tooltips after one visit), closed-bank
-search is **free**. If it does not, closed-bank search is **cut**, not built on invented data.
+1. **It ends in a trip to the bank anyway.** "You have 3 Linen Glyph in the bank" has one possible
+   follow-up action: walk to a bank. An answer you cannot act on is trivia, and it is the weakest answer
+   the question can have.
+2. **It is incomplete by construction.** The item is just as likely to be in an alt's bank. Answering
+   the question for one character is not answering it.
+3. **It is a different problem.** "Do I have this thing anywhere" is a *database* question — it needs
+   persistence, a results UI that is not a bag, and a privacy story. "Organise the stuff so I can
+   manipulate it" is a *manipulation* question, and that is what this addon is. Merging them gives us a
+   SavedVariables blob, a second UI paradigm inside the first, and a feature that still cannot find the
+   item half the time.
 
-| Feature | Status |
+**The split we chose instead: we own classification, an alt-database addon owns storage.** Our categories
+and rule trees become plain versioned data behind `BagsOfSortingAPI` (`FR-113`, Q22). An addon that
+persists what your characters have can then say "your mage has 4 items matching
+`Tradeskills.Enchanting`" using *our* rules. That is smaller than a snapshot and worth more: it helps
+every addon in that category instead of making us a worse version of one of them.
+
+| Question | Answer |
 |---|---|
 | Search the open bags | v1, `FR-50` |
-| Search the bank while the bank is open | v1, `FR-13` — it is just more harvested containers |
-| Search the bank while closed | `FR-110`, decided by issue #2. Free or cut; never persisted |
-| Search alts / alt banks | `FR-111`: read **BagSync** (20.x, active in 2026, publishes an LDB feed meant for other bag addons) or **Altoholic** (ships a Forever build, 1.60.x). If neither is installed, the feature is absent, not approximated |
-| Search the guild bank | `FR-112`, while the guild bank UI is open |
-| A Bagnon-compatible `AllInventory` for other addons | v2 at best, and only as a partial emulation of what this client currently knows — `FR-109` forbids the persisted version |
+| Search the bank while the bank is open | v1, `FR-13` — it is the same harvest loop on different indices |
+| Search the bank while closed | **out.** Not deferred — out |
+| Search alts / alt banks | **out of this addon.** Belongs to an alt-database addon, which reads our classification via `FR-113` |
+| Search the guild bank | **out.** Whether the guild bank is reachable as data at all is issue #11 — information that addon needs, not us |
+| Bagnon-compatible `AllInventory` published by us | **out.** It cannot be honest without persisted per-character data, which `FR-109` forbids |
 
-**Reopen trigger:** if reading BagSync/Altoholic turns out not to answer the question people actually
-ask, the honest answer is a **separate addon** with its own persistence and its own UI — not a snapshot
-smuggled into a bag addon.
+**Reopen trigger:** none inside this addon. If someone builds the alt-database addon and `FR-113` turns
+out to be the wrong shape for it, that is a bug in `FR-113`, not a reason to start storing inventories here.
 
 ## Q16 — Themes — **DECIDED: no theme system, use the client's own bag visuals**
 
@@ -402,12 +405,46 @@ reach, `RequestLoadItemDataByID` behaviour, coexistence runs) become GitHub issu
 `/script` snippets in the issue body, because that is where results get recorded, closed and linked to
 commits. Stabilised plans graduate into issues too. Docs keep *decisions*, issues keep *open work*.
 
+## Q22 — Is our config a public API? — **DECIDED: yes, as data, and that is the whole extent of it**
+
+`FR-113` exists because offline search left (`Q15`) and took the one genuinely interesting
+cross-addon idea with it. An alt-database addon can store what your characters have; what it cannot
+invent is what a *category* means. Ours is the thing it wants.
+
+**What we publish** — one guarded global, `BagsOfSortingAPI`:
+
+| Function | Purpose |
+|---|---|
+| `Version()` | lets another addon detect that our rule grammar changed before it misreads our data |
+| `Categories()` | the category names in this profile |
+| `Category(name)` | the rule tree, as plain data — the same structure the `BOS1.` export string carries |
+| `Matches(itemID, categoryName)` | our classifier's answer for one item, without the caller reimplementing the grammar |
+| `Export()` / `Import(string)` | the existing `BOS1.` string, exposed programmatically as well as by copy-paste |
+
+**What we do not publish:** no plugin API (`FR-32` stays Won't), no event bus, no LibDataBroker feed, no
+way for another addon to register a rule type, no hook into our rendering. Publishing *data* is a few
+dozens of lines and a version number. Publishing an *extension point* is a support obligation forever.
+
+Two consequences that must be honoured or the API is a trap:
+
+1. **The rule grammar is now a public format.** `BOS1.` and `Category(name)` are the same shape, so a
+   grammar change is a breaking change to someone else's addon. `docs/04`'s schema version and
+   `Version()` are what make that survivable; a grammar change gets a version bump and a migration note,
+   not a silent edit.
+2. **`Matches` must agree with our own classifier.** One classifier, one entry point. If the API ever
+   diverges from what the bags actually show, the API is a lie and should be deleted.
+
+**Needed:** nothing before M6. Build it when the first real consumer exists — an API with no consumer is
+just surface area. Issue #11 (is the guild bank reachable as data at all) is the nearest thing to a
+consumer question we have.
+
 ---
 
 ## Decisions needed **before M0 commits**
 
 Q1 (name), Q2 (dependencies), Q3 (section ↔ categories), Q5 (no migration), Q6 (export format),
-Q11 (Default + copy + link), Q14 (distribution), Q15 (bank snapshot only), Q16 (no themes),
+Q11 (Default + copy + link), Q14 (distribution), Q15 (no offline search, no snapshots), Q16 (no themes),
 Q17 (no DI), Q18 (group binding), Q19 (Ctrl+right-click), Q20 (help page), Q21 (issues not docs) are
-decided. Q8 (dynamic categories) must be re-confirmed against Q18 before M5. Everything else is
-decided at the milestone that needs it: Q4/Q9/Q13 at M2, Q7 at the M3→M4 boundary.
+decided. Q8 (dynamic categories) must be re-confirmed against Q18 before M5. Q22 (config as an API) is
+decided in principle and built only when a consumer exists. Everything else is decided at the milestone
+that needs it: Q4/Q9/Q13 at M2, Q7 at the M3→M4 boundary.

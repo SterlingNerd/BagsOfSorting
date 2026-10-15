@@ -233,19 +233,37 @@ loot a never-seen item, confirm it lands in the catch-all first and moves to the
 within 2 s; then `/script C_Item.RequestLoadItemDataByID(26042)` on an item never seen and confirm
 the pending button resolves without a reload.
 
-## I. Search beyond what is on screen
+## I. Search, and what search must never become
 
 | ID | P | Requirement |
 |---|---|---|
-| FR-109 | M | **Nothing derived is persisted except the item cache (`FR-97`).** No bank snapshot, no alt snapshot, no inventory store. This is a rule, not an absence: every earlier draft of this spec carried a `snapshot` table, and it is deleted. |
-| FR-110 | S | Search the **bank while it is closed**, with **no snapshot**. `C_Bank` has no item-reading API (verified: its whole surface is tabs, money and locks), so bank contents arrive only through the container API, exactly like backpack contents — harvesting the bank is the existing harvest loop pointed at bank container indices. Whether the client still answers those indices after the bank closes is issue #2: **if it does, this feature is free** — a "bank has been opened this session" flag and nothing else; **if it does not, this feature is cut** rather than built on a store we invent. Either way the UI never shows a confident empty result: it says "bank not known yet" and offers to open it. |
-| FR-111 | C | Search **alts and alt banks** by **reading an existing maintained addon**, never by building our own store: **BagSync** (v20.x, actively updated 2026, tracks per-character items/banks/guild bank and publishes an LDB feed explicitly intended for other bag addons) and **Altoholic** (which ships a **Forever-specific build**, currently 1.60.x, maintained by a fork rather than the original author). A guarded read of published data. If neither is installed the feature is absent, not approximated. |
-| FR-112 | C | Search the **guild bank** while the guild bank UI is open (`GUILDBANKFRAME_OPENED`), gated on the player's guild-bank permissions. Same container-API harvest, same no-persistence rule. |
+| FR-109 | M | **Nothing derived is persisted except the item cache (`FR-97`).** No bank snapshot, no alt snapshot, no inventory store. This is a rule, not an absence: earlier drafts of this spec carried a `snapshot` table and a closed-bank search feature, and both are deleted. |
+| FR-113 | S | **The config is an API.** Categories, their rule trees, windows and sections are exposed as plain versioned data — readable and writable from outside the addon — through `BagsOfSortingAPI`: `Version()`, `Categories()`, `Category(name)` → rule tree, `Matches(itemID, categoryName)` → bool, `Export()` / `Import(string)`. Same payload as the `BOS1.` export string (`docs/06` Q6), one guarded global, no plugin system, no event bus, no LibDataBroker. |
 
-**AC-110** log in, do not visit the bank, search "Linen Glyph": the result says the bank is unknown.
-Visit the bank, close it, search again: bank results appear without the bank being open, **and the
-SavedVariables file is the same size as before the search.** If issue #2 shows the client drops bank
-data when the bank closes, this AC is replaced by "the addon says it cannot know, and does not pretend".
+**Why offline search left this addon.** Three reasons, each sufficient on its own:
+
+1. **It ends in a trip to the bank anyway.** "You have 3 Linen Glyph in the bank" has exactly one
+   possible follow-up action, and it is walking to a bank. An answer that cannot be acted on is trivia.
+2. **It is incomplete by construction.** The item is just as likely to be in an alt's bank. A feature
+   that answers the question for one character is not answering the question.
+3. **It is a different problem.** "Do I have this thing anywhere" is a *database* question. "Organise the
+   stuff so I can manipulate it" is a *manipulation* question. This addon is the second one, and merging
+   the first into it means persisting inventory, a results UI that is not a bag, and a privacy story —
+   all to serve the weakest version of the answer.
+
+So the split is: **we own classification, an alt-database addon owns storage.** It persists what your
+characters have; we define what a category *means*; `FR-113` is how it gets our definitions so it can
+say "your mage has 4 items matching `Tradeskills.Enchanting`" using our rules rather than inventing its
+own. That is a smaller thing to build than a snapshot, and it is worth more to more people.
+
+Out of this addon entirely: searching the bank while it is closed, searching alts and alt banks,
+searching the guild bank (`docs/07` Q15). Whether the guild bank is even reachable as data is issue #11
+— an answer the alt-database addon needs, not us.
+
+**AC-109** `stat` the SavedVariables file before and after a session that opens the bank, searches, and
+reloads: no inventory blob.
+**AC-113** from another addon's `/script`: `BagsOfSortingAPI.Category("Herbs")` returns a rule tree that
+`BagsOfSortingAPI.Matches(26042, "Herbs")` agrees with our own classifier about, on the same item.
 
 ## J. Integrations (no vendored libraries)
 
@@ -256,7 +274,7 @@ data when the bank closes, this AC is replaced by "the addon says it cannot know
 | FR-122 | C | Pawn upgrade arrow via `PawnShouldItemLinkHaveUpgradeArrowUnbudgeted` when Pawn is loaded, behind our upgrade-provider seam (BetterBags `integrations/pawn.lua` shape). |
 | FR-123 | M | **No minimap button, and therefore no LibDBIcon.** The home is the Addon Compartment plus Options → AddOns (`FR-88`). A minimap icon is not a feature we are postponing; it is a feature we are not building. |
 | FR-124 | C | Coexistence tested against the addons actually installed here: `ForeverPlus` (which already repositions the vanilla bag window), `Leatrix_Plus` (which can `hooksecurefunc('OpenAllBags', CloseAllBags)`), `Baggins`, `BetterBags`. |
-| FR-125 | C | Optional integrations are **later additions, not requirements**: Pawn (`FR-122`), Masque (`FR-121`), BagSync/Altoholic as a data source (`FR-111`). Each is a guarded read of another addon's published data, never a dependency, never vendored. |
+| FR-125 | C | Optional integrations are **later additions, not requirements**: Pawn (`FR-122`), Masque (`FR-121`). Each is a guarded read of another addon's published data, never a dependency, never vendored. The reverse direction — us publishing our classification for an alt-database addon — is `FR-113`. |
 
 **AC-120** the addon appears in the Addon Compartment with our icon and opens configure mode.
 **AC-124** run each of the four alongside us and record what breaks in the coexistence issue.

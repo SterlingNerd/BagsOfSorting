@@ -325,20 +325,18 @@ Exit criteria
 
 Not milestones; a queue. Each gets a milestone only when the one before it ships.
 
-1. **Closed-bank search** (`FR-110`) — decided by issue #2, not by us. If the client keeps answering
-   bank container indices after the bank closes, this is a flag and a few lines of harvest. If it does
-   not, it stays cut. **No snapshot either way** (`FR-109`).
+1. **`BagsOfSortingAPI`** (`FR-113`) — categories and rule trees published as plain versioned data so an
+   alt-database addon can classify what it already stores with our definitions. Built when the first real
+   consumer exists; an API with no consumer is just surface area.
 2. **Auto-sell** (`FR-65b`) — a designated trash category and/or grey-quality items on opening a
    vendor, with a confirm and a global off switch. Deliberately after bulk sell has been used in the
    wild, because this is the feature that can sell something by accident.
 3. **Group bindings** (`FR-11b`) if category counts keep growing in real use — `Tradeskills.Enchanting ∗`
    binding a whole dotted family (`docs/07` Q18).
-4. **Read BagSync / Altoholic** (`FR-111`) for alt search, instead of building a store. Altoholic ships
-   a Forever build; BagSync publishes an LDB feed meant for exactly this.
-5. **Guild bank search** (`FR-112`).
 
-If alt/guild search keeps growing past that, it becomes **its own addon** with its own UI, and this one
-reads it the way it reads BagSync (`docs/07` Q15).
+Offline search is **not in this queue** — it is out of the product (`FR-109`, `docs/07` Q15). If it is
+ever built, it is its own addon with its own storage and its own UI, and it reads `FR-113` the way it
+would read any other addon's data.
 
 Exit criteria: installable from a release zip into `../addons/` with no dev tooling, on a character
 that has never had the addon, with the first-run experience tested by someone else.

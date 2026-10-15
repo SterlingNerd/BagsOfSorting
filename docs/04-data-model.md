@@ -220,6 +220,10 @@ BOS1.<base64( json-ish serialize({windows, categories}) )>
 ```
 
 - `BOS1` prefix carries the format version; a mismatched prefix is a hard, explained refusal.
+- **This serialization is also the public API payload** (`FR-113`): `BagsOfSortingAPI.Category(name)`
+  returns the same rule-tree shape this string carries. One format, one version number, two transports.
+  It is why the rule grammar is a public format and a grammar change is a breaking change with a migration
+  note, not a silent edit (`docs/07` Q22).
 - Manual categories and `itemID in {…}` leaves export their IDs, which are account-agnostic. Window
   `icon` exports (a bare `Interface\ICONS\` name is not character-specific); `overlay` does not.
 - Import is a **command batch**: it runs through the same command layer as the UI, so import is

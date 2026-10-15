@@ -47,34 +47,61 @@ Measured against Baggins as it exists today:
 | changing a rule requires a full re-sort of everything | incremental reclassify of the affected category only |
 | 30 rule types each with bespoke `Ace3Options` + `DewDropOptions` | one rule grammar, one renderer, one editor |
 
+## Scope tiers
+
+| Tier | Meaning |
+|---|---|
+| **v1** | ships or the product is wrong |
+| **v1.x** | extended features that need the v1 model to be right but no new model |
+| **v2** | needs a model decision we are deliberately not making now |
+
 ## In scope (v1)
 
 - Backpack and bank, Forever client first
-- user-defined **windows** (custom bags): name, kind (backpack/bank), priority, columns, open-with-all
+- user-defined **windows** (custom bags): name, kind (backpack/bank), priority, columns,
+  open-with-all, icon
+- a bank window can be **created as a copy of a backpack window** and then diverge (`FR-10b`)
+- **sections** inside a window: named, ordered, collapsible, hidden, movable between windows, each
+  bound to **one or more categories** (`FR-11`, decided in `docs/07` Q3)
 - **sections** inside a window: named, ordered, collapsible, hidden, movable between windows
-- **categories**: rule-driven, manual item lists, and dynamic ("group by type/subtype/expansion")
-- rule grammar with `any/all/none` nesting and a fixed field set
+- **categories**: rule-driven, manual item lists (bulk-pasteable), and dynamic
+  ("group by type/subtype/expansion")
+- rule grammar with `any/all/none` nesting and a fixed field set, where **item-ID lists and
+  exclusions are first-class** — they are 55% of the rules in a real Baggins config (`docs/01`)
 - precedence + duplicate policy
-- on-bag **configure mode** and the 3-pane settings window with live preview
+- **configure mode: the bags are the editor.** Context menus, in-place text, drag, small modals.
+  The settings window is a browser/search tool, not the primary editor (`docs/05`)
 - item inspector ("why is this here")
 - stacking/compression of stacks, empty-slot representation
 - new/recent item handling without Blizzard auto-sort (Forever has none)
-- profiles (per character), export/import strings for categories+windows
+- **physical bag interaction**: a bag-bar toggle between vanilla bags and sorting bags, an *empty
+  this bag* action, and category→specialty-bag **affinities** (`FR-51`, `FR-66`, `FR-67`)
+- profiles (shared default + per-character override), export/import strings for categories+windows
 - undo of config edits
 - a starter preset so a fresh install is useful in under a minute
+- optional integrations that cost no vendored library: AddonCompartment, Masque, Pawn (`docs/03` §Integrations)
+
+## Extended (v1.x)
+
+- **search the bank while it is closed**, from a snapshot taken the first time the bank is opened
+  this session (`FR-110`, `docs/07` Q15)
+- **search alts, alt banks and the guild bank** — needs a persisted per-character item snapshot and
+  a size/privacy decision. `docs/07` Q15 owns it; nothing in v1 may block it
 
 ## Out of scope (v1) — named so nobody quietly adds them
 
 - **Retail/Classic Era/TBC/Cata/MoP support.** Forever first. The architecture keeps a client
   capability layer (`docs/03` §Client capability layer) so a second client is a layer, not a
   rewrite — but we do not build or test it now.
-- **Theme authoring UI.** Ship 2 built-in looks (stock-like, dark) + Masque support if cheap. A
-  theme *editor* is not v1.
+- **Our own theme system.** We build our windows on Blizzard's own bag visuals
+  (`ContainerFrameItemButtonTemplate`, the `ItemButton` frame type, the client's bag atlases) so
+  whatever skinning addon a user runs — Masque or its successor — skins our bags the way it skins
+  theirs. No `themes/` module, no built-in "looks", no theme editor (`docs/07` Q16).
 - **Reagent bank, warband bank.** They do not exist on Forever (`agents.md`).
-- **Item moving / vendor / bank deposit automation beyond category-level bulk actions.** Baggins'
-  `MoveToSpecialtyBags` / compress-to-specialty-bag logic is a Should, not a Must.
+- **Bag shopping UI.** Empty-bag, affinity compaction and bulk sell/deposit are in v1; buying and
+  upgrading bags is the player's business, we only make the vanilla bags reachable.
 - **Auctioning, mail, crafting queue integration.**
-- **Tooltip replacement / item search outside the bag window.**
+- **Tooltip replacement.**
 - **Localization beyond enUS.**
 - **A plugin API for third parties.** Internal module boundaries are designed so a plugin API is
   possible later; we do not ship or stabilize one.
@@ -90,11 +117,15 @@ Measured against Baggins as it exists today:
 4. `docs/02-requirements.md` Must items all have a passing in-game checklist entry in
    `docs/06-milestones.md`.
 5. Config changes are visible in the bags in < 250 ms for a full backpack (measured, not hoped).
+6. A Baggins-scale layout (the heaviest profile in `~/Downloads/SavedVariables` is 74 categories /
+   193 rules / 12 windows / 117 sections — `docs/01`) can be rebuilt here without ever opening a
+   settings window.
 
 ## Non-goals that are not omissions
 
 - We are not trying to be faster than Baggins at the expense of clarity; a 20 ms slower refresh
   that explains itself is a win.
 - We are not trying to be feature-equal to BetterBags. Its grid is a different product.
-- We are not preserving Baggins' SavedVariables. Migration is a Should (`FR-41`), not a
-  compatibility promise.
+- We are not preserving Baggins' SavedVariables. Migration is **deferred** (`docs/07` Q5): ship
+  good default profiles instead. If anything is migrated later, the target is Bagnon/AdiBags-shaped
+  data, not Baggins'.

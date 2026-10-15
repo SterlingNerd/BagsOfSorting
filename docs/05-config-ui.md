@@ -6,123 +6,178 @@ This is the differentiator. If this doc is not convincing, the project is not wo
 
 ## Principles
 
-1. **The bags are the editor.** Anything you can do in a settings dialog, you can do by touching
-   the thing it configures. The settings window is for browsing, searching, and bulk work — not
-   for the primary act of organizing.
-2. **Consequence is visible while you edit.** No commit-then-inspect loop. Every rule edit shows
-   the items it will claim, live.
-3. **One mental model, three nouns.** *Window* (a bag on screen) → *Section* (a labeled block in
-   it) → *Category* (the rule that decides what goes in that block). Never a fourth noun, never a
+1. **The bags are the editor.** Anything you can do in a settings dialog, you can do by touching the
+   thing it configures. Doubled down: the settings window is not where organizing happens. It is a
+   utility — browse, search, import/export, profiles — and a layout can be built without opening it
+   once (`AC-72`).
+2. **Consequence is visible while you edit.** No commit-then-inspect loop, and no separate preview
+   pane either: the live list of *your own items* is inside the editor. Real inventory is the
+   preview.
+3. **One mental model, three nouns.** *Window* (a bag on screen) → *Section* (a labeled block in it)
+   → *Category* (the rule that decides what lands in that block). Never a fourth noun, never a
    synonym. Terms appear in the UI with a one-line explanation the first time they are editable.
-4. **Immediate commit, easy undo.** No Apply/Cancel, no "you must reload", no dirty-state icons.
-   `Ctrl+Z` is the safety net that lets us be bold about immediate commit.
-5. **Everything explainable.** Any item answers why it is where it is. Any category answers what
-   it claims and what competes with it.
+4. **Immediate commit, undo instead of cancel — with one honest exception.** Structural edits take
+   effect the instant they are made and are undone, not cancelled. A *half-built rule tree* is not a
+   valid model state, so the category editor stages a draft with Apply / Cancel. §Commit below is
+   normative.
+5. **Everything explainable.** Any item answers why it is where it is. Any category answers what it
+   claims and what competes with it.
 6. **Progressive disclosure, not hidden depth.** Advanced things (search DSL, raw predicate) are
    visibly marked advanced, never required, never silently available.
+7. **Use the affordance the player already has.** Window placement and the boring numeric knobs go
+   into Blizzard's EditMode, the icon picker is the macro icon picker, the search box is a
+   `SearchBoxTemplate`. We invent UI only where nothing exists.
 
 ---
 
-## Screen 1 — Settings window (`/bos`)
+## How far can we get without a config window?
 
-Three panes. No nesting deeper than tab → section.
+Everything the user can configure, and where it lives:
 
-```
-┌───────────────────────────────────────────────────────────────────────────────────┐
-│ Bag of Sorting                                    [Configure] [Search] [?]  ✕     │
-├──────────────┬───────────────────────────────────┬────────────────────────────────┤
-│ WINDOWS      │ CATEGORY: Crafting → Herbs        │ PREVIEW  42 items match        │
-│ ▸ Backpack   │                                   │                                │
-│   Backpack   │ Priority   [ 10 ▾]                │ ⌕ filter preview               │
-│   Crafting   │ Matches ANY of:                   │ ┌──┐ Linen Glyph        ×14    │
-│   Sell       │   ┌───────────────────────────┐   │ │🌿│ → Crafting / Herbs        │
-│ ▸ Bank       │   │ type = Tradeskill      ✕  │   │ ┌──┐ Peace Lily       ×3      │
-│   Bank       │   │ subtype starts with Herb ✕ │   │ │🌿│ → Crafting / Herbs        │
-│              │   └───────────────────────────┘   │ ┌──┐ Netherstar         ×1     │
-│ CATEGORIES   │   AND all of:                     │ │✨│ → Backpack / Misc ⚠       │
-│ ▸ Rules (18) │   ┌───────────────────────────┐   │ │  │                            │
-│   Armor      │   │ quality ≥ Uncommon     ✕  │   │ └──┐ Silvershard       ×6      │
-│   Herbs      │   └───────────────────────────┘   │ │🪙│ → Sell / Junk ⚠           │
-│   Junk       │                                   │                                │
-│   Quest      │ [+ Add condition]  [Add group]    │ ⚠ = would be claimed by a      │
-│ ▸ Manual (3) │                                   │   higher-priority category     │
-│ ▸ Dynamic (2)│ [Rename] [Duplicate?] [Disable]   │                                │
-│              │ [Delete category]                 │ [Create category from these]   │
-├──────────────┴───────────────────────────────────┴────────────────────────────────┤
-│ Undo  Redo                                  Presets ▾   Import/Export ▾  Profiles ▾│
-└───────────────────────────────────────────────────────────────────────────────────┘
-```
+| Thing | Where it is edited | Needs a window? |
+|---|---|---|
+| number of windows, their names, order, kind | configure mode: `+ window`, in-place title, drag | no |
+| columns per window, scale, compact, open-with-all, icon | **Blizzard EditMode** per-system settings dialog (`/bos move`), mirrored in the window's context menu | no |
+| sections: add, remove, rename, reorder, collapse, hide, move between windows | configure mode: header handles + drag + context menu | no |
+| which categories a section contains | **section editor modal**: combo box + sortable list | no (it is a modal) |
+| a category's rules | **category editor modal** (§Screen 2) | no (it is a modal) |
+| a category's item ID list | category editor → *Item IDs* → paste box (§Screen 3) | no |
+| priority, duplicate, disable, affinity | chips/rows inside those two modals | no |
+| add one item to / remove one item from a category | drag onto a section header; right-click item → *Exclude from category* | no |
+| keybinds | the client's own Key Bindings panel (our frames are registered there) | no |
+| bulk sell / deposit / move-to-window | section header context menu | no |
+| empty a physical bag, vanilla↔sorting toggle | the bag bar and the vanilla-bags view | no |
+| presets, import/export strings, profile switch, "every rule that matches Linen Glyph" | **the utility window** | yes — 4 things, one window |
 
-Pane roles:
+So: **no config window for organizing.** One small window exists for the four things above that have
+no physical counterpart, and `/bos` opens *configure mode*, not that window. `/bos settings` opens
+the utility window.
 
-- **Left — navigation.** Two trees: the physical one (windows → sections) and the logical one
-  (categories, grouped by kind). Selecting either side highlights the other where they connect, so
-  "which sections use the Herbs category?" is a hover, not a search.
-- **Center — editor.** The rule tree rendered as English-ish sentences with chips. Chips are the
-  atomic unit: one leaf = one chip, drag to reorder, `✕` to remove, click to edit in a popover.
-  Groups are labeled `Matches ANY of:` / `AND all of:` / `EXCEPT:` — the user never has to know
-  the words "predicate" or "boolean".
-- **Right — preview.** The killer feature. Runs the real classifier over the current inventory with
-  the *draft* rule tree substituted, and lists what would match, where it would land, and which
-  higher-priority category would steal it (`⚠`). Updates on every keystroke in a chip popover.
-  Also the entry point for `FR-79` ("create a category from these selected items").
+What we are not pretending: a 74-category config (`docs/01`) is hard to *see* in a bag. That is what
+the utility window's left pane and search are for — finding a category, not editing it.
 
-Preview honesty rule: the preview uses the real inventory, not a sample. If the user has no
-matching items, the pane says so and offers "show item IDs that would match from your bank" rather
-than showing a fake example.
+---
 
-## Screen 2 — Configure mode (`/bos configure`)
-
-The settings window is optional. With configure mode on, the bag windows themselves gain handles:
+## Screen 1 — Configure mode (`/bos configure`)
 
 ```
-┌─ Crafting ─────────────────────────── ✎ ─┐   ✎ = window title is editable in place
-│ ┌ Herbs ──────────────────── ⌃ ⌄ ⇄ ⌫ ┐   │   ⌃⌄ reorder · ⇄ move to window · ⌫ hide
-│ │ 🌿 🌿 🌿 🌿 🌿                        │   │
-│ │ 🌿 🌿 🌿                             │   │
-│ └──────────────────────────────────────┘   │
-│ ┌ Ores ──────────────────── ⌃ ⌄ ⇄ ⌫ ┐     │
-│ │ ⛏ ⛏ ⛏                                │   │
-│ └──────────────────────────────────────┘   │
-│ ┌ + add section ┐                          │
-└────────────────────────────────────────────┘
+┌─ Crafting ✎ ──────────────────────────── ⚙ ⌫ ─┐   ✎ title: rename in place
+│ ┌ Herbs ─────────────────── ⌃ ⌄ ⇄ ⌫ ✎ ┐       │   ⌃⌄ reorder · ⇄ move to window
+│ │ 🌿 🌿 🌿 🌿 🌿                          │       │   ⌫ hide · ✎ edit this section
+│ │ 🌿 🌿 🌿                              │       │
+│ └──────────────────────────────────────┘       │
+│ ┌ Ores · Metals ─────────── ⌃ ⌄ ⇄ ⌫ ✎ ┐       │   two categories, one block
+│ │ ⛏ ⛏ ⛏ 🪙 🪙                          │       │
+│ └──────────────────────────────────────┘       │
+│ ┌ + section ┐  ┌ + copy a window here ┐        │
+└────────────────────────────────────────────────┘
+   [Undo] [Redo]                    Done            ← configure-mode bar, not a keybind
 ```
 
-- Item buttons get a drop target: **drag an item onto a section header** → manual membership
-  (`FR-61`). Drag onto `+ add section` → prompts for a name and creates a category seeded with
-  that item (`FR-75`).
-- Section header handles appear only in configure mode, so normal use stays clean.
-- A section header shows its category's chip summary on hover: `type = Tradeskill AND subtype
-  starts with Herb AND quality ≥ Uncommon`.
-- Configure mode never blocks normal item interaction: pickup, right-click menu, and drag to a
-  spellbar still work. Drop-on-header is an *additional* drop target, not a replacement.
-- Exiting configure mode is automatic after 60 s of no interaction, with a persistent badge
-  reminder in the window title bar so it cannot be silently left on.
+- **Right-click is the main menu**, on the window title, on a section header, and on an item. One
+  menu each, ~6 entries, no submenus deeper than one.
+- Handles appear only in configure mode; normal use stays clean.
+- A section header shows its category chips on hover: `Tradeskill · subtype Herb · quality ≥ Uncommon`.
+- Configure mode never blocks normal item interaction: pickup, right-click item menu, drag to a
+  spellbar, shift-click, all unchanged. Drop-on-header is an *additional* target.
+- Exiting: `Done`, `Esc`, or 60 s idle. Exiting is **not** a commit boundary — nothing is pending.
+- During `InCombatLockdown()` the structural handles are disabled with a tooltip saying why.
 
-## Move mode: use Blizzard's, don't invent one
+## Screen 2 — The category editor (the hard one)
 
-Forever ships a real move mode (EditMode) and users already know it — the same affordance they use
-for action bars and unit frames. ThreatMeter already joins it on Camelot
-(`../addons/ThreatMeter/editmode.lua`, `## OptionalDeps: Blizzard_EditMode`), so the path is proven
-on this client, not theoretical. Recipe in `agents.md` §EditMode.
+Opened from a section header's `✎`, from a chip, or from an item's *Move to category…*. It is a
+modal, roughly the size of one small bag window, and its body is **your real inventory filtered by
+the draft rule** — that is the whole design trick, and it is why there is no preview pane.
 
-Design consequence:
+```
+┌ Category: Herbs ─────────────────────────────────────── [?] ─┐
+│ shown in: Crafting/Herbs, Bank Trade Goods/Herbs   [manage]  │
+│ priority [10 ▾]   ☐ allow duplicates   ☐ enabled             │
+│ affinity  [Herb pouch ▾]                                     │
+│                                                              │
+│ MATCHES  ▸ any of                                            │
+│   ┌ type = Tradeskill ┐ ┌ subtype starts with "Herb" ┐      │
+│   └ ✎ ✕              ┘ └ ✎ ✕                       ┘      │
+│   [ + condition ]  [ + group ]                              │
+│                                                              │
+│ EXCEPT   ▸ none of                                           │
+│   ┌ itemID in {Silvershard +2} ┐  ┌ category = Junk ┐       │
+│                                                              │
+│ 42 items · 14 stacks            ⌕ filter                     │
+│ ┌──┐ Linen Glyph        ×14   ┌──┐ Peace Lily       ×3      │
+│ │🌿│ → Crafting / Herbs       │🌿│ → Crafting / Herbs       │
+│ ┌──┐ Netherstar         ×1    ┌──┐ Silvershard      ×6      │
+│ │✨│ → Backpack / Misc  ⚠     │🪙│ → Sell / Junk   ⚠        │
+│                                                              │
+│ [ Item IDs… ]  [ Make a category from the ticked ones ]      │
+│                                    [ Cancel ]  [ Apply ]     │
+└──────────────────────────────────────────────────────────────┘
+```
 
-- **`/bos move`** (or the Configure-mode handle) opens the vanilla EditMode UI with our windows
-  participating: selection highlight, snap preview lines, magnetism, and the user's existing layout
-  habits. Our windows get the same "click a frame, drag it, snap it to a neighbour" experience.
-- **Fallback drag always works.** If EditMode is unavailable, disabled by the user, or a mixin method
-  is missing, windows are still `SetMovable` frames with saved clamped positions. EditMode is a
-  nicety layered on top, never a requirement — ThreatMeter's defensive `if EditModeSystemSelectionMixin`
-  guard is the pattern to copy.
-- We do **not** build a grid, a snap-settings panel, or a layout-preset system. That is Blizzard's
-  feature and it is already good. `shortcut: no own layout-preset system; add one only if EditMode
-  layout save/restore proves unusable for multi-window bag layouts.`
-- Open questions this raises (`docs/07` Q13): do we register with `registeredSystemFrames` (undocumented,
-  but gets EditMode's layout save/restore and `OnEditModeEnter/Exit` callbacks) or stay ThreatMeter-style
-  and drive Enter/Exit through `EventRegistry` only?
+Rules that make it work:
 
-## Screen 3 — Inspector (`FR-27`, right-click item → "Why is this here?")
+- **Chips are leaves.** One chip = one leaf. `✎` opens a popover anchored to the chip (field picker →
+  value picker, with "applies to N of your items" under the value list). Drag to reorder, drag off to
+  remove. A group is a labeled row: `MATCHES any of`, `AND all of`, `EXCEPT none of` — the words
+  "predicate" and "boolean" never appear.
+- **`EXCEPT` is a row you can add to without thinking**, because 320 of 1383 real Baggins rules are
+  `NOT` and only 44 are `AND` (`docs/01`). The fastest path to it is not this modal at all: right-click
+  the offending item in the bag → *Exclude from category*.
+- **The item list is bidirectional.** Drag an item from the bags onto this list → it joins the ID
+  list. Tick a row and press *Exclude* → it joins `EXCEPT itemID in {…}`. Drag-and-tick is the editor;
+  chips are the refinement.
+- `⚠` marks an item the draft would claim but a higher-priority category owns, and names the winner on
+  hover. This is the preview's only genuinely new information.
+- Items whose data the client has not cached render with their tier-1 icon and a `…` name until
+  `ITEM_DATA_LOAD_RESULT` resolves them (`FR-103`). Never a blank row.
+- **Apply / Cancel, and only here.** The draft is not written to the model until Apply; Apply is one
+  command, so one Undo removes an entire rebuilt rule tree. Cancel discards the draft and the model
+  never knew it existed. Apply is disabled (with a reason) when the tree is invalid: empty group,
+  unknown field, a value with no options.
+- The modal is resizable and its list is a `WowScrollBox` + `MinimalScrollBar`. It is not a
+  `ButtonFrameTemplate` dialog with a waterfall inside it.
+
+## Screen 3 — Item IDs (`FR-24b`)
+
+`[ Item IDs… ]` opens a small modal: a multiline edit box, a live count, and one Apply.
+
+```
+┌ Item IDs: Herbs ────────────────────────────┐
+│ ┌─────────────────────────────────────────┐ │
+│ │ 26042, 26044                            │ │
+│ │ [Linen Glyph]                           │ │
+│ │ 4378 4379 4380                          │ │
+│ └─────────────────────────────────────────┘ │
+│ 43 IDs · 2 unknown to this client: abc, 99999999
+│ ☑ replace current list   ☐ add to current list
+│                        [ Cancel ] [ Apply ] │
+└─────────────────────────────────────────────┘
+```
+
+IDs may be separated by newlines, commas, semicolons, spaces or tabs, mixed with item links, in one
+paste. Unknown-but-valid IDs are kept (they will resolve when the client sees them); tokens that are
+not IDs are dropped with a reason. The whole paste is one command → one Undo.
+
+## Screen 4 — Section editor
+
+`⇄`/`✎` on a header opens a modal with exactly two controls, because that is all a section is:
+
+```
+┌ Section: Ores · Metals ─────────────────────┐
+│ name  [ Ores · Metals                    ]  │
+│ categories, in order:                       │
+│   ⠿ Ores        [✕]                         │
+│   ⠿ Metals      [✕]                         │
+│   [ add category ▾ ]  [ + new category ]    │
+│ ☐ collapse by default    ☐ hidden           │
+│                        [ Cancel ] [ Apply ] │
+└─────────────────────────────────────────────┘
+```
+
+Combo box for adding, drag to reorder, `✕` to unbind (the category itself survives, and the toast says
+so). Reordering *sections* is a drag on the bags, never in a list here — one place to do each thing.
+
+## Screen 5 — Inspector (right-click item → "Why is this here?")
 
 ```
 Linen Glyph
@@ -132,71 +187,121 @@ Linen Glyph
              quality ≥ Uncommon  ✓
   Competed:  Backpack / Misc  (priority 40) — lost, higher priority won
              Junk (priority 900) — not tested
-  Membership: rule match (not manual)
-  [Move to category…]  [Make a category for this item]  [Disable this rule]
+  Membership: rule match (not an ID list)
+  [Move to category…]  [Exclude from this category]  [Disable this rule]
 ```
 
-This single panel replaces the entire "why is my addon doing this" support conversation, and it is
-the reason the classifier keeps a `trace` (`docs/03`).
+This panel replaces the entire "why is my addon doing this" support conversation, and it is why the
+classifier keeps a `trace` (`docs/03`).
 
-## Screen 4 — Rule editing popover
+## Screen 6 — Move mode: use Blizzard's, don't invent one
 
-Clicking a chip opens a popover anchored to the chip, never a new window:
+Forever ships a real move mode and users already know it. ThreatMeter joins it on Camelot
+(`../addons/ThreatMeter/editmode.lua`, `## OptionalDeps: Blizzard_EditMode`), so the path is proven
+here, not theoretical. Recipe in `agents.md` §EditMode.
 
-```
-┌ field ▾ ──────────────┐   ┌ value picker (kind depends on field) ─────┐
-│ type                  │   │ ☐ Herb  ☐ Ore  ☐ Reagent  ☐ Cloth         │
-│ subtype  ▾            │   │ ☐ Metal & Stone  ☐ Elemental              │
-│ quality               │   ─────────────────────────────────────────── │
-│ ilvl                  │   cmp: [=] [!=] [≥] [≤] [contains] [starts]   │
-│ name / tooltip        │                                             │
-│ expansion / slot      │   [applies to 42 of your items]  [Done]      │
-│ itemID / bind / …     │                                             │
-└───────────────────────┘                                             ┘
-```
+- **`/bos move`** opens vanilla EditMode with our windows participating: selection highlight, snap
+  preview, magnetism, the user's existing layout habits.
+- **The boring numbers live there too.** Where EditMode exposes a per-system settings dialog
+  (`EditModeSystemSettingsDialogButtonTemplate`), that is where columns, scale, compact and
+  open-with-all go — the same place a player already sets their action-bar and unit-frame options.
+  Every one of them is also reachable from the window's context menu, because EditMode is not always
+  available (and is closed in combat).
+- **Fallback drag always works.** If EditMode is unavailable or a mixin method is missing, windows are
+  `SetMovable` frames with saved clamped positions. ThreatMeter's defensive guard is the pattern.
+- We do **not** build a grid, snap-settings panel, or layout-preset system.
+  `shortcut: no own layout-preset system; add one only if EditMode layout save/restore proves
+  unusable for multi-window bag layouts.`
+- Caveat measured from Blizzard's own code: on this client EditMode's *Bags* system is the **bag
+  button bar**, not the bag window (`../addons/ForeverPlus/Modules/BagWindow.lua`). Our windows are
+  their own systems; do not assume EditMode's "Bags" entry means us. Open question: `docs/07` Q13.
 
-The "applies to N of your items" line under the value picker is the micro-preview: it counts
-against your actual inventory before you even commit the chip.
+## Screen 7 — The utility window (`/bos settings`)
 
-## Screen 5 — Presets, import/export, profiles
+Demoted, small, four tabs, no nesting deeper than tab → row:
 
-Bottom bar of the settings window, each a small popover, not a tab:
+| Tab | Contents |
+|---|---|
+| **Find** | search categories/windows/rules; "every rule that matches Linen Glyph"; jump-to (selecting a result opens the right modal on the bag) |
+| **Presets** | install a starter set (leveling / tradeskill / collections / minimal). Merges, never wipes, undoable |
+| **Import / Export** | multiline box + copy + paste; shows a diff ("+3 windows, +11 categories, 2 name collisions") before Apply |
+| **Profiles** | current profile, switch, copy-from, per-character override, reset-this-category; shows which characters share a profile |
 
-- **Presets** — install a starter set of windows+categories (leveling / tradeskill / collections /
-  minimal). Installing merges, never wipes, and is undoable.
-- **Import/Export** — a multiline edit box with a copy button and a paste field; import shows a
-  diff ("+3 windows, +11 categories, 2 name collisions") before applying.
-- **Profiles** — current profile, switch, copy-from, reset-this-category. Character counts shown
-  so a shared profile is visible as shared.
+No structural editing here. If a tab starts offering a rule editor, it is the wrong tab.
 
 ---
 
-## Interaction inventory (what the user can actually do)
+## Commit, cancel, exit, undo
+
+The question this answers: *no Apply button — then how do we exit edit mode, and how do we abandon a
+failed change?*
+
+| Situation | Answer |
+|---|---|
+| How do I exit configure mode? | `Done` on the configure-mode bar, `Esc`, or 60 s idle. Leaving is not a commit boundary: everything you did already applied and is still undoable after you leave. |
+| How do I abandon a rename / reorder / added section / deleted window? | **Undo.** It applied immediately and there is nothing to cancel. Undo is a button on the configure bar, in every modal footer, and in the "what changed" toast. |
+| Why does the category editor have Apply/Cancel then? | A half-built rule tree is not a valid model state (`docs/04`: an empty group is invalid). Staging a draft is the only place where "cancel" means something. Apply = one command = one undo step. |
+| What if I make a mess of several edits? | Undo repeatedly (bounded log, default 50 steps, `docs/04`), or *Reset this category/window* (`FR-95`) from the utility window. |
+| What if an edit is invalid? | Refused in the modal with a reason, Apply disabled. We do not commit garbage and then ask you to undo it. |
+| What if an edit is destructive (delete a category used by 3 sections)? | Confirm that names the dependents, and Undo still works afterwards. Confirm is informational, not a gate. |
+| Bulk operations (import, preset install, empty-bag)? | One command each, with an inverse. Import shows a diff before applying. |
+| Why not `Ctrl+Z`? | `Ctrl+Z`/`Ctrl+Y` sit next to WASD and are plausibly someone's spell, macro or other addon. They are **not bound by default**; a user may bind them in the Key Bindings panel. Buttons are the primary affordance. |
+
+---
+
+## The bag bar, real bags, and icons
+
+- **Vanilla ↔ sorting toggle** (`FR-51`) on the client's bag bar: one click shows Blizzard's own bag
+  windows and hides ours, and the vanilla view can open a *single* physical bag (the herb pouch, the
+  quiver) without opening the rest. This is how a player upgrades cloth → linen → silk, moves a bag
+  to the bank, or sells at a vendor without fighting us.
+- **Empty this bag** (`FR-67`): a physical bag's context menu item that moves everything out of it,
+  honouring affinities and free slots, refusing when there is not room.
+- **Window icons** (`FR-85`): the window context menu → *Icon* opens the client's own icon picker
+  (`IconDataProviderMixin` / `IconSelectorPopupFrameTemplate` — the picker the macro UI uses), stored
+  via `GetIconForSaving` as a bare `Interface\ICONS\` name. Our own overlay art (transparent PNG)
+  draws on top of the chosen icon at a fixed offset; `overlay` in `docs/04` stores which overlay, if
+  any. Overlaying is two layered textures on one button — no trick, and it keeps the user's freedom
+  to pick any of ~600 client icons. The same icon+overlay pair renders on the button that represents
+  the window, whether that button is on Blizzard's bar or on our own bar of sorting bags
+  (`docs/07` Q9).
+- **Our own bar, later.** The stated wish is to replace the client's bag bar with a bar of our own
+  bag buttons. That is a Q9 decision with an icon consequence: whichever bar exists, a window's
+  `icon` + `overlay` is what its button draws, so the icon work is not wasted on either answer.
+
+---
+
+## Interaction inventory
 
 | Action | Where | Command |
 |---|---|---|
-| create window | `+ add window` in left pane, or `+ add section` chain in configure mode | `window.create` |
-| rename window | click title in configure mode, or left-pane field | `window.rename` |
-| reorder windows | drag in left pane, or Blizzard EditMode move mode (`FR-54`) | `window.reorder` |
-| delete window | left-pane `✕` with confirm | `window.delete` |
-| create section | `+ add section` in configure mode | `section.create` |
+| create window | `+ window` in configure mode, or *Copy a window* | `window.create`, `window.copy` |
+| rename window | click title in configure mode | `window.rename` |
+| move / reorder windows | Blizzard EditMode (`FR-54`), or drag in configure mode | `window.reorder` |
+| columns / scale / compact / open-with-all / icon | EditMode system dialog, or window context menu | `window.set` |
+| delete window | window context menu `✕` with confirm | `window.delete` |
+| create section | `+ section` in configure mode | `section.create` |
 | rename section | click header in configure mode | `section.rename` |
 | reorder section | drag header in configure mode | `section.move` |
 | move section to another window | `⇄` handle → window list | `section.moveTo` |
 | collapse / hide section | `⌃` / `⌫` handle | `section.collapse`, `section.hide` |
-| assign item to category | drag item onto section header | `category.addManual` |
-| remove item from manual category | right-click item → "Remove from category" | `category.removeManual` |
-| create category from item | right-click item → "Make a category for this item" | `category.createFromItem` |
-| add/edit/remove rule leaf | chips in center pane | `rule.add`, `rule.set`, `rule.remove` |
-| change priority | `Priority` dropdown; preview re-sorts live | `category.setPriority` |
-| duplicate-enable a category | `Duplicate?` checkbox | `category.setDuplicate` |
-| disable a category | `Disable` (keeps config, stops matching) | `category.setEnabled` |
-| delete a category | center pane `✕` with confirm + "used by 3 sections" warning | `category.delete` |
-| bulk sell/deposit a section | right-click header at vendor/bank | `section.bulkMove` |
-| undo / redo | `Ctrl+Z` / `Ctrl+Y`, or bottom bar | `undo.step` |
+| bind / unbind / reorder categories in a section | section editor modal | `section.bindCategory`, `section.unbindCategory`, `section.reorderCategories` |
+| add / edit / remove a rule leaf | category editor chips | `rule.add`, `rule.set`, `rule.remove` |
+| add / replace an item ID list | category editor → Item IDs | `category.setItemIDs` |
+| exclude one item from a category | right-click item → *Exclude from category* | `category.excludeItemID` |
+| assign an item to a category | drag item onto a section header | `category.addManual` |
+| create category from an item | right-click item → *Make a category for this item* | `category.createFromItem` |
+| priority / duplicate / enabled / affinity | category editor rows | `category.set` |
+| disable a category | category editor row | `category.setEnabled` |
+| delete a category | category editor with "used by 3 sections" confirm | `category.delete` |
+| bulk sell / deposit / move-to-window | section header context menu | `section.bulkMove` |
+| empty a physical bag | bag context menu | `bag.empty` |
+| vanilla ↔ sorting bags | bag bar toggle | `bags.setMode` |
+| undo / redo | configure bar, modal footers, toast | `undo.step`, `redo.step` |
+| keybinds | client Key Bindings panel | — |
 
-Every row is a command in `config/commands.lua` with an inverse. If an action cannot be expressed
-as an invertible command, it does not ship.
+Every row is a command in `config/commands.lua` with an inverse. If an action cannot be expressed as
+an invertible command, it does not ship.
 
 ---
 
@@ -204,13 +309,14 @@ as an invertible command, it does not ship.
 
 | State | Design |
 |---|---|
-| **First run** | Preset windows/sections exist. A one-time banner on the backpack window: "This is a section. Click it in configure mode to rename it." Dismissable forever, not nagging. |
-| **Category matches nothing** | Chip pane header: "Matches 0 of your items" in amber, and the left pane marks the category with a dot. Not silent. |
-| **Category used by no section** | Left pane: "not shown anywhere" tag + "Add to a window" button. (Baggins' most confusing failure.) |
-| **Rule would claim items a higher priority category already owns** | Preview shows them with `⚠` and names the winner. |
+| **First run** | Preset windows/sections exist. A one-time banner on the backpack window: "This is a section. Click it in configure mode to rename it." Dismissable forever, not nagging. Plus a one-time note if our keybind collides with the default `B` (`docs/07` Q4). |
+| **Category matches nothing** | Category editor header: "Matches 0 of your items" in amber; the section header shows a dot. Not silent. |
+| **Category used by no section** | Utility window: "not shown anywhere" tag + *Add to a window*. (Baggins' most confusing failure.) |
+| **Draft rule would claim items a higher priority category owns** | `⚠` in the category editor's list, winner named on hover. |
 | **Deleting something in use** | Confirm names the dependents: "3 sections use this category." |
-| **Unknown item data** | Item renders in the catch-all with a subtle pending marker, then re-sorts when info arrives (`FR-103`). |
-| **Combat** | Configure mode disables structural handles during lockdown with a tooltip explaining why. |
+| **Item data not cached** | Tier-1 icon + `…` name + pending marker; resolves without a reload (`FR-103`). |
+| **Bank not opened this session** | Search says so, and offers to open the bank. Never a confident empty result (`FR-110`). |
+| **Combat** | Configure handles disabled with an explanation; bulk moves refused with "not while in combat". No taint (`AC-4`, `AC-68`). |
 | **Import mismatch** | Hard refusal with the version prefix named, not a partial import. |
 
 ---
@@ -218,23 +324,30 @@ as an invertible command, it does not ship.
 ## What we deliberately do NOT build
 
 - No option tree, no breadcrumbs, no "Bag/Category Config" second window.
-- No Apply/Commit/Cancel buttons.
-- No settings that only exist as a checkbox with no visible effect to observe.
-- No dropdown-of-30-rule-types as the entry point to classification. The entry point is an item or
-  a section; the rule type is chosen *after* you know what you're classifying.
-- No modal dialogs deeper than one popover.
-- No confirmation for anything undoable. Confirm only for irreversible deletes (and undo covers
-  those too, so the confirm is informational).
-- No "advanced mode" toggle that changes what the UI looks like. Advanced things are extra
-  affordances, not a different UI.
-- No drag-to-reorder in the settings window for things that are draggable on the bags — one place
-  to do it, on the bags.
+- No settings window for organizing. If a change needs a settings window, it needs a modal.
+- No separate preview pane. The live item list is inside the editor.
+- No Apply/Cancel for structural edits — Undo instead. Apply/Cancel only for the rule draft.
+- No dirty-state icons, no "you must reload", no "unsaved changes" dialog.
+- No default `Ctrl+Z`/`Ctrl+Y` bindings.
+- No settings that only exist as a checkbox with no observable effect.
+- No dropdown-of-30-rule-types as the entry point to classification. The entry point is an item or a
+  section; the rule type is chosen *after* you know what you are classifying.
+- No modal dialogs deeper than one popover, and no popover inside a modal's modal.
+- No confirmation for anything undoable.
+- No "advanced mode" toggle that changes what the UI looks like.
+- No drag-to-reorder in the utility window for things that are draggable on the bags — one place to
+  do it, on the bags.
+- No theme/skin UI (`docs/07` Q16).
+
+---
 
 ## Measurable UX targets
 
 | Target | How measured |
 |---|---|
-| Create a working custom window + 2 sections with categories in ≤ 6 interactions | counted click/drag sequence, fresh install, no help |
-| Fix a miscategorized item in ≤ 3 interactions | right-click → move to category → done |
+| Create a working custom window + 2 sections with categories in ≤ 6 interactions | counted click/drag sequence, fresh install, no help, **settings window never opened** |
+| Fix a miscategorized item in ≤ 3 interactions | right-click → Exclude from category → done |
+| Add 40 known item IDs to a category in ≤ 3 interactions | paste → Apply → done |
 | Zero interactions to understand why an item is where it is | inspector is one right-click away |
-| Preview updates within 1 frame of a rule edit | `/bos perf` logs preview latency |
+| Category editor list updates within 1 frame of a chip edit | `/bos perf` logs editor latency |
+| A 74-category / 117-section config is navigable | the `docs/01` config rebuilt in ≤ 30 minutes, utility window used only for Find |

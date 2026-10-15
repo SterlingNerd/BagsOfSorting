@@ -10,15 +10,21 @@ log rather than an option tree.
 
 ```
 core/      boot, client, constants, context, events, db, async, pool, log
-data/      harvest, enrich, classify, rules, stacks, sort, layout-model, windows, sections, categories
+data/      harvest, enrich, itemcache, classify, rules, stacks, sort, layoutmodel, windows,
+          sections, categories, snapshot
 layout/    flow (river packing), sizing, anchors
-frames/    window, section, item, header, chips, menu, inspector, money, empty-slot
-config/    commands, undo, settings-window, panes/{windows,sections,categories,rules,preview},
-           configure-mode, presets, importexport
-filters/   field registry (one file per field: type, quality, ilvl, name, tooltip, ...)
-themes/    themes, stock, dark
-util/      serialize, color, text, query (if FR-28 lands), test
+frames/    window, section, item, header, chips, menu, inspector, money, emptyslot, movemode,
+          bagbar, modals
+config/    commands, undo, settings-window, panes/{windows,sections,categories,rules,profiles},
+          configuremode, category-editor, presets, importexport, keybinds
+filters/   field registry (one file per field: type, quality, ilvl, name, tooltip, …)
+integrations/  compartment, masque, pawn
+util/      serialize, color, text, query (if FR-28 lands), idlist, test
 ```
+
+No `themes/` module (`docs/07` Q16): the windows are built from Blizzard's own bag pieces so the
+user's skinning addon does the work. `data/snapshot.lua` is the persisted bank/alt inventory that
+`FR-110`–`FR-112` need; `frames/bagbar.lua` is the vanilla↔sorting toggle on the client's bag bar.
 
 Load order = `core → data → layout → frames → config → themes → filters → util → core/init`.
 `core/init.lua` last, like BetterBags, so every module exists before anything is enabled.
@@ -43,13 +49,33 @@ One refresh, explicit phases (BetterBags' `Phase1..11` reduced to what we actual
 Rules:
 - Phases 1–7 are pure functions over a `Snapshot` table. **No phase touches a frame.** Only
   `render` does. This is what makes the classifier testable (`/bos selftest`) and what makes the
-  config preview pane cheap: the preview runs 1–7 against a filtered snapshot and renders a list.
+  category editor's live item list cheap: the editor runs 1–7 against the real snapshot with a draft
+  rule tree substituted and renders a list.
 - Each phase runs inside a `Context` (BetterBags pattern) carrying the triggering event, so a
   burst of `BAG_UPDATE` events can be cancelled/coalesced.
 - `events:BucketEvent('BAG_UPDATE', 0.2)` coalesces; `async.Batch` chunks 2–7 across frames when
   the item count exceeds a threshold (start: 60).
 - Incremental path: a single slot change re-runs 2–4 for that slot, then re-flows only the
   affected sections. `FR-26` depends on this.
+
+### Item data is not always there (enrich)
+
+`C_Item.GetItemInfo` is documented `MayReturnNothing = true` on Forever
+(`wow-ui-source` `origin/forever` → `Blizzard_APIDocumentationGenerated/ItemDocumentation.lua`).
+The client only has full data for items it has already seen this session. So `enrich` is a
+three-tier lookup, never a single call:
+
+| Tier | API | Gives | Cost |
+|---|---|---|---|
+| 1 | `C_Item.GetItemInfoInstant(itemID)` | icon, itemType, itemSubType, itemEquipLoc, classID, subClassID | local, safe in a loop |
+| 2 | `data/itemcache.lua` (persisted, bounded) | name, quality, ilvl, bind, expansion for IDs we have resolved before | free, and it is what makes a 40-ID manual category usable |
+| 3 | `C_Item.RequestLoadItemDataByID(itemID)` → `ITEM_DATA_LOAD_RESULT` | the rest, asynchronously | one request per unknown ID, batched; Blizzard's own `AsyncCallbackSystemMixin` (`ASYNC_ITEM`) is the reference implementation and is available on camelot |
+
+Consequences: the classifier may run on tier-1 data and produce a *provisional* placement; a
+resolved tier-3 result re-runs phases 2–4 for that item only (`FR-26` path). The preview/category
+editor renders tier-1 icons immediately, names when known, and a placeholder otherwise — never a
+blank row, never a blocked refresh. `expensive = true` in the field registry covers tooltip text and
+anything that needs tier 3.
 
 ### Classification
 
@@ -153,6 +179,26 @@ Forever facts (from `agents.md`) are resolved once at load:
 Pattern to copy from BetterBags: when a capability is false, **do not build the table that drives
 the feature**, so table-driven loops go inert instead of every call site gaining a branch.
 
+### Is dependency injection worth it here? No.
+
+The question was asked because `client` looks like a service every module consumes. It is not a
+service, it is **a resolved table of ~10 answers, computed once at load**. What actually removes
+the `if` statements is already in the design:
+
+1. flags resolved once (`isForever`, `hasWarbank`, …) — no re-derivation at call sites;
+2. **table-inert gating** — a missing capability means the table that would drive it is never
+   built, so the loop costs nothing and no branch exists;
+3. value getters for things that differ in kind, not just presence (`itemButtonType`).
+
+Injecting a `clientAdapter` into each module would add a second name for the same table, a wiring
+step in `core/init.lua`, and a new class of bug (which adapter, whose copy, is this module holding
+the pre-login one?). In Lua 5.1 without a framework, "DI" degenerates to manual wiring in the load
+order we already have. The honest upgrade path, if a second client is ever added, is **one data
+table per client plus a handful of function overrides where behaviour genuinely differs** (money
+frame layout, bag-bar button names) — still data, still one file, still no injected objects.
+`shortcut: single-client capability table; revisit only when a second client is actually being
+built, and then as per-client data tables, not injected adapters.`
+
 ---
 
 ## Taint & combat strategy
@@ -167,6 +213,45 @@ the feature**, so table-driven loops go inert instead of every call site gaining
   otherwise; instead our own keybinds + our own close-all-on-`PLAYER_INTERACTION_MANAGER_FRAME_SHOW`.
 - Deferred init: plain `CreateFrame("Frame")` + `PLAYER_REGEN_ENABLED` if `InCombatLockdown()` at
   enable time. Never an AceEvent-mediated deferral (parent `../agents.md` §Debugging).
+- **Do not call Blizzard's container managers just to read them.** `ForeverPlus/Modules/BagWindow.lua`
+  documents the exact trap on this client: `ContainerFrameSettingsManager:GetBagsShown()` looks like
+  a question and is not one — it *builds and stores* the list, so calling it from our code ran
+  Blizzard's bag code tainted until `UseContainerItem` was refused with `ADDON_ACTION_FORBIDDEN`.
+  Rule: a Blizzard function is called from our code only where its source was read and found to
+  write nothing (`IsUsingCombinedBags` is the named exception in ForeverPlus, and the pattern to
+  copy). Counting open container frames by name is safer than asking the game.
+- **Physical moves are cursor-based and locked.** `FR-65`/`FR-66`/`FR-67` use the
+  `PickupContainerItem(src)` → `PickupContainerItem(dstSlot)` pattern (the same one Baggins'
+  `Baggins-ItemOps.lua` uses). Verify destination space first, one move per bucket tick, abort with
+  the cursor cleared, refuse in lockdown.
+- Forever starts with the bags **combined into one window** (`ContainerFrameCombinedBags`,
+  `IsUsingCombinedBags`); our windows are separate frames and do not participate in
+  `UpdateContainerFrameAnchors`, which re-pins Blizzard's windows every time a bag opens or closes.
+  We never call it.
+
+---
+
+## Integrations (optional addons, zero vendoring)
+
+The dependency decision (`docs/07` Q2) was made on widget evidence, and it holds. What it does cost
+is the ecosystem habits a bag addon is expected to have. Named honestly, with the price of each:
+
+| Integration | What users get | How we do it | Verdict |
+|---|---|---|---|
+| **Addon Compartment** | the native puzzle-icon menu entry + our icon, on Forever | `## AddonCompartmentFunc` + `## IconTexture` (verified: `Blizzard_Minimap/Mainline/AddonCompartment.lua`, loads on camelot) | **v1**, zero cost |
+| **Minimap button** | the draggable icon Baggins users expect | Baggins gets it free from LibDataBroker + LibDBIcon. We either hand-roll ~60 lines (`MiniMapButtonTemplate` is `[AllowLoadGameType classic, camelot]`) or skip | **not v1**; add if users ask (`FR-123`). What we genuinely lose: broker-display addons (Titan/DataFeedText-class) cannot show us |
+| **Masque** | the user's bag skin applies to our buttons with no config | `LibStub('Masque', true)` + `Masque:Group('Bags of Sorting', …)` + add/remove button, guarded — BetterBags `integrations/masque.lua` is ~60 lines | **v1 if cheap** (`FR-121`); this is the strongest argument for "use Blizzard's bag visuals" (`docs/07` Q16) |
+| **Pawn** | the upgrade arrow everyone already trusts | check for `PawnShouldItemLinkHaveUpgradeArrowUnbudgeted`, register as an upgrade provider behind our own seam | **v1.x** (`FR-122`) |
+| **Bagnon/BagBrother-compatible API** (`AllInventory`, `BagnonTooltipItemSearch`) | other addons can answer "does any character of mine have X" from *our* data; a large installed surface depends on Bagnon | a compat module publishing our snapshot tables under Bagnon's global names, opt-in | **v2 candidate** (`docs/07` Q15). Neither reference addon in `../addons` provides it today, so it is a gain we choose, not a loss we suffer |
+| **Blizzard's own search matcher** | our search and the client's search agree about what "matches" means | `ItemButtonUtil.GetItemContextMatchResultForItem(itemLocation)` (used by Camelot `PaperDollFrame.lua`) | use it where it applies; it is **not** an index and cannot search a closed bank (`docs/07` Q7) |
+| **AceConfig option tables** | appearing inside someone else's unified options suite | n/a — Forever exposes no options-panel API (`C_SettingsUtil` only), and no installed addon here aggregates option trees | real but tiny loss |
+| **LibSharedMedia / LibQTip / LibBagUtils / LibWindow / LibPeriodicTable** | fonts, dewdrop tooltips, bag-slot counting, saved positions, curated item lists | vanilla templates, `UIDropDownMenu`+`EasyMenu`, `C_Container.GetBagSlotFlag`, our own positions, our own preset data (`FR-31`) | replaced, no loss |
+| **Ace3 itself** | nothing we cannot write | ~470 lines total across lifecycle/events/hooks/locale/profiles | **gain**: no `AceEvent30Frame` class of `ADDON_ACTION_FORBIDDEN` (parent `../agents.md` §Debugging, `../TODO.md`) |
+
+Coexistence is a requirement, not a nicety (`FR-124`): `ForeverPlus` already repositions the vanilla
+bag window, `Leatrix_Plus` can `hooksecurefunc('OpenAllBags', CloseAllBags)`, and both `Baggins` and
+`BetterBags` raw-hook the bag open/close globals. Every milestone ends with a run against the
+installed set, recorded in `docs/08`.
 
 ---
 
@@ -212,48 +297,55 @@ place where vendoring would be defensible, and it would be `AceDB` alone.
 ## File tree (target, M5)
 
 ```
-BagOfSorting/
-├── BagOfSorting.toc
+BagsOfSorting/
+├── BagsOfSorting.toc
 ├── .pkgmeta
 ├── .luacheckrc
+├── LICENSE                     # WTFPL
+├── Media/Icon.png              # 256×256: ## IconTexture + CurseForge project icon
 ├── core/{boot,client,constants,context,events,db,async,pool,log}.lua + README.md
-├── data/{harvest,enrich,classify,rules,stacks,sort,layoutmodel,windows,sections,categories}.lua + README.md
+├── data/{harvest,enrich,itemcache,classify,rules,stacks,sort,layoutmodel,windows,sections,categories,snapshot}.lua + README.md
 ├── layout/{flow,sizing,anchors}.lua
-├── frames/{window,section,item,header,chips,menu,inspector,money,emptyslot,movemode}.lua + README.md
-├── config/{commands,undo,form,settingswindow,configuremode,importexport,presets}.lua
-│   └── panes/{windows,sections,categories,rules,preview,profiles}.lua + README.md
+├── frames/{window,section,item,header,chips,menu,inspector,money,emptyslot,movemode,bagbar,modals}.lua + README.md
+├── config/{commands,undo,form,settingswindow,configuremode,categoryeditor,itemlisteditor,importexport,presets,keybinds}.lua
+│   └── panes/{windows,sections,categories,rules,profiles}.lua + README.md
 ├── filters/{registry,type,subtype,quality,ilvl,name,tooltip,expansion,equipslot,bind,itemid,
 │            classid,subclassid,containerfamily,bagid,isreagent,isquest,isnew,category}.lua
-├── themes/{themes,stock,dark}.lua
-├── util/{serialize,color,text,test}.lua
-├── locales/BagOfSorting-enUS.lua
+├── integrations/{compartment,masque,pawn}.lua + README.md
+├── util/{serialize,color,text,idlist,test}.lua
+├── locales/BagsOfSorting-enUS.lua
 └── tests/{fixtures.lua,selftest.lua}
 ```
+
+No `themes/` directory (`docs/07` Q16).
 
 ## TOC draft
 
 ```toc
 ## Interface-Forever: 16001
-## Title: Bag of Sorting
+## Title: Bags of Sorting
 ## Version: @project-version@
 ## Notes: Multi-window inventory organization with live, in-place configuration.
 ## Author: josh
-## SavedVariables: BagOfSortingDB
+## SavedVariables: BagsOfSortingDB
 ## X-Category: Inventory
-## OptionalDeps: Blizzard_EditMode, Masque
-## AddonCompartmentFunc: BagOfSorting_OnAddonCompartmentClick
-## IconTexture: Interface\Icons\INV_Misc_Bag_10
+## X-License: WTFPL
+## X-Curse-Project-ID: 1745962
+## X-Wago-ID: bGoYJY60
+## OptionalDeps: Blizzard_EditMode, Masque, Pawn
+## AddonCompartmentFunc: BagsOfSorting_OnAddonCompartmentClick
+## IconTexture: Interface\AddOns\BagsOfSorting\Media\Icon
 ```
 
 No `_retail_`/`_classic_` conditional TOC blocks in v1 — we ship one client.
 
 ## Packaging
 
-Repo root **is** the addon root (`BagOfSorting.toc` at `./`), so a release zip is the repo minus the
+Repo root **is** the addon root (`BagsOfSorting.toc` at `./`), so a release zip is the repo minus the
 spec. `.pkgmeta` carries the exclusions — this is what keeps the published package clean:
 
 ```yaml
-package-as: BagOfSorting
+package-as: BagsOfSorting
 
 ignore:
   - docs
@@ -268,3 +360,21 @@ ignore:
 
 No `externals:` section — v1 vendors nothing (`docs/07` Q2). `tests/` is excluded from the release
 but `/bos selftest` stays loadable in dev checkouts (`docs/06` M0).
+
+`LICENSE` and `Media/` are **not** ignored: the license ships inside the package, and the icon is
+referenced by `## IconTexture`.
+
+## License & publishing
+
+**WTFPL** — `LICENSE` at the repo root, `## X-License: WTFPL` in the TOC. Shortest license that keeps
+the addon forkable, accepted by CurseForge and Wago, and it needs no THIRD-PARTY-NOTICES file because
+we vendor nothing. Two things to keep true:
+
+- Our **art** (the project icon) is not code. WTFPL covers it as written; if the icon ever comes from
+  somewhere with terms, it gets its own `Media/LICENSE.md`.
+- A fork that vendors a GPL/MIT library carries *that* library's terms for the fork, not ours. Worth
+  one line in the readme once anyone forks us.
+
+Public locations (once something marginally usable exists — `docs/07` Q14):
+GitHub `https://github.com/SterlingNerd/BagsOfSorting.git`, CurseForge project `1745962`,
+Wago `bGoYJY60`.

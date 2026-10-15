@@ -21,22 +21,33 @@ M3 can start once M2's layout model is stable; M4 needs M3's command layer.
 place to be tested.
 
 Deliverables
-- `BagOfSorting.toc`, `.pkgmeta`, `.luacheckrc` (WoW globals declared), `LICENSE`
+- `BagsOfSorting.toc`, `.pkgmeta`, `.luacheckrc` (WoW globals declared), `LICENSE` (WTFPL),
+  `Media/Icon.png` (256×256, wired to `## IconTexture`)
 - **no `libs/` directory** — zero vendored libraries (`docs/07` Q2 resolved)
 - `core/boot.lua`, `core/client.lua` (capability flags), `core/constants.lua`, `core/log.lua`,
   `core/events.lua` (own frame + dispatch table), `core/locale.lua`
+- `integrations/compartment.lua` — `AddonCompartmentFunc` entry, our icon, opens configure mode
 - `/bos` slash command printing the resolved capability table — this doubles as the Forever fact
-  verification tool required by `agents.md`
+  verification tool required by `agents.md`. It must also answer: is `C_Item.RequestLoadItemDataByID`
+  present, does `ITEM_DATA_LOAD_RESULT` arrive, is `IconDataProviderMixin` present, is
+  `EditModeManagerFrame` present, what is `IsUsingCombinedBags`, what is
+  `C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character)`
 - `tests/fixtures.lua` + `/bos selftest` stub (asserts nothing yet, but the harness works)
 - CI: GitHub Actions running `luacheck` on push (copy the shape of `../addons/Baggins/.github/workflows/check.yml`)
 - per-directory `README.md` stubs (`NFR-3`)
 
 Exit criteria
 - **AC-1** loads with zero errors on login and 3× `/reload`; `/events` clean.
-- `/bos` prints `isForever=true`, `hasWarbank=false`, `itemButtonType=ItemButton`, and **fills in
-  the unverified `agents.md` facts** (keyring presence, reagent bag slot, `NUM_TOTAL_EQUIPPED_BAG_SLOTS`
-  value, container index ranges). Update `agents.md` with the answers — this milestone is what
-  turns the "unverified" column into facts.
+- `/bos` prints `isForever=true`, `hasWarbank=false`, `itemButtonType=ItemButton`, and **fills in the
+  unverified `agents.md` facts** (keyring presence — expect yes, since
+  `Blizzard_MainMenuBarBagButtons/Camelot/MainMenuBarBagButtons.lua` uses `KEYRING_CONTAINER` and
+  `GetKeyRingSize`; reagent bag slot; `NUM_TOTAL_EQUIPPED_BAG_SLOTS`; container index ranges).
+  Update `agents.md` with the answers — this milestone is what turns the "unverified" column into
+  facts.
+- The four item-data questions are answered in-game and recorded in `docs/08` §A: does
+  `GetItemInfoInstant` give an icon for an ID never seen this session; does
+  `RequestLoadItemDataByID` resolve it; does `ITEM_DATA_LOAD_RESULT` arrive; do
+  `GetItemNameByID`/`GetItemQualityByID` read the same cache or a separate one.
 - `luacheck` clean in CI.
 
 Risks: none material. If `/bos` cannot print the capability table, the client detection assumption
@@ -49,21 +60,28 @@ is wrong and everything downstream is re-planned here, cheaply.
 **Goal:** prove harvest → enrich → classify → sort → render on Forever with real inventory.
 
 Deliverables
-- `data/harvest.lua`, `data/enrich.lua`, `data/classify.lua`, `data/rules.lua`, `data/sort.lua`
+- `data/harvest.lua`, `data/enrich.lua`, `data/itemcache.lua`, `data/classify.lua`, `data/rules.lua`,
+  `data/sort.lua`
+- the three-tier item lookup from `docs/03` §Item data is not always there: tier-1
+  `GetItemInfoInstant`, tier-2 persisted cache, tier-3 `RequestLoadItemDataByID` +
+  `ITEM_DATA_LOAD_RESULT`, batched and cancellable (`AsyncCallbackSystemMixin` as the reference)
 - `filters/registry.lua` + 8 fields: `type`, `subtype`, `quality`, `ilvl`, `name`, `expansion`,
   `equipSlot`, `isQuestItem`
 - `frames/window.lua`, `frames/item.lua` (pooled, `ItemButton` type), `frames/section.lua`
 - one hardcoded window ("Backpack") with 3 hardcoded categories (Junk / Armor / Everything-else)
   written **in the data model**, not in code — so the schema is exercised from day one
 - `core/async.lua` chunking + `core/events.lua` bucketing
-- `/bos perf` printing ms per pipeline phase
+- `/bos perf` printing ms per pipeline phase, including item-data requests issued
 
 Exit criteria
 - **AC-14, AC-16** real inventory appears, nothing duplicated, unmatched items in the catch-all.
 - **AC-42** button pool stays flat across 10 open/close cycles (`/bos perf` reports pool stats).
 - **AC-100/101** timings recorded in `docs/06` as actual numbers, not targets.
 - **AC-103** loot an item never seen by the client; it lands in catch-all, then re-sorts when info
-  arrives.
+  arrives. Then `C_Item.RequestLoadItemDataByID` on a cold ID and confirm it resolves without a
+  reload (`docs/08` §A).
+- **AC-97** a 40-ID manual category renders icons on first login and issues zero tier-3 requests on
+  the second.
 - `/bos selftest` passes: fixture items × rule trees → expected category, including `any/all/none`
   nesting and the precedence tie-breaks from `docs/04`.
 
@@ -83,27 +101,43 @@ Risks
 Deliverables
 - `data/windows.lua`, `data/sections.lua`, `layout/flow.lua`, `layout/sizing.lua`, `layout/anchors.lua`
 - per-window `columns`, saved position/scale, `compact` windows, collapsed/hidden sections
+- **sections bound to several categories** (`FR-11`): packing one block whose contents come from N
+  categories, sub-ordered by category priority
+- `window.copy` command (`FR-10b`) — a bank window built from a backpack window in one action
 - `frames/header.lua` with the configure-mode handle placeholders
+- `frames/bagbar.lua` — vanilla↔sorting toggle on the client's bag bar, plus a vanilla-only view that
+  can open one physical bag on its own (`FR-51`)
 - `frames/movemode.lua` — saved clamped positions + **EditMode spike** (`docs/07` Q13): join
   Blizzard move mode ThreatMeter-style (`EventRegistry` `EditMode.Enter/Exit`,
-  `EditModeSystemSelectionTemplate`, `EditModeSystemMixin` adoption), and test whether
-  `EditModeManagerFrame:RegisterSystemFrame` tolerates a dynamic number of our windows
-- `frames/emptyslot.lua` (compact family counts + "show all slots" mode)
+  `EditModeSystemSelectionTemplate`, `EditModeSystemMixin` adoption); test whether
+  `EditModeManagerFrame:RegisterSystemFrame` tolerates a dynamic number of our windows, **and whether
+  the per-system settings dialog (`EditModeSystemSettingsDialogButtonTemplate`) is reachable for a
+  frame we registered** — that dialog is where columns/scale/compact live (`FR-71`)
+- `frames/emptyslot.lua` (compact family counts + "show all slots" mode), reading
+  `C_Container.GetBagSlotFlag` rather than guessing bag kinds
 - virtual stacking (`data/stacks.lua`) + split slider
 - money frame (`frames/money.lua`)
+- window icons: `IconDataProviderMixin` picker + `overlay` layer (`FR-85`)
 
 Exit criteria
-- **AC-10, AC-11, AC-17** create/rename/reorder/delete windows and sections via **temporary
-  slash commands** (`/bos test newwindow Crafting`, `/bos test movesection …`) — the real UI does
-  not exist yet, but the model and layout must be fully exercised. Slash-command config is throwaway
-  and deleted in M3.
-- **AC-40** 12 sections in a 5-column window: no overlap, no clipped titles, correct resize.
+- **AC-10, AC-10b, AC-11, AC-17** create/rename/reorder/delete windows and sections, copy a backpack
+  window into a bank window, bind two categories to one section — via **temporary slash commands**
+  (`/bos test newwindow Crafting`, `/bos test copywindow w1 bank`, `/bos test movesection …`): the
+  model and layout are fully exercised before the UI exists. Slash-command config is throwaway and
+  deleted in M3.
+- **AC-40** 12 sections in a 5-column window: no overlap, no clipped titles, correct resize. Then the
+  `docs/01` stress case: 22 sections in one window with a 30-character name.
 - **AC-43** merge 6 partial stacks → correct total; split 15 out → real slots correct.
 - **AC-44** empty-slot modes both render correctly with a reagent bag / ammo pouch present.
+- **AC-49** with Masque installed, our buttons pick up its skin with no code from us beyond the
+  template choice — or the reason they do not is written down here.
+- **AC-51** switch to vanilla bags from the bag bar, open only the herb pouch, buy and equip a bigger
+  bag, switch back: no `ADDON_ACTION_FORBIDDEN`, nothing lost.
 - **AC-41** window position and scale survive `/reload`.
+- **AC-85** pick an icon from the client's picker, `/reload`, still there.
 - **AC-54** `/bos move` opens vanilla EditMode with our windows draggable in it, snap lines against
   another window, positions persist after Exit + `/reload`; drag still works with EditMode absent.
-  Record the Q13 A-vs-B verdict in `docs/07`.
+  Record the Q13 A-vs-B verdict **and the settings-dialog verdict** in `docs/07`.
 
 Risks
 - River packing with long section titles is exactly where Baggins gets ugly (`title:GetStringWidth()/39`
@@ -113,35 +147,47 @@ Risks
 
 ---
 
-## M3 — Config layer + settings window (2.5–4 wk) — **the product milestone**
+## M3 — Config layer + the category editor (2.5–4 wk) — **the product milestone**
 
-**Goal:** replace the throwaway slash commands with the command layer and the 3-pane window.
+**Goal:** replace the throwaway slash commands with the command layer and the modals that are the
+editor.
 
 Deliverables
 - `config/commands.lua` (every action in `docs/05` §Interaction inventory, each invertible),
-  `config/undo.lua`
+  `config/undo.lua` (bounded log, default 50)
 - `config/form.lua` — minimal in-house form builder (section, checkbox, slider, dropdown, input,
   color, button group) built on vanilla templates only
-- `config/settingswindow.lua` + `config/panes/{windows,sections,categories,rules,preview}.lua`
-- chip rendering (`frames/chips.lua`) + chip popover
-- preview pane running the real classifier with a draft rule tree substituted
+- **`config/categoryeditor.lua`** — the modal from `docs/05` §Screen 2: chips, the `EXCEPT` row, the
+  live list of real inventory, Apply/Cancel draft semantics, `⚠` competitor markers
+- **`config/itemlisteditor.lua`** + `util/idlist.lua` — the paste parser (`FR-24b`), one command per
+  paste
+- `config/sectioneditor.lua` — combo box + sortable category list (`docs/05` §Screen 4)
+- `config/settingswindow.lua` — the **utility** window (Find / Presets / Import-Export / Profiles) +
+  `config/panes/{windows,sections,categories,rules,profiles}.lua`
+- chip rendering (`frames/chips.lua`) + chip popover with "applies to N of your items"
 - incremental reclassify on rule change (**FR-26**)
+- undo/redo as **buttons** (configure bar, modal footers, toast); no default Ctrl+Z/Ctrl+Y binding
 - delete the M2 throwaway slash commands
 
 Exit criteria
-- **AC-70, AC-71, AC-74, AC-78** — including the timed test: a person who has never seen the addon
-  creates a "Sell" window with Junk + Quest in under 3 minutes, unaided. **Run this test with an
-  actual human, not with yourself.** Record what they clicked; the failures become M4 work.
+- **AC-70, AC-74, AC-75, AC-80** — including the timed test: a person who has never seen the addon
+  creates a "Sell" window with Junk + Quest in under 3 minutes, unaided, **without opening the
+  settings window**. **Run this test with an actual human, not with yourself.** Record what they
+  clicked; the failures become M4 work.
 - **AC-20** a nested `any/all/none` tree built purely by clicking chips.
 - **AC-23** priority change moves items live.
+- **AC-24b** the same 43 IDs pasted newline-separated and comma-separated produce the same category,
+  in one undo step.
 - **AC-29** empty/no-match/no-reference states all visibly reported.
 - **AC-26** editing one rule does not re-run the full pipeline (`/bos perf` shows the delta).
 - Undo/redo across 10 mixed edits verified by SavedVariables diff before/after.
+- The category editor handles a 12-rule `EXCEPT`-heavy category (the `Consumables.Misc` shape from
+  `docs/01`), not just a 1-rule category.
 
 Risks
-- The preview pane is the highest-value, highest-risk component: it must run the classifier against
-  a *draft* model without mutating the real one. Budget a spike (1–2 days) to prove the
-  draft-substitution design before building panes on top of it.
+- The category editor is the highest-value, highest-risk component: it must run the classifier over
+  the current inventory with a *draft* tree substituted, without mutating the real model. Budget a
+  spike (1–2 days) to prove draft substitution before building anything else on it.
 - Dropdown widget choice on Forever: `WowStyle1DropdownTemplate` vs `UIDropDownMenuTemplate` —
   resolve in M0's capability output and use one of them everywhere.
 
@@ -152,18 +198,21 @@ Risks
 **Goal:** the bags become the editor.
 
 Deliverables
-- `config/configuremode.lua`: in-place title editing, section handles (`⌃ ⌄ ⇄ ⌫`), drop targets
+- `config/configuremode.lua`: in-place title editing, section handles (`⌃ ⌄ ⇄ ⌫ ✎`), drop targets,
+  window/section/item context menus, `Done`/`Esc`/idle exit, configure-bar Undo/Redo
 - drag-and-drop assignment (`FR-61`) with `OnReceiveDrag`/`OnDragReceived` on section headers
   without breaking secure item pickup
-- `frames/inspector.lua` (**FR-27**) reading the per-snapshot `trace`
-- `category.createFromItem` flow (**FR-75**)
-- "what changed" toast (**FR-81**)
+- `frames/inspector.lua` (**FR-78**) reading the per-snapshot `trace`, with *Exclude from category*
+  and *Make a category for this item* wired straight from it (**FR-24c**)
+- `category.createFromItem` flow (**FR-77**)
+- "what changed" toast (**FR-83**) carrying the Undo action
 - combat lockdown behavior for structural handles
 
 Exit criteria
 - **AC-60** stock item interaction is bit-for-bit unchanged (pickup, right-click menu, drag to
   spellbar/trade/vendor, shift-click, click-cast).
-- **AC-61, AC-63** drag-to-section and the inspector work on real looted items.
+- **AC-61, AC-63, AC-24c** drag-to-section, the inspector, and one-click *Exclude from category* all
+  work on real looted items.
 - **AC-72** a full layout (3 windows, 8 sections) can be built **without ever opening the settings
   window**.
 - **AC-4** configure handles disabled in combat with an explanation, no taint.
@@ -184,39 +233,60 @@ Risks
 
 Deliverables
 - bank windows (`kind = "bank"`), bank tabs + bank bags harvesting, bank control frame
-- `config/presets.lua` (leveling / tradeskill / collections / minimal) as data
+- `window.copy` exposed in configure mode (*Copy a window* → bank twin) — the thing the measured
+  Baggins configs do by hand 6 times (`docs/01`)
+- `config/presets.lua` (leveling / tradeskill / collections / minimal) **as data**, including the
+  curated item-ID lists that replace Baggins' `PeriodicTable Set` usage (`FR-31`): food, water,
+  potions, bandages, explosives, hearth, tools, ore, herbs, cloth, leather, thread
 - `config/importexport.lua` (`BOS1.` strings, diff-before-apply)
-- profiles UI (switch / copy-from / reset-this-category)
-- `core/db.Migrate()` + Baggins importer with the `docs/04` migration report (**FR-94**)
-- dynamic categories (`kind = "dynamic"`, **FR-25**)
+- profiles UI (switch / copy-from / per-character override / reset-this-category)
+- `core/db.Migrate()` for our own schema versions. **No Baggins importer** (`FR-94` = Won't, deferred
+  by `docs/07` Q5)
+- dynamic categories (`kind = "dynamic"`, **FR-25**) if `docs/07` Q8 keeps it Must
+- `data/snapshot.lua`: bank snapshot for closed-bank search (`FR-110`), session-scoped, persisted
+  only behind a setting
 
 Exit criteria
 - **AC-13** bank windows only appear while the bank is open; bank bags and tabs are complete.
-- **AC-77** fresh install with preset installed: usable layout, zero config.
+- **AC-10b** the bank twin of a 20-section window is created in one action and stays correct after
+  both are edited.
+- **AC-79** fresh install with preset installed: usable layout, zero config.
 - **AC-92** export on one character, import on another, layout matches; collision policy exercised.
 - **AC-93** 20 open/close cycles on a full backpack → SavedVariables file does not grow.
-- Baggins import run against a real `BagginsDB` from `../account/` and the report reviewed by hand.
+- **AC-110** closed-bank search behaves honestly before and after visiting the bank.
 
 Risks
-- Baggins `NOT`-rule semantics do not map cleanly (`docs/04` table). If the report is ugly, ship
-  the importer as a preview/"best effort" feature or defer it to M7.
+- Bank container enumeration on Forever (tab count from `C_Bank.FetchNumPurchasedBankTabs`, bank bag
+  indices, `Enum.BagIndex.AccountBankTab_N` being inert) is still the highest-uncertainty area; the
+  M0 capability dump must have answered it before this milestone starts.
+- A persisted snapshot is the first place this design writes derived state to disk. If it grows
+  unbounded or leaks item data a user did not opt into, it is cut back to session-only rather than
+  tuned.
 
 ---
 
-## M6 — Search, bulk actions, looks, performance (2–3 wk)
+## M6 — Search, physical moves, integrations, performance (2–3 wk)
 
 Deliverables
 - `util/query.lua` lexer+parser and `data/search.lua` index for the FR-28 field subset;
   "save search as category"
-- in-bag search bar (**FR-50**)
+- in-bag search bar (**FR-50**), reusing `ItemButtonUtil.GetItemContextMatchResultForItem` where it
+  applies so our search and the client's agree (`docs/07` Q7)
 - section bulk actions: sell-all, deposit-all, move-to-window (**FR-62, FR-65**)
-- `themes/{stock,dark}.lua`; Masque integration if cheap (**FR-49**)
-- item upgrade arrow (**FR-52**), "show real bags" view (**FR-51**) if either proves cheap
+- **`bag.empty`** — empty a physical bag (**FR-67**), and **affinity compaction** (**FR-66**) using
+  `C_Container.GetBagSlotFlag` + `Enum.BagSlotFlags`
+- physical-move safety rails (**FR-68**): destination check before first pickup, bucketed moves,
+  cursor never left holding, refusal in lockdown
+- `integrations/masque.lua` (**FR-121**) and `integrations/pawn.lua` (**FR-122**), both guarded
+- minimap button (**FR-123**) only if users asked for one during M5/M6 testing
 - performance pass against the `FR-100/101` numbers with a deliberately overstuffed test character
 
 Exit criteria
 - **AC-28** a saved search category tracks new matching items as they are looted.
 - **AC-65** selling a whole section at a vendor in one action, with a confirm naming the count.
+- **AC-66, AC-67, AC-68** affinity compaction, empty-bag, and combat refusal all behave as written in
+  `docs/02`.
+- **AC-124** run alongside `ForeverPlus`, `Leatrix_Plus`, `Baggins`, `BetterBags`; record what breaks.
 - `/bos perf` numbers meet or beat the M1-recorded numbers after the feature load.
 - **NFR-1** own-code LOC check: under ~8,000. If over, write down which module blew up and why.
 
@@ -224,11 +294,13 @@ Exit criteria
 
 ## M7 — Ship (0.5–1 wk)
 
-- `.pkgmeta` packaging, release TOC version bump, CHANGELOG
+- `.pkgmeta` packaging (LICENSE and Media/ included), release TOC version bump, CHANGELOG
 - remove debug scaffolding not gated behind `settings.debug` (**NFR-6**)
-- README screenshots/GIFs replacing the placeholder
-- CurseForge + Wago upload mechanics, `## X-Curse-Project-ID` reserved
+- README screenshots/GIFs replacing the placeholder, using `Media/Icon.png`
+- publish: GitHub `SterlingNerd/BagsOfSorting`, CurseForge project `1745962`, Wago `bGoYJY60`
+  (`docs/07` Q14), `## X-Curse-Project-ID` / `## X-Wago-ID` already in the TOC
 - a written "known limitations" section pulled from every `shortcut:` comment in the codebase
+- a first-run note about the `B` keybind collision (`docs/07` Q4)
 
 Exit criteria: installable from a release zip into `../addons/` with no dev tooling, on a character
 that has never had the addon, with the first-run experience tested by someone else.
@@ -240,16 +312,21 @@ that has never had the addon, with the first-run experience tested by someone el
 1. `luacheck` clean in CI.
 2. `/bos selftest` green — classifier fixtures grow with each new field.
 3. In-game checklist run on Forever and pasted into the milestone entry with the date and patch.
-   A milestone is not done until its AC lines have a dated entry.
+   A milestone is not done until its AC lines have a dated entry. The runnable `/script` snippets for
+   these checks live in **`docs/08-test-plan.md`**.
 4. `/bos perf` numbers recorded, not asserted.
-5. One manual "hostile" pass per milestone: full inventory, 30+ categories, a 30-char section name,
-   an item Blizzard has no info for, combat, death, `/reload` mid-combat.
+5. One manual "hostile" pass per milestone: full inventory, a 74-category config imported from the
+   `docs/01` data, 22 sections in one window, a 30-char section name, an item Blizzard has no info
+   for, combat, death, `/reload` mid-combat.
+6. Coexistence pass against the installed addons (`FR-124`).
 
 ## What would make us stop and re-plan
 
 - M1 timings blow the `FR-100` budget by > 3× on a normal backpack → the pipeline model (not the
   UI) is wrong; revisit chunking or caching before writing more UI.
-- M3's timed human test fails twice with different people → the 3-pane model is not the right
-  shape; revisit `docs/05` before continuing.
-- M4's drag spike fails → configure mode loses drag-to-assign; re-evaluate whether configure mode
-  is still the differentiator or whether the settings window with preview carries it alone.
+- M3's timed human test fails twice with different people → "the bags are the editor" is not the
+  right shape on its own; revisit `docs/05` before continuing.
+- M3's category editor cannot show a 12-rule `EXCEPT`-heavy category readably → the rule grammar is
+  too expressive for its own UI; cut nesting to `all{ any{…}, none{…} }` flat and revisit `docs/04`.
+- M4's drag spike fails → configure mode loses drag-to-assign; re-evaluate whether configure mode is
+  still the differentiator or whether the category editor carries it alone.

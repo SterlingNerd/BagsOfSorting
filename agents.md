@@ -1,4 +1,4 @@
-# BagOfSorting — Agent Context
+# BagsOfSorting — Agent Context
 
 A WoW: **Forever** (Blizzard codename *Camelot*) bag addon. Baggins' multi-window virtual-bag
 shape, with a configuration model and UI that a human can actually use.
@@ -35,6 +35,18 @@ If a task contradicts `docs/02-requirements.md` or `docs/05-config-ui.md`, stop 
 | `LE_EXPANSION_*` | reports `LE_EXPANSION_CLASSIC` (Vanilla ruleset) | parent `../agents.md` |
 | Engine | modern: `C_Container`, `C_Item`, `C_Spell`, secret values, `ItemLocation` | verified |
 | Flavor dir | `_classic_beta_`, `.flavor.info` = `wow_classic_beta` | verified |
+| Bags start **combined** into one window | yes (`ContainerFrameCombinedBags`, `IsUsingCombinedBags`) | `origin/forever` + `../addons/ForeverPlus/Modules/BagWindow.lua` |
+| EditMode's **Bags** system | the bag **button bar**, not the bag window | `../addons/ForeverPlus/Modules/BagWindow.lua` |
+| `/script` available | yes, gated (`C_GameRules … UserScriptsDisabled`, one-time dangerous-scripts popup); `/dump`, `/eventtrace`, `/framestack`, `/api` too | `origin/forever` `Blizzard_ChatFrameBase/Shared/SlashCommands.lua` |
+| Addon Compartment | present on camelot (`AddonCompartment.lua [AllowLoadGameType mainline]`, no camelot exclusion) | `origin/forever` `Blizzard_Minimap/Blizzard_Minimap.toc` |
+| Keyring | present (expect it) | `Blizzard_MainMenuBarBagButtons/Camelot/MainMenuBarBagButtons.lua` uses `KEYRING_CONTAINER`, `GetKeyRingSize` |
+| Reagent bag slot | present | `CharacterReagentBagMixin` in the same Camelot file; `ForeverPlus/Modules/BagSlots.lua` counts it |
+| `C_Bank` | present: `FetchNumPurchasedBankTabs`, `IsItemAllowedInBankType`, `FetchDepositedMoney`, `FetchViewableBankTypes` | `origin/forever` `BankDocumentation.lua` |
+| `Enum.BagSlotFlags` | 10 values, 1..512 (`DisableAutoSort`, `ClassEquipment`, `ClassConsumables`, `ClassProfessionGoods`, `ClassJunk`, `ClassQuestItems`, `ExcludeJunkSell`, `ClassReagents`, `ExpansionCurrent`, `ExpansionLegacy`) | `BagConstantsDocumentation.lua` |
+| `C_Item.GetItemInfo` | `MayReturnNothing = true` — the client only knows items it has seen | `ItemDocumentation.lua` |
+| Async item fetch | `C_Item.RequestLoadItemDataByID(itemID)` → `ITEM_DATA_LOAD_RESULT`; Blizzard's own `AsyncCallbackSystemMixin` (`ASYNC_ITEM`) is the reference and loads on camelot | `Blizzard_ObjectAPI/Mainline/AsyncCallbackSystem.lua` |
+| Icon picker | `IconDataProviderMixin` (`GetNumIcons`, `GetIconByIndex`, `GetIconForSaving`, `GetIndexOfIcon`) + `IconSelectorPopupFrameTemplate` | `Blizzard_FrameXMLBase/IconDataProvider.lua` |
+| `C_Item.CanItemFitInContainer` | **absent** on Forever — bag restrictions must be inferred from `GetBagSlotFlag` + item type | grep of `Blizzard_APIDocumentationGenerated` |
 
 Detection pattern (copy this, do not invent another):
 
@@ -154,6 +166,13 @@ move our windows. ThreatMeter deliberately does not call it.
 6. **Every non-trivial branch gets a self-check.** A small assert-based test or `/bos test`
    path. Trivial changes need none.
 7. `shortcut: <limit>, <when to upgrade>` comment on any deliberate limitation.
+8. **Do not call a Blizzard container manager just to read it.** `ContainerFrameSettingsManager:GetBagsShown()`
+   *builds and stores* the list; calling it from addon code tainted Blizzard's bag code on this client
+   until `UseContainerItem` was refused (`../addons/ForeverPlus/Modules/BagWindow.lua`). Call a
+   Blizzard function only after reading its source and finding that it writes nothing.
+9. **No default `Ctrl+Z`/`Ctrl+Y` bindings** (`FR-76`). Undo is a button; those keys sit next to WASD.
+10. **No theme/skin system, no `settings.theme`** (`docs/07` Q16). Build from `ItemButton` /
+    `ContainerFrameItemButtonTemplate` / the client's bag atlases.
 
 ---
 
@@ -163,11 +182,12 @@ move our windows. ThreatMeter deliberately does not call it.
 - **Style:** 2-space indent, `local x = 1`, module tables as `local mod = addon:NewModule('Mod')`.
   Follow BetterBags' annotation style (`---@class`, `---@field`) — it is the readable half of
   the two references.
-- **Naming:** addon folder / `addonName` = the chosen product name (see `docs/07` Q1); working
-  title `BagOfSorting`, slash command `/bos`.
+- **Naming:** addon folder / `addonName` / repo = **`BagsOfSorting`**, TOC title **`Bags of Sorting`**
+  (plural decided, `docs/07` Q1), SavedVariables `BagsOfSortingDB`, slash command `/bos`.
 - **File layout:** one concern per file, `core/`, `data/`, `layout/`, `frames/`, `config/`,
-  `filters/`, `themes/`, `util/`. Each directory gets a `README.md` (BetterBags does this; it is
-  why BetterBags is navigable).
+  `filters/`, `integrations/`, `util/`. **No `themes/`** (`docs/07` Q16: use the client's own bag
+  visuals so the user's skinning addon works). Each directory gets a `README.md` (BetterBags does
+  this; it is why BetterBags is navigable).
 - **Locales:** single `L` table from `core/locale.lua` (key-falls-back-to-itself); enUS is the key
   source. Do not hand-write other locales at spec/prototype phase.
 - **No new dependencies** without a `docs/07` entry. v1 target dependency set is **zero vendored
@@ -180,18 +200,20 @@ This repo ships **one addon and nothing else**. Wow-wide assets (the `wow-foreve
 paths from the parent workspace — never vendored here.
 
 ```bash
-ls -a .            # agents.md  readme.md  docs/  .gitignore  .agents -> ../.agents (ignored)
+ls -a .   # LICENSE  Media/  agents.md  readme.md  docs/  .gitignore  .agents -> ../.agents (ignored)
 ```
 
 `.agents` is a symlink to `../.agents` and is gitignored. Do not add shared scripts, shared docs, or
-another addon under this tree.
+another addon under this tree. `LICENSE` (WTFPL) and `Media/Icon.png` are shipped content — they are
+not in the `.pkgmeta` ignore list.
 
 ## Commands
 
 ```bash
 luacheck .                      # lint (see .luacheckrc; WoW globals declared)
 lua5.1 -e "loadfile('X.lua')"  # syntax-only smoke
-# install for in-game test: copy/symlink into ../addons/<AddonName>/
+# install for in-game test: copy/symlink into ../addons/BagsOfSorting/
+# runnable in-game checks: docs/08-test-plan.md  (/script works on Forever, gated)
 ```
 
 There is no unit-test harness yet. M0 in `docs/06-milestones.md` creates the smallest one

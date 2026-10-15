@@ -1,29 +1,32 @@
 # 07 — Open Questions
 
-Each entry: the question, the real options, **a recommendation**, and what it takes to decide.
-Disagreeing means editing the recommendation to your alternative and why — not a comment thread.
+Each entry: the question, the real options, **a recommendation** (or a decision), and what it takes
+to decide. Disagreeing means editing the recommendation to your alternative and why — not a comment
+thread.
+
+Resolved entries stay in the file with their evidence. That is what stops the same argument being
+had twice.
 
 ---
 
-## Q1 — Product name
+## Q1 — Product name — **DECIDED: `Bags of Sorting` (plural)**
 
-Repo dir is now `BagOfSorting` (renamed 2026-10-14, nothing pushed yet), and `../addons/BagOfSorting`
-is a symlink to it — so the client-visible addon folder name already matches the addon name WoW
-requires. Remaining open item is only the public name on CurseForge/Wago.
+Plural because the product *is* several bags; "Bag of Sorting" reads like one bag.
 
-| Option | Notes |
+| Field | Value |
 |---|---|
-| `Bag of Sorting` (`BagOfSorting`, `BagOfSortingDB`, `/bos`) | matches the repo dir and the addon symlink folder, descriptive, `/bos` is short and unclaimed |
-| Keep it a working title and pick at M7 | cheap now, painful later |
+| Repo / GitHub | `BagsOfSorting` — `https://github.com/SterlingNerd/BagsOfSorting.git` |
+| Addon folder / `addonName` | `BagsOfSorting` (client-visible; `../addons/BagsOfSorting` symlinks to the repo) |
+| SavedVariables | `BagsOfSortingDB` |
+| TOC `## Title` | `Bags of Sorting` |
+| Slash command | `/bos` (unchanged, short, unclaimed) |
+| CurseForge | project `1745962` |
+| Wago | `bGoYJY60` |
 
-**Recommendation:** lock `Bag of Sorting` / `/bos` now. Check CurseForge + Wago for a name clash
-before M0's first commit; if it clashes, pick the alternative today, not at M7.
+**Needed:** nothing. Check CurseForge/Wago for a *different addon* claiming the name before the first
+public upload, not before the first commit.
 
-**Needed:** one search on CurseForge/Wago.
-
-## Q2 — Dependency set
-
-**Resolved 2026-10-13: zero vendored libraries in v1.**
+## Q2 — Dependency set — **DECIDED: zero vendored libraries**, with the cost named
 
 Evidence that settled it:
 - BetterBags declares `AceGUI-3.0` and `AceConfig-3.0` in its TOC and uses **neither** in its own
@@ -31,182 +34,263 @@ Evidence that settled it:
   `UIPanelButtonTemplate`, `InputBoxTemplate`, `WowStyle1DropdownTemplate`,
   `UICheckButtonTemplate`, `UISliderTemplate`, `ButtonFrameTemplate`.
 - `origin/forever` ships all of those, plus `UIDropDownMenu`/`EasyMenu` (so BetterBags' vendored
-  `LibUIDropDownMenu` is a Classic concession), plus `StackSplitFrame` with a Camelot override.
-- Forever exposes no options-panel widget API (`C_SettingsUtil` only), so the settings window is
-  ours regardless — which was always going to be the case.
+  `LibUIDropDownMenu` is a Classic concession), plus `StackSplitFrame` with a Camelot override, plus
+  `IconDataProviderMixin` and the `IconSelectorPopupFrameTemplate` picker the macro UI uses.
+- Forever exposes no options-panel widget API (`C_SettingsUtil` only), so the settings UI is ours
+  regardless.
+- Not vendoring Ace3 removes the `AceEvent30Frame` class of `ADDON_ACTION_FORBIDDEN` that bit this
+  workspace (`../TODO.md`).
 
-What we now hand-roll (`docs/03` §Dependencies): module lifecycle ~40 lines, event dispatch ~60,
-hooks ~30, locale ~15, saved positions ~100, **profiles ~250 lines + tests**.
+What we give up, honestly — this is the part the "avoid dependencies" rule used to hide:
 
-**Remaining live question:** is `core/db.lua` (profiles: Default / per-character / copy-from /
-reset / versioned migrate) worth vendoring `AceDB` alone to avoid? Recommendation: **no** — write
-it, test it, and revisit only if it becomes a recurring bug source. AceDB is the single defensible
-exception, not a reason to take the rest of Ace3.
+| Lost habit | Real consequence | Replacement |
+|---|---|---|
+| LibDataBroker + LibDBIcon minimap icon | Baggins/Bagnon users look for a draggable minimap icon; broker-display addons (Titan-class) cannot host us | `## AddonCompartmentFunc` + `## IconTexture` in v1 (verified present on camelot); a ~60-line own minimap button if users ask (`FR-123`) |
+| AceConfig option tables | we do not appear inside someone else's aggregated options suite | nothing on Forever — no such suite is installed here and there is no options-panel API |
+| LibQTip dewdrops | Baggins' rule-editing hover panels | `UIDropDownMenu`/`EasyMenu` + `TooltipBackdropTemplate` popovers |
+| LibPeriodicTable curated lists | 329 rules in the measured config depend on named item sets (`docs/01`) | our own preset data as `itemID in {…}` categories (`FR-31`) — same content, ours to maintain |
+| LibBagUtils / LibWindow / LibSharedMedia / LibItemUpgradeInfo | bag slot counting, saved positions, media, upgrade arrows | `C_Container.GetBagSlotFlag`, own positions, no custom fonts, Pawn integration (`FR-122`) |
+| Masque / Pawn / ConsolePort / QuickFind | skinning, upgrade arrows, gamepad, cross-addon search | Masque + Pawn as guarded optional hooks (`FR-121`, `FR-122`); the rest skipped unless asked |
 
-**Needed:** none. Reopen only if the M0/M1 profile code misbehaves.
+**Reopen triggers:** `core/db.lua` profiles becoming a recurring bug source (AceDB alone would be
+defensible), or a minimap button request recurring in feedback.
 
-## Q3 — Can a section hold multiple categories?
+## Q3 — Can a section hold multiple categories? — **DECIDED: B, a section binds a list of categories**
 
-Baggins: `section.cats = { "Herbs", "Ores", "Reagents" }` — a section is a *group* of categories.
-BetterBags: one section per category.
+The measured configs settle it (`docs/01`): 6–8 sections per profile bind more than one category,
+including `Elements{5}`, `Enchanting{5}`, `Metals and Ores{2}`. "One block, several kinds of thing"
+is not an advanced feature, it is how the config is actually written.
 
-| Option | Consequence |
-|---|---|
-| **A. One category per section** (BetterBags) | model is simple, UI is obvious ("this block shows the Herbs category"), but "Herbs + Ores in one block" requires a category whose rules are `any` of both |
-| **B. Section = list of categories** (Baggins) | matches the feature users cite about Baggins ("one block, several kinds of thing"), costs a merge/sort rule for how multiple categories lay out inside one block |
+Consequences, all of which must move together:
+- `docs/04`: `section.categories = { … }`.
+- Precedence is **unchanged**: ownership is still decided globally by category priority. Several
+  categories in one section is a *display* grouping, never a precedence rule (`docs/04` §Precedence 7).
+  This is the sentence that keeps the model from becoming Baggins' ordering puzzle.
+- `docs/05` §Screen 4: the section editor is a combo box + sortable list, exactly as asked for.
+- `layout/flow` must size a block whose contents come from N categories.
+- Baggins' `section.cats` maps 1:1 if we ever do migration (moot — Q5).
 
-**Recommendation:** **A for v1**, with `category.duplicate` and `any{}` groups covering most of B's
-value, **plus** a documented path to B: a section may reference a *category group* (a named list of
-categories rendered as one block, sub-sorted by category). Ship A in M2, add the group variant in
-M6 only if real usage shows we need it. This keeps the config UI honest — one block, one thing to
-explain.
-
-**Needed:** decision. This is the single biggest model decision in the project; it changes
-`docs/04` and the left pane of `docs/05`.
-
-## Q4 — Do we hook Blizzard's bag functions?
+## Q4 — Do we hook Blizzard's bag functions? — **open, decide at M2 with the installed addons running**
 
 Baggins raw-hooks `OpenAllBags`, `ToggleAllBags`, `ToggleBackpack`, `OpenBag`, `OpenBackpack`,
-`ToggleBag` so that other addons (and Blizzard keybinds) open *our* windows. That is what makes a
-bag addon feel native — and it is also the most taint-prone code in either reference repo.
+`ToggleBag` so other addons' "open bags" opens *our* windows. It is what makes a bag addon feel
+native, and it is the most taint-prone code in either reference repo.
 
 | Option | Consequence |
 |---|---|
-| **A. Hook them** (Baggins-style) | other addons' "open bags" works, Blizzard bag button works, more combat/taint risk |
-| **B. Own keybinds + hide/reparent the Blizzard bags bar** (BetterBags-style) | less hooking, but addons that call `OpenAllBags()` directly will open stock bags alongside ours |
-| **C. Hook only `BackpackOpenButton`/`CharacterFrame` bag button click, not the global functions** | middle ground |
+| A. Hook them (Baggins-style) | other addons' `OpenAllBags()` works; highest taint/combat risk |
+| B. Own keybinds + our own vanilla↔sorting toggle (`FR-51`) | no hooking; addons that call `OpenAllBags()` directly open stock bags alongside ours — which is *survivable* because we can show the vanilla bags on purpose |
+| C. Hook only the bag-bar button click / `BackpackOpenButton` | middle ground |
 
-**Recommendation:** **B first, in M2**, and add **C** in M6 if real usage shows conflicts (e.g. with
-`../addons/Leatrix_Plus` or `ForeverPlus`, both installed here). Never A in v1.
+**Recommendation:** **B**, plus `FR-51`. The vanilla↔sorting toggle changes the shape of this
+question: we no longer need Blizzard's open functions to route to us, because we can give the player
+the real bags whenever they want them. Add **C** at M6 only if real conflicts appear. Never A in v1.
 
-**Needed:** in-game check at M2 — with our windows open, press the default B keybind and confirm
-nothing stock opens; then load Leatrix_Plus and re-test.
+**Taint note:** `ForeverPlus/Modules/BagWindow.lua` documents what happens when an addon calls
+`ContainerFrameSettingsManager:GetBagsShown()` on this client — Blizzard's bag code ran tainted until
+`UseContainerItem` was refused. Reading is not free.
 
-## Q5 — How do Baggins' multi-category sections migrate?
+**First-run matters (`FR-64`):** addons do not get to assume `B` is theirs. On first login, detect
+that our toggle collides with the default bag keybind and point at the Key Bindings panel. Getting
+this wrong is the #1 way a bag addon gets uninstalled.
 
-Consequence of Q3. If we land on A, a Baggins section with `cats = {"Herbs","Ores"}` has no direct
-equivalent.
+**Needed:** M2 in-game test with `ForeverPlus`, `Leatrix_Plus` (which can
+`hooksecurefunc('OpenAllBags', CloseAllBags)`), `Baggins` and `BetterBags` each loaded.
 
-**Recommendation:** migrate it to **one new category** named after the section, whose rule tree is
-`any{ <category Herbs tree>, <category Ores tree> }`, and list that transformation in the migration
-report as a semantic change (the original categories still exist and still compete). Do not create
-N sections — that silently explodes the layout.
+## Q5 — Baggins migration — **DECIDED: deferred, no importer in v1**
 
-**Needed:** Q3 decided first.
+Bagnon/AdiBags/AdiBags-class addons are where the users are; Baggins' userbase is smaller and its
+config shape is the thing we are deliberately not preserving. Ship **two sensible default profiles**
+(a "classic-ish" one modelled on the shapes in `docs/01`, and a minimal one) and skip migration.
 
-## Q6 — Export format: model dump or command log?
+`docs/04`'s migration table stays as the answer to "if we ever do it", so the thinking is not lost.
 
-| Option | Notes |
-|---|---|
-| Model dump (`{windows, categories}` serialized) | simple, stable, human-diffable |
-| Command log replay | guarantees import runs through the same validated path as UI edits |
+## Q6 — Export format — **DECIDED: model dump**
 
-**Recommendation:** **model dump**, but import feeds the dump through the command layer as one
-batch command (`import.apply`) so it is validated, atomic and undoable. Best of both, no complexity.
+`BOS1.<base64(serialize({windows, sections, categories}))>`, imported as **one** `import.apply`
+command so it is validated, atomic and undone by one Undo. Diff shown before Apply.
 
-**Needed:** decision only.
+## Q7 — Is the search DSL in v1, and can we reuse Blizzard's search instead?
 
-## Q7 — Is the search DSL in v1?
+**Blizzard's search is not reusable as our index.** On this client the bag search is
+`ItemButtonUtil.GetItemContextMatchResultForItem(itemLocation)` — a per-item predicate used to
+dim/hide buttons over inventory the client already knows. It has no result list, cannot see a closed
+bank, cannot see an alt, and `GetItemContextMatchResultForContainer` is absent on camelot
+(`agents.md`). So: our own index is required for anything beyond "filter what is on screen".
 
-FR-28 is Should today. A lexer+parser+index is roughly 1,000 lines (BetterBags: `util/query.lua`
-194 + `data/search.lua` 738). It is the only way a user can express "everything from Outland that
-is not a quest item and has 'herb' in the tooltip" without us shipping a field for every idea.
+What we *do* reuse is the matcher, where it applies, so our search and the client's agree about what
+"matches" means (`FR-50`).
 
-**Recommendation:** keep it **Should**, land it in M6, and cap the v1 field set to the FR-28 list.
-If M3's chip editor turns out to cover everything in practice, cut the DSL and spend the time on
-dynamic categories instead. Decide at the M3→M4 boundary using what people actually tried to build.
+The DSL itself stays **Should**, land in M6, capped to the FR-28 field subset. If M3's chip editor
+turns out to cover what people actually try to express, cut the DSL and spend the time on dynamic
+categories instead.
 
-**Needed:** evidence from the M3 human tests.
+**Needed:** evidence from the M3 human tests — specifically, rules people tried to build and could
+not express as chips.
 
 ## Q8 — Is `kind = "dynamic"` (group-by-type/subtype/expansion) Must?
 
-It is the most-liked BetterBags feature and the hardest to render as chips: a dynamic category
-produces N sections the user did not create, which conflicts with "sections are things you made".
+Concrete example of what it is, since it is hard to picture from the words. In BetterBags, a
+category `Tradeskill` with `groupBy = subtype` produces, by itself, sections named *Herbs*, *Ores*,
+*Cloth*, *Leather*, *Gems*, *Elemental* — one per distinct subtype among your items — each holding
+the matching items, each individually pinnable/hideable, none of them configured. Change one setting
+on one category and six sections appear.
 
-**Recommendation:** **Must, but scoped**: dynamic categories expand into sections inside exactly one
-window, are named `<parent> — <value>`, cannot be individually reconfigured (only disabled or
-moved), and are visually marked as generated. Anything more is a v2 feature.
+Why it is attractive here: the measured Baggins config hand-builds exactly this with 20 categories
+(`Tradeskills.Enchanting`, `.TBC`, `.Wrath`, `.Cata`, `.Mop`, `Tradeskills.Elements.*`) and 22
+sections in one window. A dynamic category is that, in one setting.
 
-**Needed:** decision. If it is not Must, `docs/04`'s classify-time expansion step disappears and
-M5 gets smaller.
+Why it is dangerous here: it makes sections the user *did not create* appear inside a window whose
+whole point is "this is the window you made".
 
-## Q9 — Do we hide the Blizzard bags bar?
+**Recommendation:** **Must, but scoped**: a dynamic category expands into sections inside exactly one
+window, named `<parent> — <value>`, individually only *disabled* or *moved* (never reconfigured), and
+visually marked as generated. Anything more is v2.
 
-BetterBags reparents `BagsBar` to a sneaky frame to hide the stock bags. On Forever the bags bar is
-`MainMenuBarBagButtons/Camelot`, and reparenting a protected-ish frame is exactly the kind of thing
-that produced the `ADDON_ACTION_FORBIDDEN` mess documented in the parent `../agents.md`.
+**Needed:** decision confirmed before M5, because if it drops, `docs/04`'s classify-time expansion
+step disappears and M5 shrinks.
 
-**Recommendation:** hide by `SetAlpha(0)`/`SetShown(false)` on the *button* only if M2 testing shows
-no lockdown errors; otherwise leave the stock button visible and let it open our windows (Q4 option
-C). A visible stock button is a cosmetic loss, not a functional one.
+## Q9 — Do we hide the Blizzard bags bar? — **reframed: we don't need to**
 
-**Needed:** M2 in-game test.
+`FR-51` (vanilla↔sorting toggle) removes most of the reason to hide anything: the stock bar stays,
+it becomes the switch. BetterBags reparents `BagsBar` to a sneaky frame; on this client the bar is
+`Blizzard_MainMenuBarBagButtons/Camelot` and `ForeverPlus` already writes numbers on
+`MainMenuBarBackpackButton`, so the bar is both reachable and contested.
+
+**Recommendation:** keep the bar visible, add our toggle to it (or beside it), and hide only
+Blizzard's *bag windows* while our windows are shown — hiding windows is a `SetShown` on a frame we
+are not using, which is a different risk class from reparenting a protected bar. Test at M2; if
+`SetShown` on container frames causes lockdown complaints, leave them visible and accept the cosmetic
+loss. A visible stock button is a cosmetic loss; a blocked `UseContainerItem` is a functional one.
 
 ## Q10 — Forever container facts we still do not know
 
-`agents.md` lists what Forever has/does not have, but these are unresolved and M2 depends on them:
+Partly answered by reading `origin/forever` (2026-10-15):
 
-- keyring present or not (Baggins treats Forever as classic-like here; BetterBags has a `KeyRingButton` note)
-- reagent bag slot present (`CharacterReagentBag0Slot` is listed as present — is it *equippable*?)
-- `NUM_TOTAL_EQUIPPED_BAG_SLOTS` value and the bank-bag index range
-- whether `Enum.BagIndex.AccountBankTab_N` being inert causes harvest loops to error or just return 0
+| Fact | Status | Evidence |
+|---|---|---|
+| Keyring exists | **yes, expect it** | `Blizzard_MainMenuBarBagButtons/Camelot/MainMenuBarBagButtons.lua` uses `KEYRING_CONTAINER`, `GetKeyRingSize`, `PutKeyInKeyRing` |
+| Reagent bag slot exists | **yes, present** | `CharacterReagentBagMixin:GetSlotAtlases()` in the Camelot bag-buttons file; `ForeverPlus/Modules/BagSlots.lua` counts it as a special bag |
+| Bags start **combined** into one window | **yes** | `ContainerFrameCombinedBags`, `IsUsingCombinedBags` (ForeverPlus `BagWindow.lua`) |
+| `C_Bank` exists with `FetchNumPurchasedBankTabs`, `IsItemAllowedInBankType`, `FetchDepositedMoney` | **yes** | `Blizzard_APIDocumentationGenerated/BankDocumentation.lua` on `origin/forever` |
+| `NUM_TOTAL_EQUIPPED_BAG_SLOTS` value, bank-bag index range | **unknown** | in-game only |
+| Whether inert `Enum.BagIndex.AccountBankTab_N` errors or returns 0 in a harvest loop | **unknown** | in-game only |
+| `AddonCompartment` available | **yes** | `Blizzard_Minimap/Blizzard_Minimap.toc`: `AddonCompartment.lua [AllowLoadGameType mainline]`, no camelot exclusion |
+| `/script` available for testing | **yes, gated** | `Blizzard_ChatFrameBase/Shared/SlashCommands.lua`: `SCRIPT` → `RunScript`, gated by `C_GameRules.IsGameRuleActive(Enum.GameRule.UserScriptsDisabled)` and a one-time dangerous-scripts popup. `/dump`, `/eventtrace`, `/framestack`, `/api` also present |
 
-**Recommendation:** M0's `/bos` capability dump answers all four in one run. Until then, every
-container loop iterates a **discovered** list built at load, never a hardcoded constant.
+**Recommendation:** unchanged — M0's `/bos` capability dump answers the rest in one run, and every
+container loop iterates a **discovered** list built at load, never a hardcoded constant. Update
+`agents.md` with the results.
 
-**Needed:** one in-game run at M0. Update `agents.md` with the results.
+## Q11 — Profile default, and can profiles inherit?
 
-## Q11 — Profile default: per-character or shared?
+**Recommendation:** **shared Default + per-character override that stores only the differences.**
+Reason: a bag layout is a personal habit, not a class-specific need, and per-character defaults
+create the "I configured it on my mage and my warrior is a mess" complaint.
 
-Ace3's `AceDB` defaults to per-character; BetterBags defaults everyone to a shared "Default"
-profile. Since we are writing our own profile store (`docs/03` §Dependencies) this is a free choice.
+The inheritance question the shared model raises is real and worth designing deliberately:
 
-**Recommendation:** **shared Default**, per-character opt-in, with the profile popover showing which
-characters share a profile. Reason: a bag layout is mostly a personal habit, not a class-specific
-need, and per-character defaults create the "I configured it on my mage and my warrior is a mess"
-complaint.
+- What users want is *"my warrior's layout is my mage's layout plus a War section, and my bank
+  windows are the same on every character"*.
+- The dangerous version is runtime inheritance — edit Default, eleven characters change, nobody knows
+  why, and a per-character override that "inherits" a category silently re-appears when Default
+  changes.
+- The safe version, in order of preference:
+  1. **Copy with provenance** (`window.copyFrom`, already in `docs/04`) — one action, no spooky link.
+  2. **Explicit re-copy** — "pull the Herbs category from Default into this character's profile",
+     shown as a command with an inverse.
+  3. Runtime inheritance — only if 1 and 2 demonstrably fail. If we ever do it, it is a field with
+     its own semantics and its own UI indicator, never an implicit default.
 
-**Needed:** decision only.
+"Send to X" sections (a section whose purpose is *deposit here* rather than *display here*) belong to
+the bulk-action work in M6, not to profiles: they are a command target, not an inheritance mechanism.
 
 ## Q12 — Do we ship a plugin API?
 
-`FR-32` says Won't for v1. Internal boundaries (`data` never touches frames, field registry is data)
-make it possible later.
-
-**Recommendation:** keep the boundaries, ship nothing, and write one `docs/` page only when someone
-actually wants to build a plugin.
-
-**Needed:** none yet.
+`FR-32` says Won't for v1. Internal boundaries (`data` never touches frames, field registry is data,
+presets are data) make it possible later. Nothing official for v1; once stable, category plugins are
+worth supporting. Write the docs page only when someone actually wants to build one.
 
 ## Q13 — How deep do we go with Blizzard EditMode?
 
-Forever's move mode is joinable (ThreatMeter does it on Camelot). Two integration depths:
-
 | Option | What you get | Cost / risk |
 |---|---|---|
-| **A. EventRegistry only** (ThreatMeter-style) | Enter/Exit callbacks, selection template, manual magnetism + snap preview calls. No registration with `registeredSystemFrames`. | proven pattern; no EditMode layout save/restore for our windows |
-| **B. Also call `EditModeManagerFrame:RegisterSystemFrame(frame)`** | EditMode treats our window as a system: `OnEditModeEnter/Exit` calls, anchor tracking, and possibly EditMode **layout save/restore** including our windows | undocumented, absent from `C_EditMode`, and EditMode's layout system assumes one frame per named *system* — our windows are user-created and variable in count. Could break layout import/export |
+| A. EventRegistry only (ThreatMeter-style) | Enter/Exit callbacks, selection template, manual magnetism + snap preview | proven on this client; no EditMode layout save/restore for our windows |
+| B. Also `EditModeManagerFrame:RegisterSystemFrame(frame)` | EditMode treats our window as a system: enter/exit calls, anchor tracking, possibly layout save/restore | undocumented, absent from `C_EditMode`, and EditMode's layout system assumes one frame per named *system* — our windows are user-created and variable in count |
 
-**Recommendation:** **A**, plus a spike in M2 to test B for one window and see whether EditMode's
-layout persistence tolerates a dynamic number of systems. If B works cleanly it is a real win (users
-move our bags in the same UI, with the same layouts, as their action bars). If it fights us, stay
-on A permanently and never mention EditMode layouts in our UI.
+**Recommendation:** **A**, plus an M2 spike on B for one window. Two extra things the spike must
+answer, because `docs/05` now depends on them:
 
-**Needed:** M2 spike, in-game. Do not build any UI that assumes B.
+1. Is `EditModeSystemSettingsDialogButtonTemplate` reachable for a frame we registered, and can it
+   carry our columns/scale/compact controls? If not, those controls live only in the window's context
+   menu and `FR-71` is downgraded to Should.
+2. EditMode's own **Bags** system on this client is the bag *button bar*, not the bag window
+   (`ForeverPlus/Modules/BagWindow.lua`). Do not let our UI imply that EditMode's "Bags" entry is us.
 
-## Q14 — Distribution
+If B works cleanly it is a real win. If it fights us, stay on A permanently and never mention
+EditMode layouts in our UI. **Do not build UI that assumes B.**
 
-CurseForge, Wago, or GitHub-only. Both references are on CurseForge (Baggins `X-Curse-Project-ID:
-13471`, BetterBags `942432`) and BetterBags also uses Wago.
+## Q14 — Distribution — **DECIDED**
 
-**Recommendation:** GitHub releases first (M7), CurseForge once the name is settled. Skip Wago
-until there is a reason.
+GitHub first (`https://github.com/SterlingNerd/BagsOfSorting.git`), CurseForge project `1745962`,
+Wago `bGoYJY60`. Publish once something marginally usable exists (M7), with `## X-Curse-Project-ID`
+and `## X-Wago-ID` already in the TOC. License: WTFPL (`LICENSE` at repo root, `## X-License: WTFPL`).
 
-**Needed:** name (Q1) + a CurseForge account.
+---
+
+## Q15 — How much inventory do we persist? (bank / alts / guild bank)
+
+The extended search features all hit the same wall: **there is no API to read an inventory the client
+does not currently know.** Bank contents arrive when the bank is opened; another character's bags are
+not on this client at all; the guild bank needs the guild bank UI and permissions.
+
+| Feature | Possible without persistence? | With persistence |
+|---|---|---|
+| Search bank while closed (`FR-110`) | **yes**, after the bank has been opened once this session — the client keeps the container data | session-only is enough for v1.x |
+| Search alts / alt banks (`FR-111`) | **no** | requires a per-character snapshot written by each character that ran the addon (the Bagnon/BagSync model) |
+| Guild bank (`FR-112`) | after `GUILDBANKFRAME_OPENED` | same question |
+| Providing a Bagnon-compatible `AllInventory` to other addons | no | same snapshot, published under Bagnon's global names |
+
+Options: (a) session-only, honest "bank not known yet" messaging; (b) persisted per-character snapshot
+of itemIDs + counts only (no names — we can resolve names from the item cache); (c) full persisted
+snapshot including location.
+
+**Recommendation:** (a) for v1.x, (b) as the v2 design, and never (c). A snapshot of itemIDs and
+counts is ~1–3 KB per character and is the only part that answers "do I have this anywhere"; location
+data is where the SavedVariables bloat and the privacy discomfort come from. Ship the honest
+"not known yet" message rather than a fake-complete result — that is a feature, not a gap.
+
+**Needed:** decision before any cross-character feature is scheduled.
+
+## Q16 — Themes — **DECIDED: no theme system, use the client's own bag visuals**
+
+Build windows and item buttons from `ItemButton` / `ContainerFrameItemButtonTemplate` / the client's
+bag atlases, and let whatever skinning addon the user runs (Masque or its successor) do its job on our
+bags the way it does on Blizzard's. Delete `themes/` from the file tree, delete `settings.theme`,
+delete FR-49's "two built-in looks".
+
+What this buys: zero theme code, zero theme maintenance, and the skinning ecosystem works for free.
+What it costs: no "dark flat" look for users who run no skinning addon. Accepted.
+
+**Needed:** M2 check (`AC-49`) that Masque actually reaches our buttons; if it does not, the reason
+gets written down rather than a theme system being invented to compensate.
+
+## Q17 — Is dependency injection worth it for the client module? — **DECIDED: no**
+
+`core/client.lua` is a resolved table of ~10 answers computed once at load, not a service. The
+if-statements are already removed by (1) flags resolved once, (2) table-inert gating — a missing
+capability means the table that would drive the feature is never built, (3) value getters where
+things differ in kind (`itemButtonType`). Injecting an adapter per module adds a second name for the
+same table, a wiring step, and a new bug class, in a language where "DI" would be manual wiring in
+the load order we already have. Full reasoning: `docs/03` §Is dependency injection worth it here?
+
+If a second client is ever real, the upgrade is **one data table per client plus a few function
+overrides where behaviour genuinely differs** — still data, still one file.
 
 ---
 
 ## Decisions needed **before M0 commits**
 
-Q1 (name), Q3 (section↔category cardinality). Q2 is resolved (no vendored libraries). Everything
-else can be decided at the milestone that needs it.
+Q1 (name) and Q3 (section ↔ categories) are decided. Q2, Q5, Q6, Q14, Q16, Q17 are decided.
+Q8 (dynamic categories) must be confirmed before M5. Everything else is decided at the milestone that
+needs it: Q4/Q9/Q13 at M2, Q7 at the M3→M4 boundary, Q15 before any cross-character feature.

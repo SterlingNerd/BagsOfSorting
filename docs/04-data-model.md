@@ -1,6 +1,6 @@
 # 04 — Data Model
 
-SavedVariables: `BagOfSortingDB`. One file, versioned, with our own profile store (no library).
+SavedVariables: `BagsOfSortingDB`. One file, versioned, with our own profile store (no library).
 
 Rule of the whole schema: **config is persisted, derived state is not.** Nothing about which item
 is where is stored — that is computed from config + live inventory every refresh.
@@ -10,7 +10,7 @@ is where is stored — that is computed from config + live inventory every refre
 ## Top level
 
 ```lua
-BagOfSortingDB = {
+BagsOfSortingDB = {
   version   = 1,                       -- schema version, drives core/db.Migrate()
   global    = {
     presetsInstalled = { leveling = true },
@@ -37,12 +37,16 @@ BagOfSortingDB = {
       columns  = 5,
       compact  = false,               -- shrink to content, hide when empty
       scale    = 1.0,
+      icon     = "INV_Misc_Bag_10",   -- bare Interface\ICONS\ name, from the client's icon picker
+      overlay  = nil,                 -- optional our-own-art overlay drawn on top of `icon`
       position = { point="BOTTOMLEFT", x=..., y=... },   -- saved drag position
       anchor   = { enabled=false, corner="auto" },
+      copyFrom = nil,                 -- window id this one was created from (FR-10b): provenance
+                                      -- only, NOT inheritance. Editing the source never edits this.
       sections = {                    -- ordered array
-        { id="s1", category="Herbs",     collapsed=false, hidden=false },
-        { id="s2", category="Ores",      collapsed=false, hidden=false },
-        { id="s3", category="__catchall", collapsed=true },
+        { id="s1", categories={"Herbs"},         collapsed=false, hidden=false },
+        { id="s2", categories={"Ores","Metals"}, collapsed=false, hidden=false },
+        { id="s3", categories={"__catchall"},    collapsed=true },
       },
     },
   },
@@ -53,9 +57,12 @@ BagOfSortingDB = {
       kind     = "rules",             -- "rules" | "manual" | "dynamic"
       rules    = <ruleTree>,
       dynamicField = nil,
-      itemIDs  = nil,                 -- kind="manual": { [itemID]=true }
+      itemIDs  = nil,                 -- kind="manual": { [itemID]=true }. For kind="rules" the IDs
+                                      -- live as an `itemID in {…}` leaf inside the tree instead.
       duplicate = false,
       enabled  = true,
+      affinity = nil,                 -- "herbalism"|"mining"|"engineering"|"soul"|"quiver"|… →
+                                      -- preferred physical container for compaction (FR-66)
       color    = nil,                 -- optional section title color
     },
     ["Recent Items"] = { priority = 1, kind = "rules",
@@ -69,12 +76,14 @@ BagOfSortingDB = {
                   showNew=true, newDuration=420, showQuestMarker=true,
                   showEmptySlots="compact"|"slots"|"off", emptySlotFamilyIcons=true },
     stacking  = { mergeStacks=true, mergeUnstackable=false, dontMergePartial=true,
-                  dontMergeTransmog=true },
+                  dontMergeTransmog=true, preferAffinityBags=true },
     sorting   = { section="manual"|"name"|"sizeDesc"|"sizeAsc",
                   item="nameThenQuality"|"qualityThenName"|"ilvl"|"expansion" },
-    interaction = { sectionBulkActions=true, itemMenu="default", upgradeArrow=false },
-    search    = { inBag=false, dsl=true },
-    theme     = "stock",
+    interaction = { sectionBulkActions=true, itemMenu="default", upgradeArrow=false,
+                    emptyBagConfirm=true },
+    bagBar    = { mode="sorting"|"vanilla", showVanillaToggle=true },
+    search    = { inBag=true, dsl=true, bankSnapshot=true },
+    undo      = { depth=50 },
     debug     = false,
   },
 }
@@ -85,13 +94,22 @@ Design notes:
 - **`windows` is an array, `categories` is a map.** Window order is meaningful and structural;
   category order is not (priority is a number, so it survives map iteration).
 - **Stable `id` for windows/sections**, name for categories. Renaming a window must not orphan its
-  sections; renaming a category must rewrite references (that is a command with an inverse, so
-  undo works).
+  sections; renaming a category must rewrite every section reference (that is a command with an
+  inverse, so undo works).
+- **A section holds a list of categories** (`docs/07` Q3, resolved: B). Inside one section the
+  categories lay out in category-priority order, then by the section's sort rule; the section title
+  is the section's own name, not a category name. This is what the measured Baggins configs use it
+  for (`Metals and Ores{Tradeskills.Metals, Tradeskills.Ore}`).
+- **`copyFrom` is provenance, not inheritance.** It exists so "make the bank half of this window" is
+  one action, and so a later *re-copy* can be offered. Nothing reads through it at runtime — runtime
+  inheritance is how configs become spooky action at a distance. If real inheritance is ever wanted
+  (`docs/07` Q11) it is a separate field with its own rules.
 - **`__catchall` is a real category**, not a special-cased code path. It has the lowest priority
   and a rule that matches "nothing else matched". This keeps `FR-16` inside the normal model.
 - **No `hideduplicates` global.** `FR-15` is per-category `duplicate = false`, default false. A
   global tri-state is how Baggins got 57 profile keys.
 - **Per-window `columns`**, not a global `columns`.
+- **No `theme` key.** We use the client's bag visuals (`docs/07` Q16).
 
 ## Rule tree
 
@@ -107,8 +125,13 @@ Constraints enforced by `data/rules.lua` on load and on every command:
   `shortcut: depth capped at 2, upgrade when a real use case appears with a UI that can show it`.
 - a leaf's `field` must exist in the field registry and its `cmp` must be in that field's allowed
   `cmps`; unknown field/`cmp` → rule disabled + reported (`FR-29`, `FR-107`), never a silent false.
-- `value` is validated against the field's `valueKind`.
+- `value` is validated against the field's `valueKind`. `valueKind = "idlist"` (the `itemID` field)
+  accepts a set of numbers and is rendered as `itemID in {Linen Glyph +41 more}` in a chip, never as
+  42 chips.
 - an empty group is invalid: it is rendered as "matches nothing" and reported.
+- a `none` group renders as **`EXCEPT …`**, not as a negative-sounding rule type. In the measured
+  Baggins configs `NOT` is used 320 times against `AND`'s 44; "except" is the refinement users
+  reach for and the UI must lead with it.
 
 ### Precedence semantics (normative)
 
@@ -120,19 +143,44 @@ Constraints enforced by `data/rules.lua` on load and on every command:
 5. `__catchall` matches only if no other category owned the item.
 6. The full ordered list of categories tested, and each match/reject reason, is recorded in the
    per-snapshot `trace` for the inspector (`FR-27`).
+7. A section bound to several categories does **not** re-run classification: ownership is decided
+   globally by priority, then each category's items are laid out inside the section in category
+   priority order. Two categories in one section are a *display* grouping, never a precedence rule.
 
-Manual membership (`kind = "manual"`) is checked **before** rules for that category, and a manual
-category with no priority advantage still loses to a higher-priority rule category — this is the
-one place users will be surprised, so the inspector must show it explicitly.
+`itemID in {…}` leaves are checked before the rest of their own tree (cheapest field, and the most
+likely to be the whole rule), and a manual-only category is equivalent to a single
+`all{ itemID in {…} }` tree — one concept, one editor, one explanation in the inspector.
+
+## Item ID entry (`FR-24b`)
+
+`util/idlist.lua` is the one parser, used by the category editor's paste box, the "make a category
+from these items" flow, preset installation and import. Accepted in one blob, mixed freely:
+
+- bare IDs: `26042 26044 4378`
+- commas, semicolons, tabs, newlines, or any mix as separators
+- item links (`[Linen Glyph]`), from a chat link or a dragged item
+- `id:26042` for the rare case where a name is also a number
+
+Rejected tokens are reported, not skipped silently: `43 IDs, 2 unknown to this client` with the two
+tokens listed. An ID the client has never seen is **kept** (it is valid config, it just cannot be
+named yet — `FR-103` resolves it later); a token that is not an ID at all is dropped with a reason.
+Output is a set, so pasting the same block twice is a no-op, and the whole paste is one command with
+one inverse.
 
 ## Not persisted
 
 - per-slot classification results, `trace`, stack groupings, section layouts (computed),
-  item button pool contents, harvested item info cache, "recent item" timestamps beyond the
-  duration anchor (`settings.newDuration` + a small map of `slotkey → time` that is debounced and
-  pruned).
-- Anything character-specific that belongs in `per-character` state lives in the per-character
+  item button pool contents, "recent item" timestamps beyond the duration anchor
+  (`settings.newDuration` + a small map of `slotkey → time` that is debounced and pruned).
+- Anything character-specific that belongs in per-character state lives in the per-character
   profile, not in `global`.
+
+**Two deliberate exceptions**, both because the alternative is a worse product:
+
+| Persisted | Why | Bound |
+|---|---|---|
+| `itemCache` (`itemID → name, quality, type, subtype, ilvl, icon`) | the client only knows items it has seen (`FR-103`); without this, a 40-ID manual category re-requests every ID at every login and the category editor is blank for a minute | bounded (≤ ~4000 entries, LRU), debounced, rebuildable, safe to delete |
+| `snapshot` (per-character item list, for `FR-110`–`FR-112`) | there is no API to read another character's inventory, and bank contents are unknown until the bank has been opened once this session | v1.x only; session-scoped for the bank in v1, and the size/retention question is `docs/07` Q15 before any cross-character version ships |
 
 ## Export / import (`FR-92`)
 
@@ -144,9 +192,10 @@ BOS1.<base64( json-ish serialize({windows, categories}) )>
 ```
 
 - `BOS1` prefix carries the format version; a mismatched prefix is a hard, explained refusal.
-- Manual categories export `itemIDs`, which are account-agnostic.
+- Manual categories and `itemID in {…}` leaves export their IDs, which are account-agnostic. Window
+  `icon` exports (a bare `Interface\ICONS\` name is not character-specific); `overlay` does not.
 - Import is a **command batch**: it runs through the same command layer as the UI, so import is
-  undoable in one `Ctrl+Z` and cannot half-apply.
+  undone by one Undo and cannot half-apply.
 - Import collision policy: existing category name → ask once (merge / rename incoming / skip),
   reported in the result toast.
 
@@ -156,7 +205,9 @@ BOS1.<base64( json-ish serialize({windows, categories}) )>
 is a pure function over the profile table. No migration ever runs inside `OnEnable` business
 logic (Baggins' `hideduplicates` boolean→string coercion in `OnEnable` is the anti-pattern).
 
-`FR-94` Baggins import is a separate opt-in path, not a schema migration:
+**Importing from other addons is deferred** (`docs/07` Q5, `FR-94` = Won't for v1): ship two
+sensible default profiles instead. The table below stays in the spec as the answer to "if we ever
+do it", and the target then is Bagnon/AdiBags-shaped data, which is where the users are.
 
 | Baggins | maps to | lossy? |
 |---|---|---|
@@ -171,12 +222,20 @@ what was dropped. Silent migration is worse than no migration.
 
 ## Size & performance notes
 
-- A heavy Baggins-style config is ~30 categories × ~3 rules. At ~120 bytes/rule that is trivial;
-  SavedVariables size is not a design driver.
-- The expensive thing is **classification cost**: `categories × items × leaves`. With 30 categories
-  and 120 items that is ~10k leaf evaluations per full refresh — fine, but only if `read(item)`
-  reads a pre-enriched record and not `GetItemInfo` per leaf. Hence phase 2 (`enrich`) materializes
-  every field the registry can ask for, once per item per snapshot.
+Measured, not guessed (`docs/01`): the heaviest real Baggins profile is **74 categories, 193 rules,
+12 windows, 117 sections**, with 419 distinct manual item IDs. At ~120 bytes/rule and ~40 bytes/ID
+that is still trivial — SavedVariables size is not a design driver, and the item cache is the only
+blob worth watching.
+
+- The expensive thing is **classification cost**: `categories × items × leaves`. At the real heavy
+  size — 74 categories × 120 items × ~2.6 leaves — that is **~23k leaf evaluations per full
+  refresh**, roughly 2× the earlier estimate in this doc. Still fine, but only if `read(item)` reads
+  a pre-enriched record and never `GetItemInfo` per leaf. Hence phase 2 (`enrich`) materializes every
+  field the registry can ask for, once per item per snapshot.
 - Field registry declares `read` as O(1) on the enriched record. A field that needs a network-ish
   lookup (tooltip text) is enriched lazily and marked `expensive = true` so the classifier can
   short-circuit (`any` groups evaluate cheap fields first — sort leaves by `field.expensive`).
+- `itemID in {…}` is a hash lookup, not a loop: cost is O(1) per item regardless of how many IDs a
+  user pasted. This matters because item-ID rules are 30% of the rules people actually write.
+- 117 sections in 12 windows is the layout-engine stress case (`AC-40` is 12 sections in one window;
+  `docs/08` has the 117-section case).

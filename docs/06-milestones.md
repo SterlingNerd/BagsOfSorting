@@ -44,8 +44,8 @@ Exit criteria
   `GetKeyRingSize`; reagent bag slot; `NUM_TOTAL_EQUIPPED_BAG_SLOTS`; container index ranges).
   Update `agents.md` with the answers — this milestone is what turns the "unverified" column into
   facts.
-- The four item-data questions are answered in-game and recorded in `docs/08` §A: does
-  `GetItemInfoInstant` give an icon for an ID never seen this session; does
+- The four item-data questions are answered in-game and recorded in **issue #1** (item data
+  availability): does `GetItemInfoInstant` give an icon for an ID never seen this session; does
   `RequestLoadItemDataByID` resolve it; does `ITEM_DATA_LOAD_RESULT` arrive; do
   `GetItemNameByID`/`GetItemQualityByID` read the same cache or a separate one.
 - `luacheck` clean in CI.
@@ -79,7 +79,7 @@ Exit criteria
 - **AC-100/101** timings recorded in `docs/06` as actual numbers, not targets.
 - **AC-103** loot an item never seen by the client; it lands in catch-all, then re-sorts when info
   arrives. Then `C_Item.RequestLoadItemDataByID` on a cold ID and confirm it resolves without a
-  reload (`docs/08` §A).
+  reload (issue #1).
 - **AC-97** a 40-ID manual category renders icons on first login and issues zero tier-3 requests on
   the second.
 - `/bos selftest` passes: fixture items × rule trees → expected category, including `any/all/none`
@@ -103,7 +103,8 @@ Deliverables
 - per-window `columns`, saved position/scale, `compact` windows, collapsed/hidden sections
 - **sections bound to several categories** (`FR-11`): packing one block whose contents come from N
   categories, sub-ordered by category priority
-- `window.copy` command (`FR-10b`) — a bank window built from a backpack window in one action
+- `window.copy` command (`FR-10b`) — a bank window built from a backpack window in one action, and
+  `window.link` (`FR-10c`) — the same two windows kept in step, with the link visible on both titles
 - `frames/header.lua` with the configure-mode handle placeholders
 - `frames/bagbar.lua` — vanilla↔sorting toggle on the client's bag bar, plus a vanilla-only view that
   can open one physical bag on its own (`FR-51`)
@@ -115,7 +116,10 @@ Deliverables
   frame we registered** — that dialog is where columns/scale/compact live (`FR-71`)
 - `frames/emptyslot.lua` (compact family counts + "show all slots" mode), reading
   `C_Container.GetBagSlotFlag` rather than guessing bag kinds
-- virtual stacking (`data/stacks.lua`) + split slider
+- virtual stacking (`data/stacks.lua`) + split slider, with `showStacks` modes (`FR-43`): merged by
+  default, `always`, `session` (toggle un-merges until the bags close), `vendor`
+- **presentation options** (`FR-45`, `FR-45b`): quality/rarity border-and-tint controls and item-level
+  controls, opened from the window's *Appearance* modal, defaults matching stock bags
 - money frame (`frames/money.lua`)
 - window icons: `IconDataProviderMixin` picker + `overlay` layer (`FR-85`)
 
@@ -126,8 +130,11 @@ Exit criteria
   model and layout are fully exercised before the UI exists. Slash-command config is throwaway and
   deleted in M3.
 - **AC-40** 12 sections in a 5-column window: no overlap, no clipped titles, correct resize. Then the
-  `docs/01` stress case: 22 sections in one window with a 30-character name.
-- **AC-43** merge 6 partial stacks → correct total; split 15 out → real slots correct.
+  `docs/01` stress case (issue #5): ~20 sections in one window with a 30-character name.
+- **AC-43** merged stacks show the true total, split pulls the right count into real slots, and each
+  `showStacks` mode renders what `docs/02` says it renders.
+- **AC-45, AC-45b** quality borders and item level: per-quality toggles, border vs tint, threshold,
+  intensity, gear-only ilvl, minimum ilvl, and ilvl hidden for an item not yet in the cache.
 - **AC-44** empty-slot modes both render correctly with a reagent bag / ammo pouch present.
 - **AC-49** with Masque installed, our buttons pick up its skin with no code from us beyond the
   template choice — or the reason they do not is written down here.
@@ -272,18 +279,23 @@ Deliverables
   "save search as category"
 - in-bag search bar (**FR-50**), reusing `ItemButtonUtil.GetItemContextMatchResultForItem` where it
   applies so our search and the client's agree (`docs/07` Q7)
-- section bulk actions: sell-all, deposit-all, move-to-window (**FR-62, FR-65**)
+- section bulk actions: deposit-all, move-to-window, and **sell-this-section behind its opt-in gate**
+  (**FR-62, FR-65**) — confirm lists every item, the total gold and the vendor buyback limit
 - **`bag.empty`** — empty a physical bag (**FR-67**), and **affinity compaction** (**FR-66**) using
   `C_Container.GetBagSlotFlag` + `Enum.BagSlotFlags`
 - physical-move safety rails (**FR-68**): destination check before first pickup, bucketed moves,
   cursor never left holding, refusal in lockdown
-- `integrations/masque.lua` (**FR-121**) and `integrations/pawn.lua` (**FR-122**), both guarded
-- minimap button (**FR-123**) only if users asked for one during M5/M6 testing
+- `integrations/masque.lua` (**FR-121**) and `integrations/pawn.lua` (**FR-122**), both guarded, both
+  optional-later rather than required
+- `config/settingspanel.lua` (**FR-88**): Options → AddOns category for Find / Presets / Import-Export
+  / Profiles / Keys, via `Settings.RegisterAddOnCategory` + vertical or canvas layout. **No minimap
+  button** (`FR-123`) — that feature is refused, not deferred
 - performance pass against the `FR-100/101` numbers with a deliberately overstuffed test character
 
 Exit criteria
 - **AC-28** a saved search category tracks new matching items as they are looted.
-- **AC-65** selling a whole section at a vendor in one action, with a confirm naming the count.
+- **AC-65** selling a section marked sellable at a vendor in one action, with a confirm naming every
+  item, the total gold and the buyback limit; a section not marked sellable cannot be bulk-sold
 - **AC-66, AC-67, AC-68** affinity compaction, empty-bag, and combat refusal all behave as written in
   `docs/02`.
 - **AC-124** run alongside `ForeverPlus`, `Leatrix_Plus`, `Baggins`, `BetterBags`; record what breaks.
@@ -300,7 +312,32 @@ Exit criteria
 - publish: GitHub `SterlingNerd/BagsOfSorting`, CurseForge project `1745962`, Wago `bGoYJY60`
   (`docs/07` Q14), `## X-Curse-Project-ID` / `## X-Wago-ID` already in the TOC
 - a written "known limitations" section pulled from every `shortcut:` comment in the codebase
-- a first-run note about the `B` keybind collision (`docs/07` Q4)
+- **`config/help.lua` — the intro / help page (`FR-87`, `docs/07` Q20)**. It ships here, not earlier:
+  the UI it explains must exist, and by 1.0 it is onboarding rather than documentation. Three nouns,
+  four gestures, where each kind of setting lives, what Undo means. Opened by `?` on the configure bar
+  and in every modal footer, and by `/bos help`.
+- a first-run note about the `B` keybind collision (`docs/07` Q4), and our keybinds registered through
+  `Settings.SetKeybindingsCategory` so they are findable in the client's own Key Bindings panel
+
+---
+
+## After M7 — v1.x, in the order they earn their place
+
+Not milestones; a queue. Each gets a milestone only when the one before it ships.
+
+1. **Closed-bank search** (`FR-110`) — a snapshot of the last time the bank was open, refreshed on
+   every open/close, results labelled with their age, and honest "bank not known yet" before that.
+2. **Auto-sell** (`FR-65b`) — a designated trash category and/or grey-quality items on opening a
+   vendor, with a confirm and a global off switch. Deliberately after bulk sell has been used in the
+   wild, because this is the feature that can sell something by accident.
+3. **Group bindings** (`FR-11b`) if category counts keep growing in real use — `Tradeskills.Enchanting ∗`
+   binding a whole dotted family (`docs/07` Q18).
+4. **Read BagSync / Altoholic** (`FR-111`) for alt search, instead of building a store. Altoholic ships
+   a Forever build; BagSync publishes an LDB feed meant for exactly this.
+5. **Guild bank search** (`FR-112`).
+
+If alt/guild search keeps growing past that, it becomes **its own addon** with its own UI, and this one
+reads it the way it reads BagSync (`docs/07` Q15).
 
 Exit criteria: installable from a release zip into `../addons/` with no dev tooling, on a character
 that has never had the addon, with the first-run experience tested by someone else.
@@ -313,11 +350,11 @@ that has never had the addon, with the first-run experience tested by someone el
 2. `/bos selftest` green — classifier fixtures grow with each new field.
 3. In-game checklist run on Forever and pasted into the milestone entry with the date and patch.
    A milestone is not done until its AC lines have a dated entry. The runnable `/script` snippets for
-   these checks live in **`docs/08-test-plan.md`**.
+   these checks live in the **spike issues** (#1–#8), not in a docs file (`docs/07` Q21).
 4. `/bos perf` numbers recorded, not asserted.
-5. One manual "hostile" pass per milestone: full inventory, a 74-category config imported from the
-   `docs/01` data, 22 sections in one window, a 30-char section name, an item Blizzard has no info
-   for, combat, death, `/reload` mid-combat.
+5. One manual "hostile" pass per milestone: full inventory, a dozens-of-categories config imported in
+   the `docs/01` shape, ~20 sections in one window, a 30-char section name, an item Blizzard has no
+   info for, combat, death, `/reload` mid-combat.
 6. Coexistence pass against the installed addons (`FR-124`).
 
 ## What would make us stop and re-plan

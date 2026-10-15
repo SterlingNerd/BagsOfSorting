@@ -36,21 +36,33 @@ Evidence that settled it:
 - `origin/forever` ships all of those, plus `UIDropDownMenu`/`EasyMenu` (so BetterBags' vendored
   `LibUIDropDownMenu` is a Classic concession), plus `StackSplitFrame` with a Camelot override, plus
   `IconDataProviderMixin` and the `IconSelectorPopupFrameTemplate` picker the macro UI uses.
-- Forever exposes no options-panel widget API (`C_SettingsUtil` only), so the settings UI is ours
-  regardless.
+- **Forever ships the modern addon settings API** (`Settings.RegisterAddOnCategory`,
+  `RegisterVerticalLayoutCategory`/`RegisterCanvasLayoutCategory`, `CreateCheckbox`/`CreateSlider`/
+  `CreateDropdown`, `RegisterProxySetting`/`RegisterAddOnSetting`, `SetKeybindingsCategory`,
+  `RegisterModifiedClickSetting`), verified 2026-10-08 in `Blizzard_Settings_Shared/Blizzard_Settings.lua`
+  with Blizzard's own guide in `Blizzard_ImplementationReadme.lua`. **My earlier claim that Forever has
+  only `C_SettingsUtil` was wrong.** This does not change the decision — it removes the only honest
+  argument for ever wanting AceConfig here (`FR-88`).
 - Not vendoring Ace3 removes the `AceEvent30Frame` class of `ADDON_ACTION_FORBIDDEN` that bit this
   workspace (`../TODO.md`).
+
+**AceConfig is refused on its own merits, not because it is unavailable.** It is the part of Baggins
+that hurts most in practice: its layout engine wraps, truncates and reflows long section and category
+names, which is exactly what a config with dotted hierarchy names and 20-section windows produces.
+A UI whose whole idea is "edit the bag you are looking at" cannot be built in it. Stated once so
+nobody re-litigates it: the cost is that we never appear inside anyone else's aggregated options
+suite, and no addon installed here aggregates option trees anyway.
 
 What we give up, honestly — this is the part the "avoid dependencies" rule used to hide:
 
 | Lost habit | Real consequence | Replacement |
 |---|---|---|
-| LibDataBroker + LibDBIcon minimap icon | Baggins/Bagnon users look for a draggable minimap icon; broker-display addons (Titan-class) cannot host us | `## AddonCompartmentFunc` + `## IconTexture` in v1 (verified present on camelot); a ~60-line own minimap button if users ask (`FR-123`) |
-| AceConfig option tables | we do not appear inside someone else's aggregated options suite | nothing on Forever — no such suite is installed here and there is no options-panel API |
+| LibDataBroker + LibDBIcon minimap icon | Baggins/Bagnon users look for a draggable minimap icon; broker-display addons (Titan-class) cannot host us | `## AddonCompartmentFunc` + `## IconTexture` and Options → AddOns. **We are not building a minimap icon at all** (`FR-123`) — no LibDBIcon, ever, unless a real request appears |
+| AceConfig option tables | we do not appear inside someone else's aggregated options suite | the client's own Options → AddOns panel (`FR-88`) |
 | LibQTip dewdrops | Baggins' rule-editing hover panels | `UIDropDownMenu`/`EasyMenu` + `TooltipBackdropTemplate` popovers |
-| LibPeriodicTable curated lists | 329 rules in the measured config depend on named item sets (`docs/01`) | our own preset data as `itemID in {…}` categories (`FR-31`) — same content, ours to maintain |
+| LibPeriodicTable curated lists | the most-used named-set rules in real configs depend on them (`docs/01`) | our own preset data as `itemID in {…}` categories, **user-editable**, because LibPeriodicTable has not been meaningfully updated in years and cannot describe items Forever adds (`FR-31`) |
 | LibBagUtils / LibWindow / LibSharedMedia / LibItemUpgradeInfo | bag slot counting, saved positions, media, upgrade arrows | `C_Container.GetBagSlotFlag`, own positions, no custom fonts, Pawn integration (`FR-122`) |
-| Masque / Pawn / ConsolePort / QuickFind | skinning, upgrade arrows, gamepad, cross-addon search | Masque + Pawn as guarded optional hooks (`FR-121`, `FR-122`); the rest skipped unless asked |
+| Masque / Pawn / ConsolePort / QuickFind | skinning, upgrade arrows, gamepad, cross-addon search | Masque and Pawn as guarded optional hooks **later, not requirements** (`FR-121`, `FR-122`, `FR-125`); the rest skipped unless asked |
 
 **Reopen triggers:** `core/db.lua` profiles becoming a recurring bug source (AceDB alone would be
 defensible), or a minimap button request recurring in feedback.
@@ -112,21 +124,34 @@ command so it is validated, atomic and undone by one Undo. Diff shown before App
 
 ## Q7 — Is the search DSL in v1, and can we reuse Blizzard's search instead?
 
-**Blizzard's search is not reusable as our index.** On this client the bag search is
-`ItemButtonUtil.GetItemContextMatchResultForItem(itemLocation)` — a per-item predicate used to
-dim/hide buttons over inventory the client already knows. It has no result list, cannot see a closed
-bank, cannot see an alt, and `GetItemContextMatchResultForContainer` is absent on camelot
-(`agents.md`). So: our own index is required for anything beyond "filter what is on screen".
+**The mental model worth writing down, because that is where the confusion lives.** Our bags are a
+*view* over real containers: harvest reads real slots, classification decides where each item is
+*drawn*, and we already hold the map `item → (window, section, button)` because rendering needs it.
+Search is that map run in reverse — a query in, a set of buttons out. So "the addon knows where
+everything is" is true **for inventory the client currently knows**, and that is the whole of it. The
+limit is not our data structure; it is that a closed bank and another character's bags have no data on
+this client to map.
 
-What we *do* reuse is the matcher, where it applies, so our search and the client's agree about what
-"matches" means (`FR-50`).
+What Blizzard gives us for free is the *predicate*, not an index:
+
+- `BagSearch_OnTextChanged` syncs text across `BagItemSearchBox` / `BankItemSearchBox` /
+  `GuildItemSearchBox` and calls `C_Container.SetItemSearch(text)`; buttons answer
+  `ItemButtonUtil.GetItemContextMatchResultForItem(ItemLocation:CreateFromBagAndSlot(bag, slot))` and
+  dim themselves.
+- That is a per-button filter over known inventory. No result list, no closed bank, no alts, and
+  `GetItemContextMatchResultForContainer` is absent on camelot (`agents.md`).
+
+So: **drive the client's search and reuse its matcher** (`FR-50`) so our search and the game's agree,
+then add our own fields (type, quality, ilvl, expansion, category) on the enriched record. Anything
+that reaches beyond the open bags is a snapshot problem (`FR-110`+, Q15) and gets its own UI, not a
+filter bolted onto the bag bar.
 
 The DSL itself stays **Should**, land in M6, capped to the FR-28 field subset. If M3's chip editor
 turns out to cover what people actually try to express, cut the DSL and spend the time on dynamic
 categories instead.
 
-**Needed:** evidence from the M3 human tests — specifically, rules people tried to build and could
-not express as chips.
+**Needed:** evidence from the M3 human tests — specifically, rules people tried to build and could not
+express as chips.
 
 ## Q8 — Is `kind = "dynamic"` (group-by-type/subtype/expansion) Must?
 
@@ -163,6 +188,11 @@ are not using, which is a different risk class from reparenting a protected bar.
 `SetShown` on container frames causes lockdown complaints, leave them visible and accept the cosmetic
 loss. A visible stock button is a cosmetic loss; a blocked `UseContainerItem` is a functional one.
 
+**And borrow its position (`FR-41`).** Where the player put the bag bar *is* where they want their
+bags. Our windows anchor off `BagsBar` / `MainMenuBarBackpackButton` by default, so a fresh install
+lands where the game already puts them and a player who arranged their UI keeps the arrangement. If we
+ever ship our own bar of sorting-bag buttons, it takes the same anchor.
+
 ## Q10 — Forever container facts we still do not know
 
 Partly answered by reading `origin/forever` (2026-10-15):
@@ -182,25 +212,34 @@ Partly answered by reading `origin/forever` (2026-10-15):
 container loop iterates a **discovered** list built at load, never a hardcoded constant. Update
 `agents.md` with the results.
 
-## Q11 — Profile default, and can profiles inherit?
+## Q11 — Profile default, and can profiles inherit? — **DECIDED: shared Default + copy + explicit link**
 
-**Recommendation:** **shared Default + per-character override that stores only the differences.**
-Reason: a bag layout is a personal habit, not a class-specific need, and per-character defaults
-create the "I configured it on my mage and my warrior is a mess" complaint.
+**Default:** **shared Default + per-character override that stores only the differences.** A bag layout
+is a personal habit, not a class-specific need, and per-character defaults create the "I configured it
+on my mage and my warrior is a mess" complaint.
 
-The inheritance question the shared model raises is real and worth designing deliberately:
+Most of a real config *should* be shared — categories especially, and the bank half of the layout. The
+question is how to share without spooky action at a distance.
 
-- What users want is *"my warrior's layout is my mage's layout plus a War section, and my bank
-  windows are the same on every character"*.
+- What users want is *"my warrior's layout is my mage's layout plus a War section, and my bank windows
+  are the same on every character"*.
 - The dangerous version is runtime inheritance — edit Default, eleven characters change, nobody knows
   why, and a per-character override that "inherits" a category silently re-appears when Default
   changes.
 - The safe version, in order of preference:
-  1. **Copy with provenance** (`window.copyFrom`, already in `docs/04`) — one action, no spooky link.
-  2. **Explicit re-copy** — "pull the Herbs category from Default into this character's profile",
-     shown as a command with an inverse.
-  3. Runtime inheritance — only if 1 and 2 demonstrably fail. If we ever do it, it is a field with
-     its own semantics and its own UI indicator, never an implicit default.
+  1. **Copy with provenance** (`window.copyFrom`, `docs/04`) — one action, no spooky link. This alone
+     answers most of it.
+  2. **Explicit link** (`window.link`, `FR-10c`) — for the one case where copying alone is genuinely
+     wrong: a bank window and its backpack twin. The link shares the **section list and its category
+     bindings** and nothing else — not kind, columns, scale, position, compact or icon. Created by one
+     deliberate action, shown on both window titles in configure mode, broken by one action that keeps
+     the current shape. Editing a section on either side updates both, and the toast names the other
+     window that changed.
+  3. Runtime inheritance across profiles — only if 1 and 2 demonstrably fail. If ever, it is a field
+     with its own semantics and its own UI indicator, never an implicit default.
+
+`copyFrom` answers "how do I get the bank half"; `link` answers "keep them in step". Both ship in v1.
+What does **not** ship is any inheritance the user cannot see on the window itself.
 
 "Send to X" sections (a section whose purpose is *deposit here* rather than *display here*) belong to
 the bulk-action work in M6, not to profiles: they are a command target, not an inheritance mechanism.
@@ -238,7 +277,7 @@ and `## X-Wago-ID` already in the TOC. License: WTFPL (`LICENSE` at repo root, `
 
 ---
 
-## Q15 — How much inventory do we persist? (bank / alts / guild bank)
+## Q15 — How much inventory do we persist? (bank / alts / guild bank) — **DECIDED: session snapshot for the bank; read someone else's store for the rest**
 
 The extended search features all hit the same wall: **there is no API to read an inventory the client
 does not currently know.** Bank contents arrive when the bank is opened; another character's bags are
@@ -246,21 +285,34 @@ not on this client at all; the guild bank needs the guild bank UI and permission
 
 | Feature | Possible without persistence? | With persistence |
 |---|---|---|
-| Search bank while closed (`FR-110`) | **yes**, after the bank has been opened once this session — the client keeps the container data | session-only is enough for v1.x |
-| Search alts / alt banks (`FR-111`) | **no** | requires a per-character snapshot written by each character that ran the addon (the Bagnon/BagSync model) |
+| Search bank while closed (`FR-110`) | **yes**, after the bank has been opened at least once — the client keeps the container data | the snapshot is the state at the **last time the bank was open**, refreshed on every open/close, labelled with its age |
+| Search alts / alt banks (`FR-111`) | **no** | someone else's store, or ours |
 | Guild bank (`FR-112`) | after `GUILDBANKFRAME_OPENED` | same question |
 | Providing a Bagnon-compatible `AllInventory` to other addons | no | same snapshot, published under Bagnon's global names |
 
-Options: (a) session-only, honest "bank not known yet" messaging; (b) persisted per-character snapshot
-of itemIDs + counts only (no names — we can resolve names from the item cache); (c) full persisted
-snapshot including location.
+**The decision, and the reason it is not the obvious one.** Cross-character search is a *different
+product* from this one: it needs its own persistence, its own UI (a search results window, not a
+filter on a bag bar), and its own privacy story. Bolting it onto the bags would give us a second UI
+paradigm inside the first one, which is how bag addons become unreadable.
 
-**Recommendation:** (a) for v1.x, (b) as the v2 design, and never (c). A snapshot of itemIDs and
-counts is ~1–3 KB per character and is the only part that answers "do I have this anywhere"; location
-data is where the SavedVariables bloat and the privacy discomfort come from. Ship the honest
-"not known yet" message rather than a fake-complete result — that is a feature, not a gap.
+So, in order:
 
-**Needed:** decision before any cross-character feature is scheduled.
+1. **v1.x — bank only, session snapshot** (`FR-110`), with honest "bank not known yet" messaging
+   before it has been opened. That is a feature, not a gap.
+2. **v1.x — read an existing maintained store when it is installed** (`FR-111`): **BagSync** (20.x,
+   actively updated in 2026, tracks per-character items/banks/guild bank, publishes an LDB feed
+   explicitly meant for other bag addons) and **Altoholic** (which ships a **Forever-specific build**,
+   1.60.x, maintained by a fork rather than the original author). Reading theirs is a guarded lookup of
+   published data — tens of lines, no persistence of our own, no duplicated storage.
+3. **v2 — our own store only if 2 proves unusable**, and then itemIDs + counts only (~1–3 KB per
+   character), never locations. Location data is where SavedVariables bloat and privacy discomfort
+   both come from.
+4. **A separate addon** is the honest home for "search everything, everywhere, offline". If we build
+   it, it is its own project with its own name, and `Bags of Sorting` reads it the same way it reads
+   BagSync.
+
+**Needed:** nothing before M6. Revisit if BagSync/Altoholic integration turns out not to answer the
+question people actually ask.
 
 ## Q16 — Themes — **DECIDED: no theme system, use the client's own bag visuals**
 
@@ -289,8 +341,70 @@ overrides where behaviour genuinely differs** — still data, still one file.
 
 ---
 
+## Q18 — Do dotted category names cascade? — **DECIDED: yes, as an explicit group binding**
+
+The idea: a section bound to `Tradeskills.Enchanting` should also pull in `Tradeskills.Enchanting.Dust`
+and `Tradeskills.Enchanting.Essence`, so a family of categories is filed by one binding and adding a
+child category needs no re-binding.
+
+It is attractive because it is what the naming convention in `docs/01` already implies, and because it
+scales the way a live game needs: a whole expansion's enchanting materials under one prefix, another
+expansion under another, one section binding each.
+
+**Decision:** binding a **group** is a distinct kind of binding (`Tradeskills.Enchanting ∗`,
+`FR-11b`), resolved from names at classify time. Three rules keep it from becoming a trap:
+
+1. **It is visible.** The section editor shows `∗` and how many categories it currently resolves to.
+   A binding whose membership changes by itself is the exact thing people hate about bag addons.
+2. **Renaming says what it does.** Moving `Tradeskills.Enchanting.Dust` to `Tradeskills.Mining.Dust`
+   removes it from that section; the rename toast reports the section it left. Silent group exit is a
+   support ticket.
+3. **It is not inheritance for rules.** A child category does not inherit its parent's rule tree — the
+   dot is a namespace, not a class hierarchy. Composition stays what it already is: a `category` leaf
+   naming one category, or a group binding naming many.
+
+This also shrinks the case for `kind = "dynamic"` (Q8): a lot of what dynamic categories were meant to
+buy — "six sections appear from one setting" — is what a group binding plus a few real categories
+already gives, with nothing appearing that the user did not create. **Q8 gets re-decided against this
+before M5.**
+
+## Q19 — Right-click is already taken. Where does our item menu go? — **DECIDED: Ctrl+right-click**
+
+On bag item buttons the client owns: naked right-click (the stock item menu), `EXPANDITEM` and
+`SPLITSTACK` via `OnModifiedClick` (shift by default, configurable in Interface Options), and
+alt-click via `HandleModifiedItemClick` (inventory scan, link). Shift and alt are therefore both
+claimed and both user-configurable, which makes them unusable as *our* modifier — we would be silently
+changing a control the player set themselves.
+
+**Decision:** our item menu is **Ctrl+right-click** (`FR-60b`), registered with
+`Settings.RegisterModifiedClickSetting` so it appears in the client's own modified-click options and
+the player can change it there. Naked right-click stays ours everywhere it does not collide: window
+titles, section headers, category chips, our bag-bar buttons. That is why the design puts its menus on
+headers and its item actions behind a modifier — the collision is real, and pretending otherwise is
+how a bag addon gets uninstalled.
+
+## Q20 — Does the "configless-config" idea need an explainer? — **DECIDED: yes, and it is a requirement (`FR-87`)**
+
+A UI you configure by touching it is not a UI anyone has met before, and "there is no settings window"
+sounds like a missing feature until it is explained. The help page (`docs/5` §Screen 8) carries the
+three nouns, the four gestures, where each kind of setting lives, and what Undo means here.
+
+**Timing:** after the PoC, before 1.0. Earlier and it describes a UI that does not exist yet; later and
+it is documentation instead of onboarding. It also carries the first-run keybind-conflict note (Q4).
+
+## Q21 — Where do spikes and plans live? — **DECIDED: GitHub issues, not a docs file**
+
+`docs/08-test-plan.md` is deleted. Spikes (container index ranges, EditMode registration, Masque
+reach, `RequestLoadItemDataByID` behaviour, coexistence runs) become GitHub issues with their
+`/script` snippets in the issue body, because that is where results get recorded, closed and linked to
+commits. Stabilised plans graduate into issues too. Docs keep *decisions*, issues keep *open work*.
+
+---
+
 ## Decisions needed **before M0 commits**
 
-Q1 (name) and Q3 (section ↔ categories) are decided. Q2, Q5, Q6, Q14, Q16, Q17 are decided.
-Q8 (dynamic categories) must be confirmed before M5. Everything else is decided at the milestone that
-needs it: Q4/Q9/Q13 at M2, Q7 at the M3→M4 boundary, Q15 before any cross-character feature.
+Q1 (name), Q2 (dependencies), Q3 (section ↔ categories), Q5 (no migration), Q6 (export format),
+Q11 (Default + copy + link), Q14 (distribution), Q15 (bank snapshot only), Q16 (no themes),
+Q17 (no DI), Q18 (group binding), Q19 (Ctrl+right-click), Q20 (help page), Q21 (issues not docs) are
+decided. Q8 (dynamic categories) must be re-confirmed against Q18 before M5. Everything else is
+decided at the milestone that needs it: Q4/Q9/Q13 at M2, Q7 at the M3→M4 boundary.

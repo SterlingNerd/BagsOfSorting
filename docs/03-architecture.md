@@ -15,7 +15,8 @@ data/      harvest, enrich, itemcache, classify, rules, stacks, sort, layoutmode
 layout/    flow (river packing), sizing, anchors
 frames/    window, section, item, header, chips, menu, inspector, money, emptyslot, movemode,
           bagbar, modals
-config/    commands, undo, settings-window, panes/{windows,sections,categories,rules,profiles},
+config/    commands, undo, configure mode, category editor, item-list editor, import/export,
+           presets (data), keybinds, help page, Options→AddOns registration, settings snapshots
           configuremode, category-editor, presets, importexport, keybinds
 filters/   field registry (one file per field: type, quality, ilvl, name, tooltip, …)
 integrations/  compartment, masque, pawn
@@ -139,19 +140,21 @@ UI widget → config:execute(Command) → model mutation → model emits change 
 ```
 
 Commands are small named records: `{ type = "section.move", args = {...}, invert = fn }`.
-Everything the settings window and configure mode can do is a command; nothing else mutates the
+Everything configure mode and the Options → AddOns panes can do is a command; nothing else mutates the
 model. Consequences:
 
 - `FR-74` undo/redo is a log walk, not a snapshot diff.
-- Configure mode and the settings window are two views over the same command set — no duplicated
+- Configure mode and the utility panes are two views over the same command set — no duplicated
   logic, no risk of them disagreeing.
 - `FR-81` "what changed" toast comes free: the command knows which categories it touched, and the
   re-classify pass reports moved-item counts.
 - Import/export is a serialized command list or a model dump (choose in `docs/07` Q6).
 
-**No AceConfig.** The settings window is built on a small in-house form builder (checkbox,
-slider, dropdown, input, color, button group, section header, index) — the BetterBags `forms/`
-idea, sized to what we use (~400 lines, not 1,100).
+**No AceConfig, and no in-house form builder either.** Forever ships the settings system: the utility
+panes register with `Settings.RegisterAddOnCategory` + `RegisterVerticalLayoutCategory` (or
+`RegisterCanvasLayoutCategory` for a frame we design ourselves) and get checkboxes, sliders, dropdowns
+and colour swatches from `Settings.Create*` (`FR-88`). BetterBags hand-rolls 1,100 lines of form code
+because it targets Classic; on this client that code is not ours to write.
 
 ---
 
@@ -239,19 +242,21 @@ is the ecosystem habits a bag addon is expected to have. Named honestly, with th
 | Integration | What users get | How we do it | Verdict |
 |---|---|---|---|
 | **Addon Compartment** | the native puzzle-icon menu entry + our icon, on Forever | `## AddonCompartmentFunc` + `## IconTexture` (verified: `Blizzard_Minimap/Mainline/AddonCompartment.lua`, loads on camelot) | **v1**, zero cost |
-| **Minimap button** | the draggable icon Baggins users expect | Baggins gets it free from LibDataBroker + LibDBIcon. We either hand-roll ~60 lines (`MiniMapButtonTemplate` is `[AllowLoadGameType classic, camelot]`) or skip | **not v1**; add if users ask (`FR-123`). What we genuinely lose: broker-display addons (Titan/DataFeedText-class) cannot show us |
-| **Masque** | the user's bag skin applies to our buttons with no config | `LibStub('Masque', true)` + `Masque:Group('Bags of Sorting', …)` + add/remove button, guarded — BetterBags `integrations/masque.lua` is ~60 lines | **v1 if cheap** (`FR-121`); this is the strongest argument for "use Blizzard's bag visuals" (`docs/07` Q16) |
-| **Pawn** | the upgrade arrow everyone already trusts | check for `PawnShouldItemLinkHaveUpgradeArrowUnbudgeted`, register as an upgrade provider behind our own seam | **v1.x** (`FR-122`) |
+| **Options → AddOns panel** | a native home for the settings that genuinely need a window: profiles, presets, import/export, find, keybinds | Forever ships the modern settings API: `Settings.RegisterAddOnCategory` + `RegisterVerticalLayoutCategory`/`RegisterCanvasLayoutCategory` + `CreateCheckbox`/`CreateSlider`/`CreateDropdown` + `RegisterProxySetting`/`RegisterAddOnSetting` + `SetKeybindingsCategory`, all in `Blizzard_Settings_Shared/Blizzard_Settings.lua` (`AllowLoadGameType Both`), with Blizzard's own how-to in `Blizzard_ImplementationReadme.lua`. Verified 2026-10-08; **my earlier claim that Forever has no options-panel API was wrong** | **v1** (`FR-88`), zero cost. The editor stays on the bags; only the utility panes go here |
+| **Minimap button** | the draggable icon Baggins users expect | nothing | **not planned** (`FR-123`). Not deferred — refused. Compartment + Options → AddOns is the home, so LibDBIcon never enters the tree. What we give up: broker-display addons (Titan/DataFeedText-class) cannot show us, and nobody has asked yet |
+| **Masque** | the user's bag skin applies to our buttons with no config | `LibStub('Masque', true)` + `Masque:Group('Bags of Sorting', …)` + add/remove button, guarded — BetterBags `integrations/masque.lua` is ~60 lines | **optional later** (`FR-121`, `FR-125`); this is the strongest argument for "use Blizzard's bag visuals" (`docs/07` Q16) |
+| **Pawn** | the upgrade arrow everyone already trusts | check for `PawnShouldItemLinkHaveUpgradeArrowUnbudgeted`, register as an upgrade provider behind our own seam | **optional later** (`FR-122`), not a requirement |
+| **BagSync / Altoholic as a data source** | "does any character of mine have X" without us building a cross-character store | guarded read of their published data. **BagSync** is actively maintained (20.x, 2026) and publishes an LDB feed explicitly meant for other bag addons; **Altoholic ships a Forever-specific build** (1.60.x, maintained by a fork) | **v1.x** (`FR-111`). Read theirs if installed; do not duplicate it |
 | **Bagnon/BagBrother-compatible API** (`AllInventory`, `BagnonTooltipItemSearch`) | other addons can answer "does any character of mine have X" from *our* data; a large installed surface depends on Bagnon | a compat module publishing our snapshot tables under Bagnon's global names, opt-in | **v2 candidate** (`docs/07` Q15). Neither reference addon in `../addons` provides it today, so it is a gain we choose, not a loss we suffer |
-| **Blizzard's own search matcher** | our search and the client's search agree about what "matches" means | `ItemButtonUtil.GetItemContextMatchResultForItem(itemLocation)` (used by Camelot `PaperDollFrame.lua`) | use it where it applies; it is **not** an index and cannot search a closed bank (`docs/07` Q7) |
-| **AceConfig option tables** | appearing inside someone else's unified options suite | n/a — Forever exposes no options-panel API (`C_SettingsUtil` only), and no installed addon here aggregates option trees | real but tiny loss |
+| **Blizzard's own search matcher** | our search and the client's search agree about what "matches" means | our search box calls `C_Container.SetItemSearch(text)` and filters with `ItemButtonUtil.GetItemContextMatchResultForItem(ItemLocation:CreateFromBagAndSlot(bag, slot))` — the same predicate `BagSearch_OnTextChanged` drives. Our bags already hold `item → (window, section, button)`; search is that map run in reverse (`docs/07` Q7) | use it for anything the client currently knows. It is **not** an index and cannot search a closed bank |
+| **AceConfig option tables** | appearing inside someone else's unified options suite | nothing — and this is a **deliberate refusal, not a platform gap**. AceConfig is out because its layout engine is what makes Baggins' config UI unusable at real scale: it wraps, truncates and reorders long section and category names, and its widget set fights a UI whose whole point is in-place editing. Forever's own settings API removes the only real reason addons reached for it | loss: none measured. No installed addon here aggregates option trees |
 | **LibSharedMedia / LibQTip / LibBagUtils / LibWindow / LibPeriodicTable** | fonts, dewdrop tooltips, bag-slot counting, saved positions, curated item lists | vanilla templates, `UIDropDownMenu`+`EasyMenu`, `C_Container.GetBagSlotFlag`, our own positions, our own preset data (`FR-31`) | replaced, no loss |
 | **Ace3 itself** | nothing we cannot write | ~470 lines total across lifecycle/events/hooks/locale/profiles | **gain**: no `AceEvent30Frame` class of `ADDON_ACTION_FORBIDDEN` (parent `../agents.md` §Debugging, `../TODO.md`) |
 
 Coexistence is a requirement, not a nicety (`FR-124`): `ForeverPlus` already repositions the vanilla
 bag window, `Leatrix_Plus` can `hooksecurefunc('OpenAllBags', CloseAllBags)`, and both `Baggins` and
 `BetterBags` raw-hook the bag open/close globals. Every milestone ends with a run against the
-installed set, recorded in `docs/08`.
+installed set, recorded in the coexistence issue.
 
 ---
 
@@ -278,9 +283,9 @@ BetterBags vendoring `LibUIDropDownMenu` is a Classic concession we do not need.
 | AceConfig / AceDBOptions | banned by design (`docs/05`) | 0 |
 | LibWindow-1.1 saved positions | `frames/movemode.lua` | ~100 lines |
 | LibUIDropDownMenu | Blizzard-provided on Forever | 0 |
-| LibDataBroker + LibDBIcon (minimap) | `AddonCompartmentFunc` (already in the TOC) | 0 |
+| LibDataBroker + LibDBIcon (minimap) | `AddonCompartmentFunc` + Options → AddOns | 0 |
 | LibSharedMedia | skip unless we ship custom fonts | 0 |
-| LibPeriodicTable (preset definitions) | ship our own preset data (`config/presets.lua`) | 0 |
+| LibPeriodicTable (preset definitions) | ship our own preset data (`config/presets.lua`) — **and make it user-editable**, because LibPeriodicTable has not been meaningfully updated in years and cannot describe items Forever adds (`FR-31`) | 0 |
 
 **Zero vendored libraries in v1.** Also removes the entire `AceEvent30Frame` protected-frame class
 of bugs that bit this workspace (parent `../agents.md` §Debugging) — we never touch a Blizzard or
@@ -307,7 +312,7 @@ BagsOfSorting/
 ├── data/{harvest,enrich,itemcache,classify,rules,stacks,sort,layoutmodel,windows,sections,categories,snapshot}.lua + README.md
 ├── layout/{flow,sizing,anchors}.lua
 ├── frames/{window,section,item,header,chips,menu,inspector,money,emptyslot,movemode,bagbar,modals}.lua + README.md
-├── config/{commands,undo,form,settingswindow,configuremode,categoryeditor,itemlisteditor,importexport,presets,keybinds}.lua
+├── config/{commands,undo,configuremode,categoryeditor,itemlisteditor,importexport,presets,keybinds,help,settingspanel}.lua
 │   └── panes/{windows,sections,categories,rules,profiles}.lua + README.md
 ├── filters/{registry,type,subtype,quality,ilvl,name,tooltip,expansion,equipslot,bind,itemid,
 │            classid,subclassid,containerfamily,bagid,isreagent,isquest,isnew,category}.lua

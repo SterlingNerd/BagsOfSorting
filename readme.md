@@ -30,9 +30,9 @@ dialogs**: to move a section you open *Bag/Category Config*, pick a bag from a d
 your bags to see whether the rule did what you meant. There is no preview, no feedback, no
 explanation of why an item is where it is.
 
-And the configs people actually build are big. The heaviest profile in our own SavedVariables is
-**74 categories, 193 rules, 12 windows and 117 sections** — six backpack windows and six bank
-windows that mirror them (`docs/01`). That is the config this UI has to make manageable.
+And the configs people actually build are big. A long-lived personal Baggins setup runs to **dozens of
+categories, a few hundred rules, ~12 windows and over a hundred sections** — a set of purpose windows
+and a near-mirror set of bank windows (`docs/01`). That is the config this UI has to make manageable.
 
 BetterBags (`../addons/BetterBags`) proves the other half is solvable: a real settings window
 built from a form system, drag-a-category-to-pin, search-based categories, import/export strings,
@@ -74,8 +74,9 @@ with the fact that `B` is already taken.
 `StackSplitFrame`, `UIDropDownMenu`, `IconDataProviderMixin`), and Forever's EditMode is joinable by
 addons — ThreatMeter already does it here (`../addons/ThreatMeter/editmode.lua`). We build the
 profile store and the form layer ourselves rather than carry Ace3, and we say out loud what that
-costs (`docs/07` Q2): no draggable minimap icon until we write one, and Masque/Pawn as opt-in hooks
-rather than free rides on shared libraries.
+costs (`docs/07` Q2): no minimap icon at all — refused, not deferred — and Masque/Pawn as opt-in hooks
+rather than free rides on shared libraries. Settings that genuinely need a window go in the client's
+own **Options → AddOns** panel, which Forever ships (`docs/07` Q2, `FR-88`).
 
 **No theme system.** The windows are built from Blizzard's own bag visuals, so whatever skinning
 addon you run works on our bags too (`docs/07` Q16).
@@ -96,7 +97,10 @@ addon you run works on our bags too (`docs/07` Q16).
 | [05 config UI](docs/05-config-ui.md) | the actual UX design — the reason this project exists |
 | [06 milestones](docs/06-milestones.md) | build order, exit criteria, in-game test checklists |
 | [07 open questions](docs/07-open-questions.md) | the decisions, each with a recommendation or a decision |
-| [08 test plan](docs/08-test-plan.md) | runnable `/script` checks and the in-game checklists |
+
+Open work lives in **[GitHub issues](https://github.com/SterlingNerd/BagsOfSorting/issues)**, not in a
+docs file: eight `spike` issues hold the runnable `/script` checks that must be answered before the code
+that depends on them is written (`docs/07` Q21).
 
 ## License
 

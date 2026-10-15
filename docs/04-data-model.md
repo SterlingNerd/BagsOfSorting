@@ -43,10 +43,18 @@ BagsOfSortingDB = {
       anchor   = { enabled=false, corner="auto" },
       copyFrom = nil,                 -- window id this one was created from (FR-10b): provenance
                                       -- only, NOT inheritance. Editing the source never edits this.
+      link     = nil,                 -- window id to stay in step with (FR-10c). Shares the section
+                                      -- list and its category bindings; does NOT share kind, columns,
+                                      -- scale, position, compact or icon. Explicit, visible, breakable.
+                                      -- The usual shape: a bank window linked to its backpack twin.
       sections = {                    -- ordered array
         { id="s1", categories={"Herbs"},         collapsed=false, hidden=false },
         { id="s2", categories={"Ores","Metals"}, collapsed=false, hidden=false },
-        { id="s3", categories={"__catchall"},    collapsed=true },
+        { id="s3", categories={"Tradeskills.Enchanting*"}, collapsed=false },  -- trailing `*` = bind
+                                      -- the whole dotted group: every category under that prefix
+                                      -- (FR-11b). Resolved at classify time from names, so renaming
+                                      -- a category out of the prefix moves it out of the section.
+        { id="s4", categories={"__catchall"},    collapsed=true },
       },
     },
   },
@@ -72,15 +80,30 @@ BagsOfSortingDB = {
   },
 
   settings = {
-    display   = { qualityColor=true, qualityThreshold=2, qualityIntensity=0.3,
-                  showNew=true, newDuration=420, showQuestMarker=true,
-                  showEmptySlots="compact"|"slots"|"off", emptySlotFamilyIcons=true },
-    stacking  = { mergeStacks=true, mergeUnstackable=false, dontMergePartial=true,
+    display   = {
+      -- quality / rarity presentation (FR-45)
+      qualityOn     = { [0]=true,[1]=true,[2]=true,[3]=true,[4]=true,[5]=true,[6]=true,[7]=true },
+      qualityMode   = "border"|"tint"|"both"|"off",   -- "off" leaves the client's own look alone
+      qualityThreshold  = 2, qualityIntensity = 0.3,
+      -- item level presentation (FR-45b)
+      showIlvl = true, ilvlOnGearOnly = true, ilvlMin = 0, ilvlPos = "bottomright",
+      ilvlQualityColor = false,        -- hides entirely for an item not in the cache (FR-103)
+      showNew=true, newDuration=420,
+      clearNewOnClose = true,          -- FR-47: false keeps the highlight until cleared by
+                                       -- keybind / context menu / `/bos new`
+      showQuestMarker=true,
+      showEmptySlots="compact"|"slots"|"off", emptySlotFamilyIcons=true },
+    stacking  = { showStacks="merged"|"always"|"session"|"vendor",  -- FR-43; "session" = merged but
+                  -- a Show-stacks toggle un-merges until the bags close; "vendor" un-merges while a
+                  -- vendor is open
+                  mergeUnstackable=false, dontMergePartial=true,
                   dontMergeTransmog=true, preferAffinityBags=true },
     sorting   = { section="manual"|"name"|"sizeDesc"|"sizeAsc",
                   item="nameThenQuality"|"qualityThenName"|"ilvl"|"expansion" },
-    interaction = { sectionBulkActions=true, itemMenu="default", upgradeArrow=false,
-                    emptyBagConfirm=true },
+    interaction = { sectionBulkActions=true, itemMenuModifier="CTRL",  -- FR-60b; our item menu, the
+                    -- stock item menu keeps naked right-click
+                    sellSections=false, sellableCategories={},  -- FR-65: bulk sell is opt-in per category
+                    upgradeArrow=false, emptyBagConfirm=true },
     bagBar    = { mode="sorting"|"vanilla", showVanillaToggle=true },
     search    = { inBag=true, dsl=true, bankSnapshot=true },
     undo      = { depth=50 },
@@ -98,8 +121,12 @@ Design notes:
   inverse, so undo works).
 - **A section holds a list of categories** (`docs/07` Q3, resolved: B). Inside one section the
   categories lay out in category-priority order, then by the section's sort rule; the section title
-  is the section's own name, not a category name. This is what the measured Baggins configs use it
-  for (`Metals and Ores{Tradeskills.Metals, Tradeskills.Ore}`).
+  is the section's own name, not a category name. This is what real Baggins configs use it for
+  (`Metals and Ores` → `Tradeskills.Metals` + `Tradeskills.Ore`).
+- **A trailing `*` on a binding means "the whole dotted group"** (`FR-11b`, `docs/07` Q8):
+  `Tradeskills.Enchanting*` binds every category whose name starts with that prefix. It is resolved
+  from names at classify time, so it costs nothing to add a child category — but renaming a category
+  out of the prefix silently moves it out of the section, which the rename UI must say out loud.
 - **`copyFrom` is provenance, not inheritance.** It exists so "make the bank half of this window" is
   one action, and so a later *re-copy* can be offered. Nothing reads through it at runtime — runtime
   inheritance is how configs become spooky action at a distance. If real inheritance is ever wanted
@@ -180,7 +207,7 @@ one inverse.
 | Persisted | Why | Bound |
 |---|---|---|
 | `itemCache` (`itemID → name, quality, type, subtype, ilvl, icon`) | the client only knows items it has seen (`FR-103`); without this, a 40-ID manual category re-requests every ID at every login and the category editor is blank for a minute | bounded (≤ ~4000 entries, LRU), debounced, rebuildable, safe to delete |
-| `snapshot` (per-character item list, for `FR-110`–`FR-112`) | there is no API to read another character's inventory, and bank contents are unknown until the bank has been opened once this session | v1.x only; session-scoped for the bank in v1, and the size/retention question is `docs/07` Q15 before any cross-character version ships |
+| `snapshot` (per-character item list, for `FR-110`–`FR-112`) | there is no API to read another character's inventory, and bank contents are unknown until the bank has been opened at least once | v1.x only. The bank snapshot is the state at the **last time the bank was open**, refreshed on every open/close and labelled with its age — not a once-per-session capture. For alts, read BagSync/Altoholic when installed (`FR-111`) before considering our own store (`docs/07` Q15) |
 
 ## Export / import (`FR-92`)
 
@@ -222,20 +249,19 @@ what was dropped. Silent migration is worse than no migration.
 
 ## Size & performance notes
 
-Measured, not guessed (`docs/01`): the heaviest real Baggins profile is **74 categories, 193 rules,
-12 windows, 117 sections**, with 419 distinct manual item IDs. At ~120 bytes/rule and ~40 bytes/ID
-that is still trivial — SavedVariables size is not a design driver, and the item cache is the only
-blob worth watching.
+Rough, from a real heavy config (`docs/01`): dozens of categories, a few hundred rules, ~12 windows,
+over a hundred sections, hundreds of manual item IDs. At ~120 bytes/rule and ~40 bytes/ID that is
+still trivial — SavedVariables size is not a design driver, and the item cache is the only blob worth
+watching.
 
-- The expensive thing is **classification cost**: `categories × items × leaves`. At the real heavy
-  size — 74 categories × 120 items × ~2.6 leaves — that is **~23k leaf evaluations per full
-  refresh**, roughly 2× the earlier estimate in this doc. Still fine, but only if `read(item)` reads
-  a pre-enriched record and never `GetItemInfo` per leaf. Hence phase 2 (`enrich`) materializes every
-  field the registry can ask for, once per item per snapshot.
+- The expensive thing is **classification cost**: `categories × items × leaves`. At that size —
+  ~70 categories × ~120 items × ~2.5 leaves — call it **~20k leaf evaluations per full refresh**.
+  Fine, but only if `read(item)` reads a pre-enriched record and never `GetItemInfo` per leaf. Hence
+  phase 2 (`enrich`) materializes every field the registry can ask for, once per item per snapshot.
 - Field registry declares `read` as O(1) on the enriched record. A field that needs a network-ish
   lookup (tooltip text) is enriched lazily and marked `expensive = true` so the classifier can
   short-circuit (`any` groups evaluate cheap fields first — sort leaves by `field.expensive`).
 - `itemID in {…}` is a hash lookup, not a loop: cost is O(1) per item regardless of how many IDs a
   user pasted. This matters because item-ID rules are 30% of the rules people actually write.
-- 117 sections in 12 windows is the layout-engine stress case (`AC-40` is 12 sections in one window;
-  `docs/08` has the 117-section case).
+- A 100-plus-section layout is the layout-engine stress case (`AC-40` is 12 sections in one window;
+  the spike issue has the ~100-section case).

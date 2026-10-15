@@ -99,9 +99,32 @@ Absent on Forever — do not design around these:
 |---|---|
 | `C_SecureHandlerRegisterSnippets`, `SecureHandlerOnSNippet`, `SecureCmdOptionCheck` | no secure-snippet handling on item buttons; M4's drag spike must not assume them |
 | `SetBindingSnippet` | keybinds via plain `SetBinding` on our own frame |
-| `C_Settings.Create*` widget API | Forever exposes only `C_SettingsUtil.OpenSettingsPanel` / `NotifySettingsLoaded`; there is **no** Blizzard options-panel widget API to build on |
 | Blizzard EditMode is not addon-*documented* | `Blizzard_EditMode/Camelot/*` ships only Blizzard systems (action bars, unit frames, minimap) and there is no documented addon registration — but it **is** joinable in practice, see the recipe below. |
-| `HorizontalSliderTemplate`, `ColorPickerSwatch`, `InputSpinBoxTemplate`, `CheckboxInputTemplate`, `SettingsPanel*Template`, `HeaderStrip`, `SharedUIPanelCursorDragEffect`, `SpawnFrameArea`, `MoveUnitFrame` | newer-retail or other-branch names; not on Forever |
+| `HorizontalSliderTemplate`, `ColorPickerSwatch`, `InputSpinBoxTemplate`, `CheckboxInputTemplate`, `HeaderStrip`, `SharedUIPanelCursorDragEffect`, `SpawnFrameArea`, `MoveUnitFrame` | newer-retail or other-branch names; not on Forever. (`SettingsPanel*Template` **is** present, under `Blizzard_Settings_Shared/Mainline/` — see below.) |
+
+Present on Forever and worth using — do not assume these are retail-only:
+
+| Present | Consequence |
+|---|---|
+| **The modern addon Settings API** — `Blizzard_Settings_Shared/Blizzard_Settings.lua` (`AllowLoadGameType Both`): `Settings.RegisterAddOnCategory`, `RegisterVerticalLayoutCategory`, `RegisterCanvasLayoutCategory`, `RegisterVerticalLayoutSubcategory`, `RegisterProxySetting`, `RegisterAddOnSetting`, `RegisterCVarSetting`, `RegisterInitializer`, `CreateCheckbox`, `CreateSlider`, `CreateDropdown`, `CreateColorSwatch`, `SetKeybindingsCategory`, `RegisterModifiedClickSetting`, `OpenToCategory`, `SETTING_GROUP_ADDONS = "AddOns"` | **This is the Options → AddOns panel.** My earlier claim that Forever has no options-panel API was wrong. The utility panes register there with zero dependencies — no AceConfig, no minimap icon (`FR-88`, `FR-123`). `Blizzard_Settings_Shared/Blizzard_ImplementationReadme.lua` is Blizzard's own in-tree guide for an addon settings page. |
+| `Settings.RegisterModifiedClickSetting` | the client already has a UI for modified-click bindings; our item-menu modifier (`FR-60b`) registers there instead of inventing its own |
+| Right-click on a bag item is **already taken** | the stock item menu owns it; `OnModifiedClick` handles `EXPANDITEM`/`SPLITSTACK` and `HandleModifiedItemClick` owns alt-click (inventory scan, link). Our item menu needs a free modifier — Ctrl+right-click |
+| Altoholic ships a **Forever-specific build** (1.60.x; maintained via a fork, not the original author); **BagSync** is actively updated (20.x, 2026) with per-character item/bank/guild-bank tracking and an LDB feed meant for other bag addons | cross-character search should read one of these when present rather than build our own store (`FR-111`, `docs/07` Q15) |
+| LibPeriodicTable is stale | the curated sets Baggins leans on have not been meaningfully updated in years and cannot describe items Forever adds; our preset categories ship as **editable data** (`FR-31`) |
+
+### Config scale, from a long-lived personal Baggins setup
+
+Not a benchmark — a shape to design against: **dozens of categories, a few hundred rules, ~12
+windows made of a purpose set plus a near-mirror bank set, over a hundred sections (up to ~20 in one
+window), hundreds of manually listed item IDs.** Most categories have one rule; the outliers are the
+exclusion-heavy ones. `OR` dominates and `NOT` beats `AND` by a wide margin. `ItemID` lists and
+curated named sets are the two most-used rule types, and category→category references are a primary
+tool, not an advanced one. Full write-up in `docs/01`.
+
+That config names categories with a **dotted hierarchy** (`Consumable.Potions`,
+`Tradeskills.Enchanting.Wrath`). It is one person's convention, not a requirement — but it is worth
+supporting, because a dotted name is a category group in disguise and it scales to a whole expansion
+per family (`FR-11b`, `docs/07` Q8).
 
 ### EditMode ("move mode") is joinable — ThreatMeter proves it on Camelot
 
@@ -213,7 +236,7 @@ not in the `.pkgmeta` ignore list.
 luacheck .                      # lint (see .luacheckrc; WoW globals declared)
 lua5.1 -e "loadfile('X.lua')"  # syntax-only smoke
 # install for in-game test: copy/symlink into ../addons/BagsOfSorting/
-# runnable in-game checks: docs/08-test-plan.md  (/script works on Forever, gated)
+# runnable in-game checks: the `spike` issues #1–#8  (/script works on Forever, gated)
 ```
 
 There is no unit-test harness yet. M0 in `docs/06-milestones.md` creates the smallest one

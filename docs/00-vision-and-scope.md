@@ -39,7 +39,7 @@ Measured against Baggins as it exists today:
 
 | Baggins today | Target |
 |---|---|
-| 2 separate option tables (`Baggins`, `BagginsEdit`), waterfall dialogs | 1 settings window, 3 panes, no nesting deeper than tab → section |
+| 2 separate option tables (`Baggins`, `BagginsEdit`), waterfall dialogs | the client's own **Options → AddOns** panel, a handful of flat panes, no nesting deeper than pane → row |
 | reorder via `^` / `v` / `X` execute buttons in a scrollable group | drag the section header in the bag |
 | add a rule: dropdown of 30 rule types → per-type sub-dialog → LibQTip dewdrop | one chip row: `+ rule` → field picker → value picker, with live match list |
 | no preview of what a rule matches | right pane lists matching items + count, updates as you type |
@@ -67,17 +67,26 @@ Measured against Baggins as it exists today:
 - **categories**: rule-driven, manual item lists (bulk-pasteable), and dynamic
   ("group by type/subtype/expansion")
 - rule grammar with `any/all/none` nesting and a fixed field set, where **item-ID lists and
-  exclusions are first-class** — they are 55% of the rules in a real Baggins config (`docs/01`)
+  exclusions are first-class** — they are the most-used rule types and exclusions outnumber
+  conjunctions several to one in real configs (`docs/01`)
 - precedence + duplicate policy
 - **configure mode: the bags are the editor.** Context menus, in-place text, drag, small modals.
-  The settings window is a browser/search tool, not the primary editor (`docs/05`)
-- item inspector ("why is this here")
-- stacking/compression of stacks, empty-slot representation
-- new/recent item handling without Blizzard auto-sort (Forever has none)
+  Options → AddOns is a browser/search tool for the settings that genuinely need a window, never the
+  primary editor (`docs/05`)
+- item inspector ("why is this here"), on Ctrl+right-click — naked right-click stays the game's item
+  menu (`FR-60b`)
+- stacking/compression of stacks **with the display choice left to the user**, empty-slot representation
+- **quality/rarity and item-level presentation, with options** (`FR-45`, `FR-45b`) — required, not
+  decoration; defaults look like stock bags
+- new/recent item handling without Blizzard auto-sort (Forever has none), including a user-controlled
+  policy for when the highlight clears (`FR-47`)
 - **physical bag interaction**: a bag-bar toggle between vanilla bags and sorting bags, an *empty
   this bag* action, and category→specialty-bag **affinities** (`FR-51`, `FR-66`, `FR-67`)
-- profiles (shared default + per-character override), export/import strings for categories+windows
+- profiles (shared default + per-character override), export/import strings for categories+windows,
+  and **linked windows** so a bank window keeps step with its backpack twin (`FR-10c`)
 - undo of config edits
+- an intro / help page, because "configure it by touching it" is not a UI anyone has met before
+  (`FR-87`)
 - a starter preset so a fresh install is useful in under a minute
 - optional integrations that cost no vendored library: AddonCompartment, Masque, Pawn (`docs/03` §Integrations)
 
@@ -98,8 +107,16 @@ Measured against Baggins as it exists today:
   whatever skinning addon a user runs — Masque or its successor — skins our bags the way it skins
   theirs. No `themes/` module, no built-in "looks", no theme editor (`docs/07` Q16).
 - **Reagent bank, warband bank.** They do not exist on Forever (`agents.md`).
-- **Bag shopping UI.** Empty-bag, affinity compaction and bulk sell/deposit are in v1; buying and
+- **Bag shopping UI.** Empty-bag, affinity compaction and gated bulk sell are in v1; buying and
   upgrading bags is the player's business, we only make the vanilla bags reachable.
+- **Vendor integration beyond selling.** No price awareness, no restock logic, no merchant-specific
+  behaviour. Auto-sell of a trash category or greys is v1.x (`FR-65b`), and it is the only vendor
+  feature on the roadmap — vendor buyback is limited, so anything that sells in bulk stays gated.
+- **A minimap icon.** Refused rather than deferred: the home is the Addon Compartment plus Options →
+  AddOns, so LibDBIcon never enters the tree (`FR-123`).
+- **Cross-character search as a feature of this addon.** Bank-while-closed is in scope for v1.x;
+  alts, alt banks and guild banks read an existing maintained store when one is installed
+  (`FR-111`), and a full "search everything offline" product is its **own addon** (`docs/07` Q15).
 - **Auctioning, mail, crafting queue integration.**
 - **Tooltip replacement.**
 - **Localization beyond enUS.**
@@ -117,9 +134,8 @@ Measured against Baggins as it exists today:
 4. `docs/02-requirements.md` Must items all have a passing in-game checklist entry in
    `docs/06-milestones.md`.
 5. Config changes are visible in the bags in < 250 ms for a full backpack (measured, not hoped).
-6. A Baggins-scale layout (the heaviest profile in `~/Downloads/SavedVariables` is 74 categories /
-   193 rules / 12 windows / 117 sections — `docs/01`) can be rebuilt here without ever opening a
-   settings window.
+6. A Baggins-scale layout — dozens of categories, a few hundred rules, ~12 windows with a mirrored
+   bank half (`docs/01`) — can be rebuilt here without ever opening a settings window.
 
 ## Non-goals that are not omissions
 

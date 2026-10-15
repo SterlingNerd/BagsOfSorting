@@ -18,56 +18,58 @@ own code on configuration UI, and it is the part users complain about.
 
 ---
 
-## What a real config actually looks like (measured)
+## What a real heavy config looks like
 
-Parsed with `lua5.1` out of `~/Downloads/SavedVariables/Baggins*.lua` (6 files, 13 profile tables,
-one account's own playing configs). These numbers replace every guess in this repo about how big a
-config gets.
+From a long-lived personal Baggins setup (several characters, years of playing). The point is
+**scale and shape**, not exact counts — treat this as "the size of config the UI has to survive",
+not a benchmark.
 
-| Measure | Value |
+| Shape | Scale |
 |---|---|
-| Categories in the heaviest profile | **74** (not ~30) |
-| Rules in that profile | **193** |
-| Windows | **12** — 6 backpack + 6 near-mirror `Bank *` windows |
-| Sections | **117**, up to **22 in one window** |
-| Sections bound to more than one category | 6–8 per profile (`Metals and Ores{Tradeskills.Metals, Tradeskills.Ore}`, `Enchanting{5 categories}`) |
-| Distinct category names across profiles | 165 |
-| Manual item IDs across profiles | 419 distinct |
+| Categories | dozens, not a handful — call it ~70 |
+| Rules | a few hundred; most categories have exactly one rule |
+| Windows | ~12: a set of purpose windows and a **near-mirror set of bank windows** |
+| Sections | over a hundred in total, up to ~20 in one window |
+| Sections bound to several categories | common (`Metals and Ores`, `Enchanting` with five) |
+| Manual item IDs | hundreds, spread across many categories |
 
-Rule types, by real usage:
+Rule types, in the order they actually get used:
 
-| Rule type | Uses | What it says about the design |
-|---|---|---|
-| `ItemID` (explicit ID list) | **407** | manual ID lists are the #1 rule, not an escape hatch |
-| `PeriodicTable Set` (curated named lists) | **329** | users lean on curated item lists; we must ship our own data or lose this |
-| `ItemType` (`itype`/`isubtype`) | 236 | the type/subtype fields, as planned |
-| `Category` (one category references another) | 120 | **category composition is a primary tool**, not an advanced trick |
-| `Bag` ("item is in physical bag N") | 111 | physical-bag awareness is part of classification |
-| `Tooltip` | 34 | text search, mostly for `ITEM_BIND_QUEST` and set names |
-| `Quality` 26, `ItemLevel` 17, `Bind` 14, `NewItems` 13, `Other` 13, `Empty` 13, `ItemName` 11, `EquipLoc` 10, `ContainerType` 8, `AmmoBag` 6, `Scrap` 4, `EquipmentSlot` 4, `Teleport` 4, `EquipmentSet` 3 | 113 | the long tail; most of it is one field + one value |
+| Rule type | What it says about the design |
+|---|---|
+| `ItemID` (explicit ID list) | manual ID lists are the #1 rule, not an escape hatch |
+| `PeriodicTable Set` (curated named lists) | people lean hard on curated item lists — we must ship our own, and ours must be editable |
+| `ItemType` (`itype`/`isubtype`) | the type/subtype fields, as planned |
+| `Category` (one category references another) | **category composition is a primary tool**, not an advanced trick |
+| `Bag` ("item is in physical bag N") | physical-bag awareness belongs in classification |
+| `Tooltip` | text search, mostly for quest-bound and set names |
+| `Quality`, `ItemLevel`, `Bind`, `NewItems`, `Other`, `Empty`, `ItemName`, `EquipLoc`, `ContainerType`, `AmmoBag`, `Scrap`, `EquipmentSlot`, `Teleport`, `EquipmentSet` | the long tail; almost all of it is one field + one value |
 
-Rule **operations**: `OR` 1019, **`NOT` 320**, `AND` 44. Subtraction is 7× more common than
-conjunction. "Except this" is the refinement users reach for, so it must be a first-class row in
-the editor, not a rule type you have to discover.
+Rule **operations**: `OR` dominates, and `NOT` is used several times more than `AND`. Subtraction is
+the refinement people reach for, so "except this" must be a first-class row in the editor, not a rule
+type you have to discover.
 
-Rules per category: 316 categories have 1 rule, 109 have 2, 77 have 3; the tail runs to 19. Median
-1, mean 2.3. **The editor is designed for the 1-rule category and the 12-rule `NOT`-heavy
-category**, not for a balanced tree.
+Most categories have one rule; the outliers have ten-plus and are the exclusion-heavy ones
+(`Consumables.Misc` = one include plus nine exclusions). **The editor is designed for the one-rule
+category and for the exclusion-heavy category**, not for a balanced boolean tree.
 
-Naming, in the user's own words: categories are named in a **dotted hierarchy**
-(`Consumable.Potions`, `Tradeskills.Enchanting.Wrath`, `Gear.Sets.Tank`, `Reputation.Zandalar`) and
-windows are named after a *place or purpose* (`Quest`, `Consumables`, `Trade Goods`, `Equipment`,
-`Tools`, `Other`, each mirrored as `Bank …`). Two consequences:
+Naming: this config uses a **dotted hierarchy** (`Consumable.Potions`,
+`Tradeskills.Enchanting.Wrath`, `Gear.Sets.Tank`, `Reputation.Zandalar`) and names windows after a
+purpose (`Quest`, `Consumables`, `Trade Goods`, `Equipment`, `Tools`, `Other`, each mirrored as
+`Bank …`). That hierarchy is **one person's convention, not a requirement** — but it is a good one at
+this scale, especially for splitting things by expansion, so it is worth shipping as an example
+preset and supporting with name completion. Two consequences:
 
-1. The bank half of a real config is **the same categories in a second set of windows**. Nobody
-   wants to build that twice → `FR-10b` (copy a backpack window into a bank window).
-2. A hierarchy in a name is a category group wearing a disguise. Our section→categories list
-   (`docs/07` Q3) and the `category` field are the honest version of it.
+1. The bank half of a config is **the same categories in a second set of windows**. Nobody wants to
+   build that twice → `FR-10b` (copy) and `FR-10c` (keep them linked, `docs/07` Q11).
+2. A hierarchy in a name is a category group wearing a disguise. Making groups explicit
+   (`docs/07` Q8) is the honest version of it.
 
-The 329 `PeriodicTable Set` rules are curated lists (`Consumable.Food.Edible`,
-`Tradeskill.Mat.ByType.Ore`, `Tradeskill.Tool`, `Misc.Hearth`, `Consumable.Bandage`, …). We are not
-vendoring LibPeriodicTable (`docs/03` §Dependencies), so **the preset data file must carry the same
-kind of content** or the heaviest real category becomes 40 hand-typed item IDs.
+The curated sets (`Consumable.Food.Edible`, `Tradeskill.Mat.ByType.Ore`, `Tradeskill.Tool`,
+`Misc.Hearth`, `Consumable.Bandage`, …) come from LibPeriodicTable, **which has not been meaningfully
+updated in years and cannot describe items Forever will add**. We ship the same *kind* of content as
+preset categories, and users can add to and correct them (`FR-31`) — a preset nobody can edit is a
+preset that rots.
 
 ---
 
@@ -202,6 +204,11 @@ AddColor / AddButtonGroup / AddInlineSubSection / AddSubIndex`, an optional clic
 scroll-to-sections, `tabbed = true`, theme integration, and per-widget `getValue/setValue(ctx)`
 binding. `config/config.lua` (1,142 lines) builds the whole settings UI from it — no AceConfig
 dialog anywhere (the only `AceConfigRegistry:NotifyChange` call in the addon is commented out).
+
+Worth knowing, **not worth stealing**: BetterBags had to build this because it targets Classic, where
+the modern settings API is not available to addons. On Forever it is (`agents.md` §Present on
+Forever), so the equivalent of these 1,100 lines for us is a handful of `Settings.Register*` /
+`Settings.Create*` calls.
 This is the single most reusable idea in either repo.
 
 **Real dialogs, not dropdowns.** `frames/question.lua` gives `YesNo`, `Alert`, `AskForInput`;
@@ -277,7 +284,7 @@ per-site branching. Copy this pattern.
 | AceConfig waterfall + dynamic option-tree rebuilds | Baggins | **refuse** |
 | 57 flat profile keys | Baggins | **refuse** → grouped, defaults-first |
 | per-type bespoke option UI | Baggins | **refuse** → one chip editor |
-| form system for settings window | BetterBags | **steal** (own minimal version) |
+| form system for settings window | BetterBags | **refuse** — Forever ships `Settings.CreateCheckbox`/`CreateSlider`/`CreateDropdown`/`CreateColorSwatch` and the vertical/canvas layout system, so the utility panes need no form builder of ours at all |
 | numeric category priority + explicit precedence chain | BetterBags | **steal** |
 | search DSL → save-as-category, groupBy | BetterBags | **adapt** (v1: subset of fields) |
 | 11-phase async refresh pipeline | BetterBags | **steal** (shape, not code) |
@@ -287,7 +294,7 @@ per-site branching. Copy this pattern.
 | capability flags + table-inert gating for Forever | BetterBags | **steal** |
 | category tabs/groups inside one window | BetterBags | **out of scope v1** (windows replace it) |
 | vendored Ace3 + analytics | BetterBags | **refuse** |
-| LibPeriodicTable as a dependency | Baggins (329 rules use it) | **refuse the library, steal the content** → preset categories that are `itemID in {…}` lists (`FR-31`) |
+| LibPeriodicTable as a dependency | Baggins (its most-used named-set rules depend on it) | **refuse the library, steal the content** → preset categories that are `itemID in {…}` lists, user-editable, because the library is stale (`FR-31`) |
 | LibDataBroker + LibDBIcon minimap icon | Baggins | **refuse**; AddonCompartment in v1, own minimap button only if users ask (`docs/07` Q2) |
 | Masque / Pawn hooks | BetterBags `integrations/` | **steal the pattern** (guarded `LibStub`/global checks, ~40–60 lines each), not the code |
 | Bagnon-compatible `AllInventory` | neither reference addon provides it | **v2 candidate** (`docs/07` Q15) — a gain we would choose, not a loss from avoiding libraries |

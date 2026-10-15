@@ -303,11 +303,12 @@ So there was never a second inventory system to build — only a question of whe
    SavedVariables blob, a second UI paradigm inside the first, and a feature that still cannot find the
    item half the time.
 
-**The split we chose instead: we own classification, an alt-database addon owns storage.** Our categories
-and rule trees become plain versioned data behind `BagsOfSortingAPI` (`FR-113`, Q22). An addon that
-persists what your characters have can then say "your mage has 4 items matching
-`Tradeskills.Enchanting`" using *our* rules. That is smaller than a snapshot and worth more: it helps
-every addon in that category instead of making us a worse version of one of them.
+**The split we chose instead: we keep classification clean, an alt-database addon owns storage.** Our
+categories and rule trees stay plain versioned data (`FR-113`, Q22) so that an addon which persists what
+your characters have *could* say "your mage has 4 items matching `Tradeskills.Enchanting`" using our
+rules instead of inventing its own. We do not build the bridge, the transport, or the storage — we make
+the bridge unnecessary to pre-build. Keeping the model plain data is worth doing for import/export,
+migration and the test fixtures regardless of whether anyone else ever reads it.
 
 | Question | Answer |
 |---|---|

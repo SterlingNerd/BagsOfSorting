@@ -142,9 +142,9 @@ What Blizzard gives us for free is the *predicate*, not an index:
   `GetItemContextMatchResultForContainer` is absent on camelot (`agents.md`).
 
 So: **drive the client's search and reuse its matcher** (`FR-50`) so our search and the game's agree,
-then add our own fields (type, quality, ilvl, expansion, category) on the enriched record. Anything
-that reaches beyond the open bags is a snapshot problem (`FR-110`+, Q15) and gets its own UI, not a
-filter bolted onto the bag bar.
+then add our own fields (type, quality, ilvl, expansion, category) on the enriched record. Anything that
+reaches beyond what is on screen is out of this addon (`Q15`) — not a snapshot problem to solve, and not a
+second UI to bolt onto the bag bar.
 
 The DSL itself stays **Should**, land in M6, capped to the FR-28 field subset. If M3's chip editor
 turns out to cover what people actually try to express, cut the DSL and spend the time on dynamic
@@ -204,7 +204,8 @@ Partly answered by reading `origin/forever` (2026-10-15):
 | Bags start **combined** into one window | **yes** | `ContainerFrameCombinedBags`, `IsUsingCombinedBags` (ForeverPlus `BagWindow.lua`) |
 | `C_Bank` exists with `FetchNumPurchasedBankTabs`, `IsItemAllowedInBankType`, `FetchDepositedMoney` | **yes** | `Blizzard_APIDocumentationGenerated/BankDocumentation.lua` on `origin/forever` |
 | `NUM_TOTAL_EQUIPPED_BAG_SLOTS` value, bank-bag index range | **unknown, and now known to be a trap** | `Enum.BagIndex` on Forever has **no `BankBag_*` values** (27 values: `Keyring -1`, `Backpack 0`, `Bag_1..4`, `ReagentBag 5`, `CharacterBankTab_1..9 = 6..14`, `AccountBankTab_1..9 = 15..23`), yet `Blizzard_UIPanels_Game/Camelot/BankFrame.lua:26` computes bank bags as `bagSlot + ITEM_INVENTORY_BANK_BAG_OFFSET` where that offset is `NUM_TOTAL_EQUIPPED_BAG_SLOTS`. If that is 5 here, bank bags land on the bank-tab indices. In-game only — issue #2 |
-| Whether the client still answers bank container indices after the bank closes | **unknown, and it decides `FR-110`** | if yes, closed-bank search is free; if no, it is cut. Issue #2 |
+| Whether the client still answers bank container indices after the bank closes | **no longer a question we need an answer to** | Closed-bank search is out of the product (`FR-109`, Q15). We read bank containers only while the bank is open |
+| **Does the character bank have tabs at all, or is it one 48-slot grid?** | **unknown, and it decides what a "bank window" means** | Forever doubled the default bank to 48 slots (6×8) with 8 bag slots; Camelot pages at 88 slots per page, so 48 fits on one page. `BankTabData` has name/icon/depositFlags, but that shape is much more a guild-bank feature. Issue #9 |
 | Whether inert `Enum.BagIndex.AccountBankTab_N` errors or returns 0 in a harvest loop | **unknown** | in-game only |
 | `AddonCompartment` available | **yes** | `Blizzard_Minimap/Blizzard_Minimap.toc`: `AddonCompartment.lua [AllowLoadGameType mainline]`, no camelot exclusion |
 | `/script` available for testing | **yes, gated** | `Blizzard_ChatFrameBase/Shared/SlashCommands.lua`: `SCRIPT` → `RunScript`, gated by `C_GameRules.IsGameRuleActive(Enum.GameRule.UserScriptsDisabled)` and a one-time dangerous-scripts popup. `/dump`, `/eventtrace`, `/framestack`, `/api` also present |
@@ -314,7 +315,7 @@ every addon in that category instead of making us a worse version of one of them
 | Search the bank while the bank is open | v1, `FR-13` — it is the same harvest loop on different indices |
 | Search the bank while closed | **out.** Not deferred — out |
 | Search alts / alt banks | **out of this addon.** Belongs to an alt-database addon, which reads our classification via `FR-113` |
-| Search the guild bank | **out.** Whether the guild bank is reachable as data at all is issue #11 — information that addon needs, not us |
+| Search the guild bank | **out of scope completely.** Its stacking and per-tab restrictions are a different problem, and only an offline-search product would care |
 | Bagnon-compatible `AllInventory` published by us | **out.** It cannot be honest without persisted per-character data, which `FR-109` forbids |
 
 **Reopen trigger:** none inside this addon. If someone builds the alt-database addon and `FR-113` turns
@@ -405,46 +406,46 @@ reach, `RequestLoadItemDataByID` behaviour, coexistence runs) become GitHub issu
 `/script` snippets in the issue body, because that is where results get recorded, closed and linked to
 commits. Stabilised plans graduate into issues too. Docs keep *decisions*, issues keep *open work*.
 
-## Q22 — Is our config a public API? — **DECIDED: yes, as data, and that is the whole extent of it**
+## Q22 — Do we publish a config API? — **DECIDED: not now. We keep the model publishable and let someone else decide how to ship it.**
 
-`FR-113` exists because offline search left (`Q15`) and took the one genuinely interesting
-cross-addon idea with it. An alt-database addon can store what your characters have; what it cannot
-invent is what a *category* means. Ours is the thing it wants.
+`FR-113` exists because offline search left (`Q15`) and took the one interesting cross-addon idea with
+it: an alt-database addon can store what your characters have, but it cannot invent what a *category*
+means. Ours is the thing it would want.
 
-**What we publish** — one guarded global, `BagsOfSortingAPI`:
+**That is still firmly later, and it is not our problem.** Designing a transport for a consumer that does
+not exist yet — a global, an LDB feed, a documented endpoint — is how a project acquires surface area it
+then has to support forever. There is no consumer. There is no interaction design yet that would tell us
+whether a guarded global, a LibDataBroker feed, or nothing at all is the right shape.
 
-| Function | Purpose |
-|---|---|
-| `Version()` | lets another addon detect that our rule grammar changed before it misreads our data |
-| `Categories()` | the category names in this profile |
-| `Category(name)` | the rule tree, as plain data — the same structure the `BOS1.` export string carries |
-| `Matches(itemID, categoryName)` | our classifier's answer for one item, without the caller reimplementing the grammar |
-| `Export()` / `Import(string)` | the existing `BOS1.` string, exposed programmatically as well as by copy-paste |
+**What we do now, because we want it anyway:** keep the model publishable.
 
-**What we do not publish:** no plugin API (`FR-32` stays Won't), no event bus, no LibDataBroker feed, no
-way for another addon to register a rule type, no hook into our rendering. Publishing *data* is a few
-dozens of lines and a version number. Publishing an *extension point* is a support obligation forever.
+- Categories, rule trees, windows and sections stay **plain data** — no closures in the schema, no
+  classifier logic entangled with storage.
+- Names are stable identities; the schema carries a version marker.
+- `Export()`/`Import()` already round-trips the whole model as a string, and tests already assert against
+  it. That is the API, in embryo, and it earns its keep for import/export and migration whether or not
+  anyone else ever reads it.
 
-Two consequences that must be honoured or the API is a trap:
+If an API ever ships, `LibDataBroker` is a plausible transport rather than a new invention — it is how
+this ecosystem already passes data between addons, and we already refused LibDBIcon (the *display* half),
+not the data feed. Deciding that is a decision for the day a consumer exists.
 
-1. **The rule grammar is now a public format.** `BOS1.` and `Category(name)` are the same shape, so a
-   grammar change is a breaking change to someone else's addon. `docs/04`'s schema version and
-   `Version()` are what make that survivable; a grammar change gets a version bump and a migration note,
-   not a silent edit.
-2. **`Matches` must agree with our own classifier.** One classifier, one entry point. If the API ever
-   diverges from what the bags actually show, the API is a lie and should be deleted.
+**Rule grammar stability, stated honestly: nothing in this spec is breakable-free before 1.0.** The rule
+grammar, the export format, the schema version and the data shapes are all expected to change while the
+addon is pre-1.0, and we make a **best effort** — version markers, migration entry points, and a
+`BOS1.`-style prefix that fails loudly rather than silently misreading someone's file. If a public API
+is ever published, it is published *after* 1.0, when there is something worth promising. Promising
+stability before we know what the UI needs would constrain the design for a hypothetical stranger.
 
-**Needed:** nothing before M6. Build it when the first real consumer exists — an API with no consumer is
-just surface area. Issue #11 (is the guild bank reachable as data at all) is the nearest thing to a
-consumer question we have.
+**Needed:** nothing. Reopen when a real consumer and a real interaction design both exist.
 
 ---
 
 ## Decisions needed **before M0 commits**
 
 Q1 (name), Q2 (dependencies), Q3 (section ↔ categories), Q5 (no migration), Q6 (export format),
-Q11 (Default + copy + link), Q14 (distribution), Q15 (no offline search, no snapshots), Q16 (no themes),
-Q17 (no DI), Q18 (group binding), Q19 (Ctrl+right-click), Q20 (help page), Q21 (issues not docs) are
-decided. Q8 (dynamic categories) must be re-confirmed against Q18 before M5. Q22 (config as an API) is
-decided in principle and built only when a consumer exists. Everything else is decided at the milestone
-that needs it: Q4/Q9/Q13 at M2, Q7 at the M3→M4 boundary.
+Q11 (Default + copy + link), Q14 (distribution), Q15 (no offline search, no snapshots, guild bank out),
+Q16 (no themes), Q17 (no DI), Q18 (group binding), Q19 (Ctrl+right-click), Q20 (help page),
+Q21 (issues not docs), Q22 (no published API; keep the model publishable) are decided.
+Q8 (dynamic categories) must be re-confirmed against Q18 before M5. Everything else is decided at the
+milestone that needs it: Q4/Q9/Q13 at M2, Q7 at the M3→M4 boundary.

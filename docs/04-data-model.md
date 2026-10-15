@@ -208,7 +208,7 @@ one inverse.
 | Persisted | Why | Bound |
 |---|---|---|
 | `itemCache` (`itemID → name, quality, type, subtype, ilvl, icon`) | the client only knows items it has seen (`FR-103`); without this, a 40-ID manual category re-requests every ID at every login and the category editor is blank for a minute | bounded (≤ ~4000 entries, LRU), debounced, rebuildable, safe to delete |
-| ~~`snapshot`~~ — **deleted** | every earlier draft of this spec carried a persisted bank/alt item list. It has no reason to exist: `C_Bank` exposes no item-reading API, so bank and guild-bank contents arrive through the same container API as backpack contents, and the harvest loop is already the only reader. Cross-character data is read from BagSync/Altoholic when installed (`FR-111`) or is a different addon (`docs/07` Q15) | **`FR-109`: the item cache is the only derived state we persist.** Whether closed-bank search survives at all depends on issue #2 — if the client stops answering bank container indices after the bank closes, the feature is cut rather than built on invented storage |
+| ~~`snapshot`~~ — **deleted** | every earlier draft of this spec carried a persisted bank/alt item list. It has no reason to exist: `C_Bank` exposes no item-reading API, so bank contents arrive through the same container API as backpack contents and the harvest loop is already the only reader. Offline search — closed bank, alts, guild bank — is out of the product (`docs/07` Q15) | **`FR-109`: the item cache is the only derived state we persist.** Nothing else here is derived, cached or stored |
 
 ## Export / import (`FR-92`)
 
@@ -220,10 +220,13 @@ BOS1.<base64( json-ish serialize({windows, categories}) )>
 ```
 
 - `BOS1` prefix carries the format version; a mismatched prefix is a hard, explained refusal.
-- **This serialization is also the public API payload** (`FR-113`): `BagsOfSortingAPI.Category(name)`
-  returns the same rule-tree shape this string carries. One format, one version number, two transports.
-  It is why the rule grammar is a public format and a grammar change is a breaking change with a migration
-  note, not a silent edit (`docs/07` Q22).
+- **Nothing here is stable before 1.0.** The grammar, the schema and this format are all expected to move
+  while the addon is pre-1.0; the version marker exists so our own migrations fail loudly rather than
+  silently misreading a file, not to promise anyone else compatibility (`docs/07` Q22).
+- The model is kept **plain data** — no closures in the schema, names as identities — so that publishing
+  it later is a transport decision rather than a rewrite (`FR-113`). That is a reason we want this
+  regardless of whether anyone else ever reads it: import/export, migration and the test fixtures all
+  depend on the same property.
 - Manual categories and `itemID in {…}` leaves export their IDs, which are account-agnostic. Window
   `icon` exports (a bare `Interface\ICONS\` name is not character-specific); `overlay` does not.
 - Import is a **command batch**: it runs through the same command layer as the UI, so import is

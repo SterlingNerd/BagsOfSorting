@@ -92,11 +92,8 @@ Measured against Baggins as it exists today:
 
 ## Extended (v1.x)
 
-- **`BagsOfSortingAPI`** (`FR-113`): categories, rule trees, windows and sections exposed as plain
-  versioned data, so another addon — an alt-database addon — can classify *its* stored items with *our*
-  definitions instead of inventing its own
-- auto-sell of a designated trash category and/or greys at a vendor, gated and confirmable (`FR-65b`)
-- group bindings for dotted category families if real configs keep growing (`FR-11b`)
+- **auto-sell** of a designated trash category and/or greys at a vendor, gated and confirmable (`FR-65b`)
+- **group bindings** for dotted category families if real configs keep growing (`FR-11b`)
 
 ## Out of scope (v1) — named so nobody quietly adds them
 
@@ -118,8 +115,12 @@ Measured against Baggins as it exists today:
 - **Offline search, in any form.** Not searching the bank while it is closed, not searching alts or alt
   banks, not searching the guild bank. It ends in a trip to the bank anyway; it is incomplete the moment
   the item turns out to be on another character; and "do I have this anywhere" is a database question
-  while this addon is a manipulation tool (`docs/07` Q15). What we ship instead is the classification,
-  as data another addon can use (`FR-113`).
+  while this addon is a manipulation tool (`docs/07` Q15).
+- **The guild bank, completely.** Its stacking rules and per-tab restrictions are a separate problem, and
+  only an offline-search product would care. Not deferred — out.
+- **A published config API.** We keep the model publishable (`FR-113`) because that is good engineering
+  we want regardless; shipping an API, a LibDataBroker feed or any other transport is a later decision
+  for when a consumer and an interaction design both exist (`docs/07` Q22).
 - **Persisting any inventory beyond the item cache** (`FR-109`). No bank snapshot, no alt snapshot, no
   inventory store.
 - **Auctioning, mail, crafting queue integration.**

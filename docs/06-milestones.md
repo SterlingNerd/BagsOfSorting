@@ -250,8 +250,9 @@ Deliverables
 - `core/db.Migrate()` for our own schema versions. **No Baggins importer** (`FR-94` = Won't, deferred
   by `docs/07` Q5)
 - dynamic categories (`kind = "dynamic"`, **FR-25**) if `docs/07` Q8 keeps it Must
-- `data/snapshot.lua`: bank snapshot for closed-bank search (`FR-110`), session-scoped, persisted
-  only behind a setting
+- **no `data/snapshot.lua`** (`FR-109`): the harvest loop is the only inventory reader, and bank
+  containers are read while the bank is open. Issue #9 decides whether a bank *window* maps onto one
+  48-slot grid or onto tab containers
 
 Exit criteria
 - **AC-13** bank windows only appear while the bank is open; bank bags and tabs are complete.
@@ -325,18 +326,15 @@ Exit criteria
 
 Not milestones; a queue. Each gets a milestone only when the one before it ships.
 
-1. **`BagsOfSortingAPI`** (`FR-113`) — categories and rule trees published as plain versioned data so an
-   alt-database addon can classify what it already stores with our definitions. Built when the first real
-   consumer exists; an API with no consumer is just surface area.
-2. **Auto-sell** (`FR-65b`) — a designated trash category and/or grey-quality items on opening a
+1. **Auto-sell** (`FR-65b`) — a designated trash category and/or grey-quality items on opening a
    vendor, with a confirm and a global off switch. Deliberately after bulk sell has been used in the
    wild, because this is the feature that can sell something by accident.
-3. **Group bindings** (`FR-11b`) if category counts keep growing in real use — `Tradeskills.Enchanting ∗`
+2. **Group bindings** (`FR-11b`) if category counts keep growing in real use — `Tradeskills.Enchanting ∗`
    binding a whole dotted family (`docs/07` Q18).
 
-Offline search is **not in this queue** — it is out of the product (`FR-109`, `docs/07` Q15). If it is
-ever built, it is its own addon with its own storage and its own UI, and it reads `FR-113` the way it
-would read any other addon's data.
+Offline search and the guild bank are **not in this queue** — they are out of the product (`FR-109`,
+`docs/07` Q15). A published config API is not in the queue either: we keep the model publishable
+(`FR-113`) and let a future consumer decide the transport (`docs/07` Q22).
 
 Exit criteria: installable from a release zip into `../addons/` with no dev tooling, on a character
 that has never had the addon, with the first-run experience tested by someone else.

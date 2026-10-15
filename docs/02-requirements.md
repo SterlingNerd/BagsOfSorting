@@ -99,9 +99,9 @@ wrote. **AC-26** editing one rule re-classifies only the affected categories —
 | FR-45b | M | **Item-level presentation is a required feature, with options:** show ilvl on the button; only on gear (or on everything); minimum ilvl to display; text position and size; optional quality-coloured ilvl text; hide when the item's data is not cached yet (`FR-103`) rather than showing `ilvl 0` or `ilvl 1`. |
 | FR-46 | M | Sorting: sections by name / size desc / size asc / manual order; items within a section by name→quality, quality→name, ilvl, expansion. |
 | FR-47 | M | **New/recent item highlight**, with a clear policy the user controls: clear when the bags close, or keep the highlight until cleared manually. Clearable by keybind, by context menu, and by `/bos new`. Optional duration-based expiry and optional flash. This exists because Forever has no Blizzard auto-sort and no reliable new-item signal of its own. |
-| FR-48 | S | Money frame attached to a window. |
+| FR-48 | S | Money and currency display attached to a window, **built on the client's own currency API rather than hand-rolled**: `C_CurrencyInfo` on Forever (`PlayerMoney`, `AccountMoney`, `GetCoinText`, `GetCoinTextureString`, `GetBackpackCurrencyInfo`, `GetCurrencyListInfo`, `GetCurrencyLink`, `SetCurrencyBackpack`, `PickupCurrency`, `CurrencyDisplayUpdate`). Forever ships a currency tab on the character panel, so the data model and the icons are the client's, not ours. |
 | FR-49 | M | **No theme system.** Windows and item buttons are built from Blizzard's own pieces (`ItemButton` frame type, `ContainerFrameItemButtonTemplate`, the client's bag/backdrop atlases) so a skinning addon the user already runs applies to our bags without our involvement. Masque support is an optional integration, not a feature (`docs/03` §Integrations, `docs/07` Q16). |
-| FR-50 | S | In-window search bar. Our bags are a *view* over real containers, and we already hold `item → (window, section, button)`; search is that map run in reverse. We drive the client's own matcher so the two agree: our search box calls `C_Container.SetItemSearch(text)` and filters with `ItemButtonUtil.GetItemContextMatchResultForItem(ItemLocation:CreateFromBagAndSlot(bag, slot))`, the same predicate Blizzard's `BagItemSearchBox` uses. Extra fields (type, quality, ilvl, expansion, category) run on our enriched record. What this cannot do is search inventory the client does not currently know — that is `FR-110`+ and a different UI (`docs/07` Q7, Q15). |
+| FR-50 | S | In-window search bar. Our bags are a *view* over real containers, and we already hold `item → (window, section, button)`; search is that map run in reverse. We drive the client's own matcher so the two agree: our search box calls `C_Container.SetItemSearch(text)` and filters with `ItemButtonUtil.GetItemContextMatchResultForItem(ItemLocation:CreateFromBagAndSlot(bag, slot))`, the same predicate Blizzard's `BagItemSearchBox` uses. Extra fields (type, quality, ilvl, expansion, category) run on our enriched record. What this cannot do is search inventory the client does not currently know — and that is out of this addon, not a feature waiting behind a snapshot (`docs/07` Q7, Q15). |
 | FR-51 | M | **Real bags stay reachable.** A toggle on the client's bag bar switches between vanilla bags and sorting bags, and a *vanilla-only* view can open one physical bag (e.g. the herb bag) without opening the rest. This is how a player upgrades cloth → linen → silk and moves bags to the bank. |
 | FR-52 | C | Item upgrade arrow vs equipped gear, via Pawn when installed (`docs/03` §Integrations) rather than our own comparison. |
 | FR-53 | C | Per-section column override for wide categories (e.g. a 10-wide gear section in a 5-wide window). |
@@ -238,7 +238,7 @@ the pending button resolves without a reload.
 | ID | P | Requirement |
 |---|---|---|
 | FR-109 | M | **Nothing derived is persisted except the item cache (`FR-97`).** No bank snapshot, no alt snapshot, no inventory store. This is a rule, not an absence: earlier drafts of this spec carried a `snapshot` table and a closed-bank search feature, and both are deleted. |
-| FR-113 | S | **The config is an API.** Categories, their rule trees, windows and sections are exposed as plain versioned data — readable and writable from outside the addon — through `BagsOfSortingAPI`: `Version()`, `Categories()`, `Category(name)` → rule tree, `Matches(itemID, categoryName)` → bool, `Export()` / `Import(string)`. Same payload as the `BOS1.` export string (`docs/06` Q6), one guarded global, no plugin system, no event bus, no LibDataBroker. |
+| FR-113 | M | **The model stays clean enough that an API would be possible.** Categories, rule trees, windows and sections remain plain data with stable names and a version marker — no Lua closures in the schema, no classifier logic entangled with storage, no profile-specific hacks in the rule grammar. This is an internal hygiene requirement, **not** a shipped API: `BagsOfSortingAPI`, a LibDataBroker feed, or any other transport is a later decision made by whoever needs it, and it is explicitly not our problem now. What is ours is making it *possible* without a rewrite — which we want for our own reasons (export/import, migration, tests) whether or not anyone else ever reads it. |
 
 **Why offline search left this addon.** Three reasons, each sufficient on its own:
 
@@ -251,19 +251,19 @@ the pending button resolves without a reload.
    the first into it means persisting inventory, a results UI that is not a bag, and a privacy story —
    all to serve the weakest version of the answer.
 
-So the split is: **we own classification, an alt-database addon owns storage.** It persists what your
-characters have; we define what a category *means*; `FR-113` is how it gets our definitions so it can
-say "your mage has 4 items matching `Tradeskills.Enchanting`" using our rules rather than inventing its
-own. That is a smaller thing to build than a snapshot, and it is worth more to more people.
+So the split is: **we keep classification clean and self-contained; anyone who wants cross-character
+storage builds it.** If such an addon ever wants our category definitions, the fact that they are plain
+versioned data is what makes that a twenty-line job instead of a fork — but designing a transport for a
+consumer that does not exist yet is how projects acquire surface area they then have to support forever.
 
 Out of this addon entirely: searching the bank while it is closed, searching alts and alt banks,
-searching the guild bank (`docs/07` Q15). Whether the guild bank is even reachable as data is issue #11
-— an answer the alt-database addon needs, not us.
+searching the guild bank (`docs/07` Q15, Q22).
 
 **AC-109** `stat` the SavedVariables file before and after a session that opens the bank, searches, and
 reloads: no inventory blob.
-**AC-113** from another addon's `/script`: `BagsOfSortingAPI.Category("Herbs")` returns a rule tree that
-`BagsOfSortingAPI.Matches(26042, "Herbs")` agrees with our own classifier about, on the same item.
+**AC-113** `grep` the schema and the rule registry for functions stored in data (`= function`, closures
+in SavedVariables, `setfenv`): zero. A category's rule tree round-trips through `Export()`/`Import()`
+without our process being alive.
 
 ## J. Integrations (no vendored libraries)
 

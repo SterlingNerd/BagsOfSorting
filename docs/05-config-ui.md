@@ -385,7 +385,7 @@ an invertible command, it does not ship.
 | **Draft rule would claim items a higher priority category owns** | `⚠` in the category editor's list, winner named on hover. |
 | **Deleting something in use** | Confirm names the dependents: "3 sections use this category." |
 | **Item data not cached** | Tier-1 icon + `…` name + pending marker; resolves without a reload (`FR-103`). |
-| **Bank not opened this session** | Search says so, and offers to open the bank. Never a confident empty result (`FR-110`). |
+| **Bank closed** | Bank windows simply do not exist on screen. There is no "search the bank from anywhere" state to design for — that feature is out of the product (`FR-109`, `docs/07` Q15) |
 | **Combat** | Configure handles disabled with an explanation; bulk moves refused with "not while in combat". No taint (`AC-4`, `AC-68`). |
 | **Import mismatch** | Hard refusal with the version prefix named, not a partial import. |
 

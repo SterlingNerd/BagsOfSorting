@@ -92,10 +92,13 @@ Measured against Baggins as it exists today:
 
 ## Extended (v1.x)
 
-- **search the bank while it is closed**, from a snapshot taken the first time the bank is opened
-  this session (`FR-110`, `docs/07` Q15)
-- **search alts, alt banks and the guild bank** — needs a persisted per-character item snapshot and
-  a size/privacy decision. `docs/07` Q15 owns it; nothing in v1 may block it
+- **search the bank while it is closed** — decided by issue #2, not by us. `C_Bank` has no item-reading
+  API, so bank contents come through the same container API as everything else: if the client keeps
+  answering bank container indices after the bank closes, this is nearly free (`FR-110`); if it does
+  not, it stays cut. **No snapshot either way** (`FR-109`)
+- **search alts, alt banks and the guild bank** by reading an existing maintained store when one is
+  installed — BagSync or Altoholic (which ships a Forever build). Never by building our own
+  (`FR-111`, `FR-112`)
 
 ## Out of scope (v1) — named so nobody quietly adds them
 
@@ -114,9 +117,10 @@ Measured against Baggins as it exists today:
   feature on the roadmap — vendor buyback is limited, so anything that sells in bulk stays gated.
 - **A minimap icon.** Refused rather than deferred: the home is the Addon Compartment plus Options →
   AddOns, so LibDBIcon never enters the tree (`FR-123`).
-- **Cross-character search as a feature of this addon.** Bank-while-closed is in scope for v1.x;
-  alts, alt banks and guild banks read an existing maintained store when one is installed
-  (`FR-111`), and a full "search everything offline" product is its **own addon** (`docs/07` Q15).
+- **Persisting any inventory beyond the item cache.** No bank snapshot, no alt snapshot, no inventory
+  store (`FR-109`). Closed-bank search either reads containers the client already knows or does not
+  exist. A full "search everything offline" product is its **own addon** with its own persistence
+  (`docs/07` Q15).
 - **Auctioning, mail, crafting queue integration.**
 - **Tooltip replacement.**
 - **Localization beyond enUS.**

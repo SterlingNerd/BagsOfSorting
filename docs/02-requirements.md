@@ -36,7 +36,7 @@ Acceptance criteria are written as things a human verifies **in-game on the Fore
 | FR-11b | S | A section may bind a **category group** instead of a single category: binding `Tradeskills.Enchanting` pulls in `Tradeskills.Enchanting.Dust`, `.Essence`, `.Rod` — every category under that dotted prefix (`docs/07` Q8). Group membership comes from the name, so renaming a category out of the prefix moves it out of the section, and the UI says so at rename time. |
 | FR-12 | M | A **category** is a named classification rule set that can be referenced by zero or more sections. One category may appear in several windows/sections. |
 | FR-13 | M | Backpack and bank are both handled, with bank windows scoped by `kind = bank` and never shown when the bank is closed. |
-| FR-14 | M | Items in real containers (backpack slots, equipped bags, bank tabs, bank bags, keyring, reagent bag if present on Forever) are harvested exactly once and displayed in virtual windows; the addon does not fabricate inventory. |
+| FR-14 | M | Items in real containers (backpack slots, equipped bags, bank tabs, **bank bags**, keyring, reagent bag if present on Forever) are harvested exactly once and displayed in virtual windows; the addon does not fabricate inventory. **The container list is derived from constants and `pcall`-probed, never enumerated from `Enum.BagIndex`** — Forever has no `BankBag_*` enum values while the client still computes bank-bag indices arithmetically, and the two ranges may overlap (issue #2). Indices are de-duplicated: reading one index under two names counts the same items twice. |
 | FR-15 | M | An item never appears in two windows/sections unless the category explicitly opts into duplication. |
 | FR-16 | M | Items that match no category land in a catch-all section whose name and position the user controls. |
 | FR-17 | S | Per-window column count (default 5) independent of other windows. |
@@ -233,18 +233,19 @@ loot a never-seen item, confirm it lands in the catch-all first and moves to the
 within 2 s; then `/script C_Item.RequestLoadItemDataByID(26042)` on an item never seen and confirm
 the pending button resolves without a reload.
 
-## I. Search beyond the open bags (v1.x)
+## I. Search beyond what is on screen
 
 | ID | P | Requirement |
 |---|---|---|
-| FR-110 | S | Search the **bank while it is closed**, from a snapshot of the **last time the bank was open** — refreshed on every `GUILDBANKFRAME_OPENED`/close, not captured once per session. Results are labelled with their age ("bank, seen 4 min ago"). Before the bank has ever been opened in this client's history the UI says "bank not known yet" and offers to open it — it never shows a confident empty result. |
-| FR-111 | C | Search **alts and alt banks**. Prefer *reading an existing maintained addon* over building our own store: **BagSync** (v20.x, actively updated 2026, tracks per-character items/banks/guild bank and publishes an LDB feed explicitly intended for other bag addons) and **Altoholic** (which ships a **Forever-specific build**, currently 1.60.x, and is maintained by a fork rather than the original author). If either is loaded, read their data; do not duplicate it. Building our own cross-character store is the fallback, not the plan (`docs/07` Q15). |
-| FR-112 | C | Search the **guild bank** after `GUILDBANKFRAME_OPENED`, gated on the player's guild-bank permissions. |
+| FR-109 | M | **Nothing derived is persisted except the item cache (`FR-97`).** No bank snapshot, no alt snapshot, no inventory store. This is a rule, not an absence: every earlier draft of this spec carried a `snapshot` table, and it is deleted. |
+| FR-110 | S | Search the **bank while it is closed**, with **no snapshot**. `C_Bank` has no item-reading API (verified: its whole surface is tabs, money and locks), so bank contents arrive only through the container API, exactly like backpack contents — harvesting the bank is the existing harvest loop pointed at bank container indices. Whether the client still answers those indices after the bank closes is issue #2: **if it does, this feature is free** — a "bank has been opened this session" flag and nothing else; **if it does not, this feature is cut** rather than built on a store we invent. Either way the UI never shows a confident empty result: it says "bank not known yet" and offers to open it. |
+| FR-111 | C | Search **alts and alt banks** by **reading an existing maintained addon**, never by building our own store: **BagSync** (v20.x, actively updated 2026, tracks per-character items/banks/guild bank and publishes an LDB feed explicitly intended for other bag addons) and **Altoholic** (which ships a **Forever-specific build**, currently 1.60.x, maintained by a fork rather than the original author). A guarded read of published data. If neither is installed the feature is absent, not approximated. |
+| FR-112 | C | Search the **guild bank** while the guild bank UI is open (`GUILDBANKFRAME_OPENED`), gated on the player's guild-bank permissions. Same container-API harvest, same no-persistence rule. |
 
 **AC-110** log in, do not visit the bank, search "Linen Glyph": the result says the bank is unknown.
-Visit the bank, close it, search again: bank results appear, without the bank being open, and are
-labelled with their age. Move an item into the bank, reopen the bank, search again: the snapshot has
-updated without a reload.
+Visit the bank, close it, search again: bank results appear without the bank being open, **and the
+SavedVariables file is the same size as before the search.** If issue #2 shows the client drops bank
+data when the bank closes, this AC is replaced by "the addon says it cannot know, and does not pretend".
 
 ## J. Integrations (no vendored libraries)
 

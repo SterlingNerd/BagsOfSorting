@@ -105,7 +105,8 @@ BagsOfSortingDB = {
                     sellSections=false, sellableCategories={},  -- FR-65: bulk sell is opt-in per category
                     upgradeArrow=false, emptyBagConfirm=true },
     bagBar    = { mode="sorting"|"vanilla", showVanillaToggle=true },
-    search    = { inBag=true, dsl=true, bankSnapshot=true },
+    search    = { inBag=true, dsl=true },   -- no bankSnapshot key: nothing is persisted but the
+                                            -- item cache (FR-109)
     undo      = { depth=50 },
     debug     = false,
   },
@@ -169,7 +170,7 @@ Constraints enforced by `data/rules.lua` on load and on every command:
    field value, inheriting the parent's priority.
 5. `__catchall` matches only if no other category owned the item.
 6. The full ordered list of categories tested, and each match/reject reason, is recorded in the
-   per-snapshot `trace` for the inspector (`FR-27`).
+   per-harvest `trace` for the inspector (`FR-27`).
 7. A section bound to several categories does **not** re-run classification: ownership is decided
    globally by priority, then each category's items are laid out inside the section in category
    priority order. Two categories in one section are a *display* grouping, never a precedence rule.
@@ -207,7 +208,7 @@ one inverse.
 | Persisted | Why | Bound |
 |---|---|---|
 | `itemCache` (`itemID → name, quality, type, subtype, ilvl, icon`) | the client only knows items it has seen (`FR-103`); without this, a 40-ID manual category re-requests every ID at every login and the category editor is blank for a minute | bounded (≤ ~4000 entries, LRU), debounced, rebuildable, safe to delete |
-| `snapshot` (per-character item list, for `FR-110`–`FR-112`) | there is no API to read another character's inventory, and bank contents are unknown until the bank has been opened at least once | v1.x only. The bank snapshot is the state at the **last time the bank was open**, refreshed on every open/close and labelled with its age — not a once-per-session capture. For alts, read BagSync/Altoholic when installed (`FR-111`) before considering our own store (`docs/07` Q15) |
+| ~~`snapshot`~~ — **deleted** | every earlier draft of this spec carried a persisted bank/alt item list. It has no reason to exist: `C_Bank` exposes no item-reading API, so bank and guild-bank contents arrive through the same container API as backpack contents, and the harvest loop is already the only reader. Cross-character data is read from BagSync/Altoholic when installed (`FR-111`) or is a different addon (`docs/07` Q15) | **`FR-109`: the item cache is the only derived state we persist.** Whether closed-bank search survives at all depends on issue #2 — if the client stops answering bank container indices after the bank closes, the feature is cut rather than built on invented storage |
 
 ## Export / import (`FR-92`)
 
@@ -257,7 +258,7 @@ watching.
 - The expensive thing is **classification cost**: `categories × items × leaves`. At that size —
   ~70 categories × ~120 items × ~2.5 leaves — call it **~20k leaf evaluations per full refresh**.
   Fine, but only if `read(item)` reads a pre-enriched record and never `GetItemInfo` per leaf. Hence
-  phase 2 (`enrich`) materializes every field the registry can ask for, once per item per snapshot.
+  phase 2 (`enrich`) materializes every field the registry can ask for, once per item per harvest.
 - Field registry declares `read` as O(1) on the enriched record. A field that needs a network-ish
   lookup (tooltip text) is enriched lazily and marked `expensive = true` so the classifier can
   short-circuit (`any` groups evaluate cheap fields first — sort leaves by `field.expensive`).

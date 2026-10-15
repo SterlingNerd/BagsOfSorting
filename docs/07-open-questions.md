@@ -203,7 +203,8 @@ Partly answered by reading `origin/forever` (2026-10-15):
 | Reagent bag slot exists | **yes, present** | `CharacterReagentBagMixin:GetSlotAtlases()` in the Camelot bag-buttons file; `ForeverPlus/Modules/BagSlots.lua` counts it as a special bag |
 | Bags start **combined** into one window | **yes** | `ContainerFrameCombinedBags`, `IsUsingCombinedBags` (ForeverPlus `BagWindow.lua`) |
 | `C_Bank` exists with `FetchNumPurchasedBankTabs`, `IsItemAllowedInBankType`, `FetchDepositedMoney` | **yes** | `Blizzard_APIDocumentationGenerated/BankDocumentation.lua` on `origin/forever` |
-| `NUM_TOTAL_EQUIPPED_BAG_SLOTS` value, bank-bag index range | **unknown** | in-game only |
+| `NUM_TOTAL_EQUIPPED_BAG_SLOTS` value, bank-bag index range | **unknown, and now known to be a trap** | `Enum.BagIndex` on Forever has **no `BankBag_*` values** (27 values: `Keyring -1`, `Backpack 0`, `Bag_1..4`, `ReagentBag 5`, `CharacterBankTab_1..9 = 6..14`, `AccountBankTab_1..9 = 15..23`), yet `Blizzard_UIPanels_Game/Camelot/BankFrame.lua:26` computes bank bags as `bagSlot + ITEM_INVENTORY_BANK_BAG_OFFSET` where that offset is `NUM_TOTAL_EQUIPPED_BAG_SLOTS`. If that is 5 here, bank bags land on the bank-tab indices. In-game only — issue #2 |
+| Whether the client still answers bank container indices after the bank closes | **unknown, and it decides `FR-110`** | if yes, closed-bank search is free; if no, it is cut. Issue #2 |
 | Whether inert `Enum.BagIndex.AccountBankTab_N` errors or returns 0 in a harvest loop | **unknown** | in-game only |
 | `AddonCompartment` available | **yes** | `Blizzard_Minimap/Blizzard_Minimap.toc`: `AddonCompartment.lua [AllowLoadGameType mainline]`, no camelot exclusion |
 | `/script` available for testing | **yes, gated** | `Blizzard_ChatFrameBase/Shared/SlashCommands.lua`: `SCRIPT` → `RunScript`, gated by `C_GameRules.IsGameRuleActive(Enum.GameRule.UserScriptsDisabled)` and a one-time dangerous-scripts popup. `/dump`, `/eventtrace`, `/framestack`, `/api` also present |
@@ -277,42 +278,44 @@ and `## X-Wago-ID` already in the TOC. License: WTFPL (`LICENSE` at repo root, `
 
 ---
 
-## Q15 — How much inventory do we persist? (bank / alts / guild bank) — **DECIDED: session snapshot for the bank; read someone else's store for the rest**
+## Q15 — How much inventory do we persist? — **DECIDED: none. The snapshot is deleted.**
 
-The extended search features all hit the same wall: **there is no API to read an inventory the client
-does not currently know.** Bank contents arrive when the bank is opened; another character's bags are
-not on this client at all; the guild bank needs the guild bank UI and permissions.
+Every earlier draft of this spec had a `snapshot` table for the bank, alts and guild bank. Checking the
+API removed the reason for it:
 
-| Feature | Possible without persistence? | With persistence |
-|---|---|---|
-| Search bank while closed (`FR-110`) | **yes**, after the bank has been opened at least once — the client keeps the container data | the snapshot is the state at the **last time the bank was open**, refreshed on every open/close, labelled with its age |
-| Search alts / alt banks (`FR-111`) | **no** | someone else's store, or ours |
-| Guild bank (`FR-112`) | after `GUILDBANKFRAME_OPENED` | same question |
-| Providing a Bagnon-compatible `AllInventory` to other addons | no | same snapshot, published under Bagnon's global names |
+- **`C_Bank` has no item-reading API.** Its entire surface is tabs, money and locks —
+  `FetchPurchasedBankTabIDs`, `FetchNumPurchasedBankTabs`, `FetchMaxNumBankTabs`,
+  `FetchDepositedMoney`, `AutoDepositItemsIntoBank`, `IsItemAllowedInBankType`, `CanUseBank`,
+  `CloseBankFrame`. Nothing returns an item.
+- **Bank contents therefore arrive through the container API** — the same
+  `C_Container.GetContainerItemLink(containerIndex, slotIndex)` we already call for backpack slots.
+  Harvesting the bank is the existing harvest loop pointed at different indices. There is no second
+  inventory system to build.
 
-**The decision, and the reason it is not the obvious one.** Cross-character search is a *different
-product* from this one: it needs its own persistence, its own UI (a search results window, not a
-filter on a bag bar), and its own privacy story. Bolting it onto the bags would give us a second UI
-paradigm inside the first one, which is how bag addons become unreadable.
+So a snapshot bought exactly one thing: **searching the bank while it is closed.** That is not worth a
+store. Standing at the auction house, "you have 3 Linen Glyph in the bank (as of 20 minutes ago)" still
+ends with walking to the bank — the answer is not actionable, it only saves a walk. And it would be the
+one place in the design where we persist derived state we cannot validate, dragging in the
+staleness-honesty UI ("seen 4 min ago") that exists purely to stop us lying. Players already understand
+"bank search happens at the bank"; matching that model costs nothing and replacing it costs a subsystem.
 
-So, in order:
+**What replaces it is a flag, not a store:** *has the bank been opened this session*. Whether even that
+is needed is one check in issue #2 — if the client keeps answering bank container indices after the bank
+closes (which is why Bagnon-class addons can show bank items in tooltips after one visit), closed-bank
+search is **free**. If it does not, closed-bank search is **cut**, not built on invented data.
 
-1. **v1.x — bank only, session snapshot** (`FR-110`), with honest "bank not known yet" messaging
-   before it has been opened. That is a feature, not a gap.
-2. **v1.x — read an existing maintained store when it is installed** (`FR-111`): **BagSync** (20.x,
-   actively updated in 2026, tracks per-character items/banks/guild bank, publishes an LDB feed
-   explicitly meant for other bag addons) and **Altoholic** (which ships a **Forever-specific build**,
-   1.60.x, maintained by a fork rather than the original author). Reading theirs is a guarded lookup of
-   published data — tens of lines, no persistence of our own, no duplicated storage.
-3. **v2 — our own store only if 2 proves unusable**, and then itemIDs + counts only (~1–3 KB per
-   character), never locations. Location data is where SavedVariables bloat and privacy discomfort
-   both come from.
-4. **A separate addon** is the honest home for "search everything, everywhere, offline". If we build
-   it, it is its own project with its own name, and `Bags of Sorting` reads it the same way it reads
-   BagSync.
+| Feature | Status |
+|---|---|
+| Search the open bags | v1, `FR-50` |
+| Search the bank while the bank is open | v1, `FR-13` — it is just more harvested containers |
+| Search the bank while closed | `FR-110`, decided by issue #2. Free or cut; never persisted |
+| Search alts / alt banks | `FR-111`: read **BagSync** (20.x, active in 2026, publishes an LDB feed meant for other bag addons) or **Altoholic** (ships a Forever build, 1.60.x). If neither is installed, the feature is absent, not approximated |
+| Search the guild bank | `FR-112`, while the guild bank UI is open |
+| A Bagnon-compatible `AllInventory` for other addons | v2 at best, and only as a partial emulation of what this client currently knows — `FR-109` forbids the persisted version |
 
-**Needed:** nothing before M6. Revisit if BagSync/Altoholic integration turns out not to answer the
-question people actually ask.
+**Reopen trigger:** if reading BagSync/Altoholic turns out not to answer the question people actually
+ask, the honest answer is a **separate addon** with its own persistence and its own UI — not a snapshot
+smuggled into a bag addon.
 
 ## Q16 — Themes — **DECIDED: no theme system, use the client's own bag visuals**
 

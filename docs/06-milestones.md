@@ -209,7 +209,7 @@ Deliverables
   window/section/item context menus, `Done`/`Esc`/idle exit, configure-bar Undo/Redo
 - drag-and-drop assignment (`FR-61`) with `OnReceiveDrag`/`OnDragReceived` on section headers
   without breaking secure item pickup
-- `frames/inspector.lua` (**FR-78**) reading the per-snapshot `trace`, with *Exclude from category*
+- `frames/inspector.lua` (**FR-78**) reading the per-harvest `trace`, with *Exclude from category*
   and *Make a category for this item* wired straight from it (**FR-24c**)
 - `category.createFromItem` flow (**FR-77**)
 - "what changed" toast (**FR-83**) carrying the Undo action
@@ -325,8 +325,9 @@ Exit criteria
 
 Not milestones; a queue. Each gets a milestone only when the one before it ships.
 
-1. **Closed-bank search** (`FR-110`) — a snapshot of the last time the bank was open, refreshed on
-   every open/close, results labelled with their age, and honest "bank not known yet" before that.
+1. **Closed-bank search** (`FR-110`) — decided by issue #2, not by us. If the client keeps answering
+   bank container indices after the bank closes, this is a flag and a few lines of harvest. If it does
+   not, it stays cut. **No snapshot either way** (`FR-109`).
 2. **Auto-sell** (`FR-65b`) — a designated trash category and/or grey-quality items on opening a
    vendor, with a confirm and a global off switch. Deliberately after bulk sell has been used in the
    wild, because this is the feature that can sell something by accident.

@@ -11,12 +11,12 @@ log rather than an option tree.
 ```
 core/      boot, client, constants, context, events, db, async, pool, log
 data/      harvest, enrich, itemcache, classify, rules, stacks, sort, layoutmodel, windows,
-          sections, categories, snapshot
+          sections, categories
 layout/    flow (river packing), sizing, anchors
 frames/    window, section, item, header, chips, menu, inspector, money, emptyslot, movemode,
           bagbar, modals
 config/    commands, undo, configure mode, category editor, item-list editor, import/export,
-           presets (data), keybinds, help page, Options→AddOns registration, settings snapshots
+           presets (data), keybinds, help page, Options→AddOns registration, import/export
           configuremode, category-editor, presets, importexport, keybinds
 filters/   field registry (one file per field: type, quality, ilvl, name, tooltip, …)
 integrations/  compartment, masque, pawn
@@ -24,8 +24,10 @@ util/      serialize, color, text, query (if FR-28 lands), idlist, test
 ```
 
 No `themes/` module (`docs/07` Q16): the windows are built from Blizzard's own bag pieces so the
-user's skinning addon does the work. `data/snapshot.lua` is the persisted bank/alt inventory that
-`FR-110`–`FR-112` need; `frames/bagbar.lua` is the vanilla↔sorting toggle on the client's bag bar.
+user's skinning addon does the work. There is **no `data/snapshot.lua`**: `C_Bank` exposes no
+item-reading API, so bank and guild-bank contents arrive through the same container API as backpack
+contents and the harvest loop is the only inventory reader in the addon (`FR-109`); `frames/bagbar.lua`
+is the vanilla↔sorting toggle on the client's bag bar.
 
 Load order = `core → data → layout → frames → config → themes → filters → util → core/init`.
 `core/init.lua` last, like BetterBags, so every module exists before anything is enabled.
@@ -50,7 +52,7 @@ One refresh, explicit phases (BetterBags' `Phase1..11` reduced to what we actual
 Rules:
 - Phases 1–7 are pure functions over a `Snapshot` table. **No phase touches a frame.** Only
   `render` does. This is what makes the classifier testable (`/bos selftest`) and what makes the
-  category editor's live item list cheap: the editor runs 1–7 against the real snapshot with a draft
+  category editor's live item list cheap: the editor runs 1–7 against the real harvest with a draft
   rule tree substituted and renders a list.
 - Each phase runs inside a `Context` (BetterBags pattern) carrying the triggering event, so a
   burst of `BAG_UPDATE` events can be cancelled/coalesced.
@@ -89,7 +91,7 @@ end
 trace = { tested = {...}, matched = owner, rejected = {...} }   -- feeds FR-27 inspector
 ```
 
-`trace` is kept per item for the current snapshot only (not persisted). It is the single most
+`trace` is kept per item for the current harvest only (not persisted). It is the single most
 important debuggability feature in the design.
 
 ### Rule representation
@@ -143,7 +145,7 @@ Commands are small named records: `{ type = "section.move", args = {...}, invert
 Everything configure mode and the Options → AddOns panes can do is a command; nothing else mutates the
 model. Consequences:
 
-- `FR-74` undo/redo is a log walk, not a snapshot diff.
+- `FR-74` undo/redo is a log walk, not a full-state diff.
 - Configure mode and the utility panes are two views over the same command set — no duplicated
   logic, no risk of them disagreeing.
 - `FR-81` "what changed" toast comes free: the command knows which categories it touched, and the
@@ -247,7 +249,7 @@ is the ecosystem habits a bag addon is expected to have. Named honestly, with th
 | **Masque** | the user's bag skin applies to our buttons with no config | `LibStub('Masque', true)` + `Masque:Group('Bags of Sorting', …)` + add/remove button, guarded — BetterBags `integrations/masque.lua` is ~60 lines | **optional later** (`FR-121`, `FR-125`); this is the strongest argument for "use Blizzard's bag visuals" (`docs/07` Q16) |
 | **Pawn** | the upgrade arrow everyone already trusts | check for `PawnShouldItemLinkHaveUpgradeArrowUnbudgeted`, register as an upgrade provider behind our own seam | **optional later** (`FR-122`), not a requirement |
 | **BagSync / Altoholic as a data source** | "does any character of mine have X" without us building a cross-character store | guarded read of their published data. **BagSync** is actively maintained (20.x, 2026) and publishes an LDB feed explicitly meant for other bag addons; **Altoholic ships a Forever-specific build** (1.60.x, maintained by a fork) | **v1.x** (`FR-111`). Read theirs if installed; do not duplicate it |
-| **Bagnon/BagBrother-compatible API** (`AllInventory`, `BagnonTooltipItemSearch`) | other addons can answer "does any character of mine have X" from *our* data; a large installed surface depends on Bagnon | a compat module publishing our snapshot tables under Bagnon's global names, opt-in | **v2 candidate** (`docs/07` Q15). Neither reference addon in `../addons` provides it today, so it is a gain we choose, not a loss we suffer |
+| **Bagnon/BagBrother-compatible API** (`AllInventory`, `BagnonTooltipItemSearch`) | other addons can answer "does any character of mine have X" from *our* data; a large installed surface depends on Bagnon | a compat module publishing **what the client currently knows** under Bagnon's global names, opt-in. It cannot be a real `AllInventory` without persisted per-character data, which `FR-109` forbids — so this is a partial, honest emulation, and it is a v2 question, not a v1.x one | **v2 candidate, weak** (`docs/07` Q15). Neither reference addon in `../addons` provides it today, so it is a gain we choose, not a loss we suffer |
 | **Blizzard's own search matcher** | our search and the client's search agree about what "matches" means | our search box calls `C_Container.SetItemSearch(text)` and filters with `ItemButtonUtil.GetItemContextMatchResultForItem(ItemLocation:CreateFromBagAndSlot(bag, slot))` — the same predicate `BagSearch_OnTextChanged` drives. Our bags already hold `item → (window, section, button)`; search is that map run in reverse (`docs/07` Q7) | use it for anything the client currently knows. It is **not** an index and cannot search a closed bank |
 | **AceConfig option tables** | appearing inside someone else's unified options suite | nothing — and this is a **deliberate refusal, not a platform gap**. AceConfig is out because its layout engine is what makes Baggins' config UI unusable at real scale: it wraps, truncates and reorders long section and category names, and its widget set fights a UI whose whole point is in-place editing. Forever's own settings API removes the only real reason addons reached for it | loss: none measured. No installed addon here aggregates option trees |
 | **LibSharedMedia / LibQTip / LibBagUtils / LibWindow / LibPeriodicTable** | fonts, dewdrop tooltips, bag-slot counting, saved positions, curated item lists | vanilla templates, `UIDropDownMenu`+`EasyMenu`, `C_Container.GetBagSlotFlag`, our own positions, our own preset data (`FR-31`) | replaced, no loss |
@@ -309,7 +311,7 @@ BagsOfSorting/
 ├── LICENSE                     # WTFPL
 ├── Media/Icon.png              # 256×256: ## IconTexture + CurseForge project icon
 ├── core/{boot,client,constants,context,events,db,async,pool,log}.lua + README.md
-├── data/{harvest,enrich,itemcache,classify,rules,stacks,sort,layoutmodel,windows,sections,categories,snapshot}.lua + README.md
+├── data/{harvest,enrich,itemcache,classify,rules,stacks,sort,layoutmodel,windows,sections,categories}.lua + README.md
 ├── layout/{flow,sizing,anchors}.lua
 ├── frames/{window,section,item,header,chips,menu,inspector,money,emptyslot,movemode,bagbar,modals}.lua + README.md
 ├── config/{commands,undo,configuremode,categoryeditor,itemlisteditor,importexport,presets,keybinds,help,settingspanel}.lua

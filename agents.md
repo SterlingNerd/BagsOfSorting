@@ -1,0 +1,210 @@
+# BagOfSorting — Agent Context
+
+A WoW: **Forever** (Blizzard codename *Camelot*) bag addon. Baggins' multi-window virtual-bag
+shape, with a configuration model and UI that a human can actually use.
+
+**Current phase: spec.** Code has not started. `docs/` is the source of truth for what to build;
+change the spec there before changing direction in code.
+
+---
+
+## Read this order
+
+| File | What it is |
+|---|---|
+| `readme.md` | Human-facing pitch + status |
+| `docs/00-vision-and-scope.md` | Problem statement, design thesis, in/out of scope |
+| `docs/01-reference-analysis.md` | Feature inventory of Baggins + BetterBags, steal/adapt/skip |
+| `docs/02-requirements.md` | Numbered FR/NFR with MoSCoW priority + acceptance criteria |
+| `docs/03-architecture.md` | Modules, pipeline, load order, file tree |
+| `docs/04-data-model.md` | SavedVariables schema, rule grammar, migration/export |
+| `docs/05-config-ui.md` | The differentiator: config UX design |
+| `docs/06-milestones.md` | M0→M7 plan with exit criteria + in-game test checklists |
+| `docs/07-open-questions.md` | Open decisions, each with a recommendation |
+
+If a task contradicts `docs/02-requirements.md` or `docs/05-config-ui.md`, stop and ask.
+
+---
+
+## Target client: WoW: Forever (Camelot)
+
+| Fact | Value | Source |
+|---|---|---|
+| `WOW_PROJECT_ID` | `18` (`WOW_PROJECT_CAMELOT`) | verified in `../addons/Baggins`, `../addons/BetterBags` |
+| Interface version | `16001` (patch 1.60.1, build 70170) | `Baggins.toc`, `BetterBags_Camelot.toc` |
+| `LE_EXPANSION_*` | reports `LE_EXPANSION_CLASSIC` (Vanilla ruleset) | parent `../agents.md` |
+| Engine | modern: `C_Container`, `C_Item`, `C_Spell`, secret values, `ItemLocation` | verified |
+| Flavor dir | `_classic_beta_`, `.flavor.info` = `wow_classic_beta` | verified |
+
+Detection pattern (copy this, do not invent another):
+
+```lua
+local isCamelot = WOW_PROJECT_CAMELOT ~= nil and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT
+addon.isForever = isCamelot
+addon.isRetailLike = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE or isCamelot
+addon.hasWarbank = addon.isRetail and not addon.isForever   -- Forever ships no warbank
+```
+
+### Forever HAS (retail-like)
+- `ItemButton` frame type for container slots
+- `CharacterReagentBag0Slot`, `KeyRingButton`
+- modern money frame with atlas textures (`coin-gold/silver/copper`)
+- `C_Container.GetContainerItemQuestInfo`
+
+### Forever does NOT have (classic-like, or absent entirely)
+- reagent bank tab (`REAGENT_BANK_TAB`)
+- Warbands / account (warbank) bank — `Enum.BagIndex.AccountBankTab_N` exists but is inert
+- item crafting quality overlays, pet-battle levels in tooltips
+- `ItemButtonUtil.GetItemContextMatchResultForContainer`
+- Blizzard auto-sort (`BlizzSortBags`)
+
+Anything not in those two lists is **unverified**: confirm in-game or with
+`wow-ui-source` `origin/forever` before writing a code path for it. Add confirmed facts to this
+table — this file is the client-fact cache.
+
+### Forever UI toolkit (verified against `../wow-ui-source` `origin/forever`)
+
+Present, use these instead of any widget library:
+
+| Vanilla piece | Evidence on `origin/forever` |
+|---|---|
+| `WowScrollBox`, `MinimalScrollBar`, `ScrollUtil` | 135 / 135 / 141 files |
+| `NineSlice`, `ButtonFrameTemplate`, `DefaultPanelFlatTemplate`, `TooltipBackdropTemplate` | 120 / 110 / 6 files |
+| `UIPanelButtonTemplate` | 172 files |
+| `UICheckButtonTemplate`, `CheckButtonTemplate` | 33 / 59 files |
+| `InputBoxTemplate`, `SearchBoxTemplate`, `BagSearchBoxTemplate` | 26 / 85 / 4 files |
+| `WowStyle1DropdownTemplate` | 79 files |
+| `UIDropDownMenuTemplate` + `UIDropDownMenu`/`EasyMenu` | Blizzard-provided: `Blizzard_SharedXML/Mainline/UIDropDownMenuTemplates.xml` — **do not vendor LibUIDropDownMenu** |
+| `UISliderTemplate` | 5 files |
+| `ColorPickerFrame` | 16 files |
+| `StackSplitFrame` (vanilla split-stack UI) | `Blizzard_FrameXML/Mainline/StackSplitFrame.lua` + a **Camelot override** `Blizzard_FrameXML/Camelot/StackSplitFrame.xml` |
+| `ContainerFrameItemButtonTemplate`, `ItemButton` secure type | used by BetterBags on the Camelot build |
+| `C_Container` bag API | `Blizzard_APIDocumentationGenerated/ContainerDocumentation.lua`, `BagIndexConstantsDocumentation.lua` |
+
+Absent on Forever — do not design around these:
+
+| Missing | Consequence |
+|---|---|
+| `C_SecureHandlerRegisterSnippets`, `SecureHandlerOnSNippet`, `SecureCmdOptionCheck` | no secure-snippet handling on item buttons; M4's drag spike must not assume them |
+| `SetBindingSnippet` | keybinds via plain `SetBinding` on our own frame |
+| `C_Settings.Create*` widget API | Forever exposes only `C_SettingsUtil.OpenSettingsPanel` / `NotifySettingsLoaded`; there is **no** Blizzard options-panel widget API to build on |
+| Blizzard EditMode is not addon-*documented* | `Blizzard_EditMode/Camelot/*` ships only Blizzard systems (action bars, unit frames, minimap) and there is no documented addon registration — but it **is** joinable in practice, see the recipe below. |
+| `HorizontalSliderTemplate`, `ColorPickerSwatch`, `InputSpinBoxTemplate`, `CheckboxInputTemplate`, `SettingsPanel*Template`, `HeaderStrip`, `SharedUIPanelCursorDragEffect`, `SpawnFrameArea`, `MoveUnitFrame` | newer-retail or other-branch names; not on Forever |
+
+### EditMode ("move mode") is joinable — ThreatMeter proves it on Camelot
+
+`../addons/ThreatMeter/editmode.lua` participates in Forever's EditMode; its
+`ThreatMeter_Camelot.toc` declares `## OptionalDeps: Blizzard_EditMode`. Verified on
+`origin/forever`: `EditModeSystemSelectionTemplate` (1), `EditModeSystemSelectionMixin` (2),
+`EditModeSystemMixin` (15), `EditModeSystemSettingsDialogButtonTemplate`,
+`EditModeSystemSettingsDialogExtraButtonTemplate`, `EventRegistry` `EditMode.Enter`/`EditMode.Exit`,
+`EditModeManagerFrameMixin:RegisterSystemFrame`, `EditModeMagnetismManager:ApplyMagnetism`,
+`C_EditMode.*` (13 methods incl. `GetLayouts`, `SetActiveLayout`, `ConvertLayoutInfoToString`).
+
+Recipe (from ThreatMeter, all guarded so it degrades to plain drag if a piece is missing):
+
+1. `## OptionalDeps: Blizzard_EditMode` in the TOC.
+2. `frame.Selection = CreateFrame("Frame", nil, frame, "EditModeSystemSelectionTemplate")`;
+   `SetAllPoints()`; raise frame level; `Selection:SetSystem(frame)`; hidden by default.
+3. Implement on the movable frame: `GetSystemName`, `HighlightSystem`, `SelectSystem`,
+   `ClearHighlight`.
+4. Copy the snap/magnetism math off `EditModeSystemMixin` onto our frame for the ~21 method names
+   EditMode expects (`GetFrameMagneticEligibility`, `HasValidSelectionRect`,
+   `IsVerticallyAlignedWithFrame`, `GetScaledSelectionCenter`, `GetSnapOffsets`, `SnapToFrame`, …),
+   only where we do not already define them.
+5. `OnDragStart`/`OnDragStop`: `StartMoving`/`StopMovingOrSizing`,
+   `EditModeManagerFrame:SetSnapPreviewFrame(self)` / `ClearSnapPreviewFrame`,
+   `IsSnapEnabled()`, `EditModeMagnetismManager:ApplyMagnetism(self)`.
+6. `EventRegistry:RegisterCallback("EditMode.Enter"/"EditMode.Exit", ...)` to show/hide handles.
+7. Open it: guard `InCombatLockdown()`, close `SettingsPanel` first, then
+   `ShowUIPanel(EditModeManagerFrame)`.
+8. Optional per-window options dialog via `EditModeSystemSettingsDialog*Template`.
+
+`EditModeManagerFrameMixin:RegisterSystemFrame(frame)` exists (a plain `table.insert` into
+`registeredSystemFrames`, which EditMode then calls `OnEditModeEnter/OnEditModeExit` on) but is
+**undocumented and not in `C_EditMode`** — treat it as best-effort, and never as the only way to
+move our windows. ThreatMeter deliberately does not call it.
+
+### Reference source
+- `../wow-ui-source` — cloned `Gethe/wow-ui-source`. Forever UI lives on `origin/forever`:
+  `git show origin/forever:Interface/AddOns/Blizzard_MainMenuBarBagButtons/Camelot/...`
+- `../addons/Baggins` — the shape we want (see `docs/01`)
+- `../addons/BetterBags` — the ergonomics we want (see `docs/01`)
+- `../account` — symlink to live `WTF/Account/1071383#1/` for SavedVariables inspection
+
+---
+
+## Hard rules
+
+1. **Syntax checks prove nothing.** `luacheck`/`lua -p` passing is necessary, not sufficient.
+   Every behavior change must be confirmed in-game on the Forever client. This repo's parent
+   `../agents.md` states this because the API surface differs per client.
+2. **Never perform protected actions.** No `RegisterEvent` on Blizzard/protected frames, no
+   showing/hiding Blizzard container frames outside a lockdown-safe path, no secure-button
+   attribute writes while `InCombatLockdown()`. Deferred init uses a plain
+   `CreateFrame("Frame")` + `PLAYER_REGEN_ENABLED`, never an AceEvent-mediated deferral
+   (that pattern already bit this workspace — see parent `../agents.md` §Debugging).
+3. **Item buttons are secure.** Pool them, reuse them, and never re-create a button in combat.
+   If a button must be created during lockdown, mark it `tainted` and replace it on regen.
+4. **No AceConfig waterfall.** The config UI is hand-built per `docs/05-config-ui.md`. Adding
+   `AceConfigDialog` back to solve a config problem is a spec change — argue it in
+   `docs/07-open-questions.md` first.
+5. **Config edits are model edits.** UI widgets never touch frames directly; they send commands
+   to the model, the model emits change events, the view re-renders. Undo is a model concern.
+6. **Every non-trivial branch gets a self-check.** A small assert-based test or `/bos test`
+   path. Trivial changes need none.
+7. `shortcut: <limit>, <when to upgrade>` comment on any deliberate limitation.
+
+---
+
+## Conventions
+
+- **Language:** Lua 5.1 (WoW). No `goto`, no `#` on tables with nil holes.
+- **Style:** 2-space indent, `local x = 1`, module tables as `local mod = addon:NewModule('Mod')`.
+  Follow BetterBags' annotation style (`---@class`, `---@field`) — it is the readable half of
+  the two references.
+- **Naming:** addon folder / `addonName` = the chosen product name (see `docs/07` Q1); working
+  title `BagOfSorting`, slash command `/bos`.
+- **File layout:** one concern per file, `core/`, `data/`, `layout/`, `frames/`, `config/`,
+  `filters/`, `themes/`, `util/`. Each directory gets a `README.md` (BetterBags does this; it is
+  why BetterBags is navigable).
+- **Locales:** single `L` table from `core/locale.lua` (key-falls-back-to-itself); enUS is the key
+  source. Do not hand-write other locales at spec/prototype phase.
+- **No new dependencies** without a `docs/07` entry. v1 target dependency set is **zero vendored
+  libraries** (`docs/03` §Dependencies, `docs/07` Q2).
+
+## Repo boundary
+
+This repo ships **one addon and nothing else**. Wow-wide assets (the `wow-forever-api` skill,
+`wow-ui-source`, installed addons, the account symlink) live outside it and are reached by relative
+paths from the parent workspace — never vendored here.
+
+```bash
+ls -a .            # agents.md  readme.md  docs/  .gitignore  .agents -> ../.agents (ignored)
+```
+
+`.agents` is a symlink to `../.agents` and is gitignored. Do not add shared scripts, shared docs, or
+another addon under this tree.
+
+## Commands
+
+```bash
+luacheck .                      # lint (see .luacheckrc; WoW globals declared)
+lua5.1 -e "loadfile('X.lua')"  # syntax-only smoke
+# install for in-game test: copy/symlink into ../addons/<AddonName>/
+```
+
+There is no unit-test harness yet. M0 in `docs/06-milestones.md` creates the smallest one
+(luacheck + a `/bos selftest` slash command that asserts the classifier against fixture items).
+
+---
+
+## What not to do
+
+- Do not fork Baggins or BetterBags. Read them for behavior; write our own.
+- Do not add a filter/rule type without also adding its chip rendering + preview support in the
+  config UI. A rule type that the UI cannot explain is a Baggins-style footgun.
+- Do not add options that have no UI story. Every setting must answer: where does the user see
+  it, and how do they learn it exists?
+- Do not touch `../addons/Baggins` or `../addons/BetterBags` from this repo. They are read-only
+  references (both are git clones of upstream).

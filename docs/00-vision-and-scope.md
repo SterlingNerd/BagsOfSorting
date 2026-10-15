@@ -1,0 +1,100 @@
+# 00 — Vision & Scope
+
+## Problem statement
+
+Bag addons split into two camps, and each one gives up something the other has.
+
+**Camp A — Baggins (`../addons/baggins`).** Virtual bags: you define N windows, each window
+contains sections, each section displays one or more categories, categories are defined by rules.
+You get a physical-feeling, per-window organization and you can build a window that means
+something to *you* ("Outland", "Sell", "Crafting"). Cost: configuration is a 4,800-line AceConfig
+option tree with no feedback loop.
+
+**Camp B — BetterBags (`../addons/BetterBags`).** One category grid per window (backpack / bank),
+excellent config panes, drag-to-pin, search DSL, search-derived categories, import/export,
+profiles. Cost: your inventory is a flat list of categories. You cannot say "this window is my
+crafting window and it is 10 wide and only ever shows crafting + reagents".
+
+We want Camp A's shape and Camp B's ergonomics. Neither addon is a base to fork: Baggins' config
+layer is the problem we are solving, and BetterBags' data model is a single-window grid from the
+floor up.
+
+## Design thesis
+
+1. **The layout is the config.** If a user can rename a section by clicking its title in the bag,
+   reorder it by dragging it, and add an item to a category by dragging the item onto it, then
+   most configuration needs no settings window at all.
+2. **Every rule must show its consequence.** Editing a rule shows the live list of your items it
+   matches, before you commit. No more "change rule → close dialog → open bags → squint".
+3. **Every placement must be explainable.** Any item can answer "which category, which rule,
+   which window, and what else was competing for it". This turns debugging into reading.
+4. **Explicit precedence beats order-dependent chaining.** Baggins' rules are a flat list whose
+   meaning depends on each rule's `OR`/`AND`/`NOT` slot and its position. We use an explicit
+   `any / all / none` tree that can be rendered as one readable sentence.
+5. **Small surface, no hidden knobs.** A setting that has no place in the UI does not get added.
+
+## What "improve on the configuration toil" means concretely
+
+Measured against Baggins as it exists today:
+
+| Baggins today | Target |
+|---|---|
+| 2 separate option tables (`Baggins`, `BagginsEdit`), waterfall dialogs | 1 settings window, 3 panes, no nesting deeper than tab → section |
+| reorder via `^` / `v` / `X` execute buttons in a scrollable group | drag the section header in the bag |
+| add a rule: dropdown of 30 rule types → per-type sub-dialog → LibQTip dewdrop | one chip row: `+ rule` → field picker → value picker, with live match list |
+| no preview of what a rule matches | right pane lists matching items + count, updates as you type |
+| "why is this item in this section?" is unanswerable | item inspector names the category, rule chain and competitors |
+| changing a rule requires a full re-sort of everything | incremental reclassify of the affected category only |
+| 30 rule types each with bespoke `Ace3Options` + `DewDropOptions` | one rule grammar, one renderer, one editor |
+
+## In scope (v1)
+
+- Backpack and bank, Forever client first
+- user-defined **windows** (custom bags): name, kind (backpack/bank), priority, columns, open-with-all
+- **sections** inside a window: named, ordered, collapsible, hidden, movable between windows
+- **categories**: rule-driven, manual item lists, and dynamic ("group by type/subtype/expansion")
+- rule grammar with `any/all/none` nesting and a fixed field set
+- precedence + duplicate policy
+- on-bag **configure mode** and the 3-pane settings window with live preview
+- item inspector ("why is this here")
+- stacking/compression of stacks, empty-slot representation
+- new/recent item handling without Blizzard auto-sort (Forever has none)
+- profiles (per character), export/import strings for categories+windows
+- undo of config edits
+- a starter preset so a fresh install is useful in under a minute
+
+## Out of scope (v1) — named so nobody quietly adds them
+
+- **Retail/Classic Era/TBC/Cata/MoP support.** Forever first. The architecture keeps a client
+  capability layer (`docs/03` §Client capability layer) so a second client is a layer, not a
+  rewrite — but we do not build or test it now.
+- **Theme authoring UI.** Ship 2 built-in looks (stock-like, dark) + Masque support if cheap. A
+  theme *editor* is not v1.
+- **Reagent bank, warband bank.** They do not exist on Forever (`agents.md`).
+- **Item moving / vendor / bank deposit automation beyond category-level bulk actions.** Baggins'
+  `MoveToSpecialtyBags` / compress-to-specialty-bag logic is a Should, not a Must.
+- **Auctioning, mail, crafting queue integration.**
+- **Tooltip replacement / item search outside the bag window.**
+- **Localization beyond enUS.**
+- **A plugin API for third parties.** Internal module boundaries are designed so a plugin API is
+  possible later; we do not ship or stabilize one.
+
+## Success criteria (how we know it worked)
+
+1. A new user with zero config gets a usable bag layout on first login (preset), and can name
+   their first custom window without opening a settings dialog.
+2. Creating a category that matches exactly the items you intend takes **one interaction chain**,
+   not a dialog round trip: drag item → name category → see the match list → done.
+3. No config action requires knowing a term we invented. If the UI says "section", the UI also
+   shows what a section is the first time you can change one.
+4. `docs/02-requirements.md` Must items all have a passing in-game checklist entry in
+   `docs/06-milestones.md`.
+5. Config changes are visible in the bags in < 250 ms for a full backpack (measured, not hoped).
+
+## Non-goals that are not omissions
+
+- We are not trying to be faster than Baggins at the expense of clarity; a 20 ms slower refresh
+  that explains itself is a win.
+- We are not trying to be feature-equal to BetterBags. Its grid is a different product.
+- We are not preserving Baggins' SavedVariables. Migration is a Should (`FR-41`), not a
+  compatibility promise.

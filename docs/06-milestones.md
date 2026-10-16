@@ -347,7 +347,7 @@ that has never had the addon, with the first-run experience tested by someone el
 2. `/bos selftest` green — classifier fixtures grow with each new field.
 3. In-game checklist run on Forever and pasted into the milestone entry with the date and patch.
    A milestone is not done until its AC lines have a dated entry. The runnable `/script` snippets for
-   these checks live in the **spike issues** (#1–#8), not in a docs file (`docs/07` Q21).
+   these checks live in the **spike issues** (#1–#11), not in a docs file (`docs/07` Q21).
 4. `/bos perf` numbers recorded, not asserted.
 5. One manual "hostile" pass per milestone: full inventory, a dozens-of-categories config imported in
    the `docs/01` shape, ~20 sections in one window, a 30-char section name, an item Blizzard has no

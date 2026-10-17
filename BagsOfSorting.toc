@@ -1,0 +1,52 @@
+## Interface: 16001
+## Interface-Forever: 16001
+## Title: Bags of Sorting
+## Version: @project-version@
+## Notes: Multi-window inventory organization with live, in-place configuration.
+## Author: josh
+## SavedVariables: BagsOfSortingDB
+## X-Category: Inventory
+## X-License: WTFPL
+## X-Curse-Project-ID: 1745962
+## X-Wago-ID: bGoYJY60
+## OptionalDeps: Blizzard_EditMode, Masque, Pawn
+## AddonCompartmentFunc: BagsOfSorting_OnAddonCompartmentClick
+## IconTexture: Interface\AddOns\BagsOfSorting\Media\Icon
+
+# Load order: core -> filters -> data -> layout -> frames -> integrations -> tests -> core/init.
+# shortcut: docs/03 lists filters after frames. The field registry is data the classifier
+# reads on every leaf, so it loads before data/ instead of being looked up per leaf.
+core\boot.lua
+core\log.lua
+core\client.lua
+core\constants.lua
+core\locale.lua
+core\events.lua
+core\context.lua
+core\async.lua
+core\pool.lua
+core\db.lua
+
+filters\registry.lua
+filters\fields.lua
+
+data\harvest.lua
+data\itemcache.lua
+data\enrich.lua
+data\rules.lua
+data\classify.lua
+data\sort.lua
+data\pipeline.lua
+
+layout\flow.lua
+
+frames\item.lua
+frames\section.lua
+frames\window.lua
+
+integrations\compartment.lua
+
+tests\fixtures.lua
+tests\selftest.lua
+
+core\init.lua

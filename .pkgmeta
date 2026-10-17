@@ -1,0 +1,11 @@
+package-as: BagsOfSorting
+
+ignore:
+  - docs
+  - agents.md
+  - readme.md
+  - tests
+  - .github
+  - .luacheckrc
+  - .gitignore
+  - .agents

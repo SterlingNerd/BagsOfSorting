@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  luacheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: BigWigsMods/actions/luacheck@master
+        with:
+          args: -q
+
+  # The classifier is pure data (docs/03: "Phases 1-7 are pure functions over a
+  # Snapshot table. No phase touches a frame."), so it is testable off the client.
+  # This is not a substitute for the in-game checklist (agents.md hard rule 1).
+  classifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y lua5.1
+      - run: lua5.1 tests/run.lua

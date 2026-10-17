@@ -1,0 +1,159 @@
+-- Wiring: what loads, what listens, and the slash command that doubles as the Forever fact
+-- verification tool (docs/06 M0).
+
+local _, addon = ...
+
+---@class Init: BoSModule
+local init = addon:NewModule('Init')
+
+local log = addon:GetModule('Log')
+local events = addon:GetModule('Events')
+local client = addon:GetModule('Client')
+local context = addon:GetModule('Context')
+local db = addon:GetModule('DB')
+local harvest = addon:GetModule('Harvest')
+local enrich = addon:GetModule('Enrich')
+local pipeline = addon:GetModule('Pipeline')
+local windows = addon:GetModule('WindowFrames')
+local itemFrames = addon:GetModule('ItemFrames')
+local pool = addon:GetModule('Pool')
+local selftest = addon:GetModule('SelfTest')
+
+init.started = false
+
+local function printLines(lines)
+  for _, line in ipairs(lines) do print(line) end
+end
+
+---@param models BoSWindowModel[]
+---@param shown table<string, boolean>
+---@param ctx BoSContext
+local function render(models, shown, ctx)
+  for index, model in ipairs(models) do
+    windows.Render(model, index)
+  end
+  windows.Prune(shown)
+  context.MarkPhase(ctx, 'render')
+  log.Debug(context.Format(ctx))
+end
+
+events.On('BOS_REFRESH_DONE', render)
+
+local function listen()
+  -- A loot burst is one refresh, not twenty (docs/03 §The pipeline).
+  events.Bucket('BAG_UPDATE', 0.2, function() pipeline.Refresh('bag-update') end)
+  events.On('BAG_CONTAINER_UPDATE', function()
+    harvest.Invalidate()
+    pipeline.Refresh('container')
+  end)
+  events.On('PLAYER_EQUIPMENT_CHANGED', function()
+    harvest.Invalidate()
+    pipeline.Refresh('equipment')
+  end)
+  -- Tier-3 answers re-classify through the same bucketed path (FR-26's entry point).
+  events.Bucket('BOS_ITEM_DATA', 0.3, function() pipeline.Refresh('item-data') end)
+  events.On('ITEM_DATA_LOAD_RESULT', function(itemID, success)
+    if enrich.OnItemDataLoaded(itemID, success) then
+      events.Emit('BOS_ITEM_DATA')
+    end
+  end)
+  events.On('BOS_MODEL_CHANGED', function() pipeline.Refresh('model') end)
+end
+
+function init.Start()
+  if init.started then return end
+  init.started = true
+
+  harvest.Discover()
+  -- Pre-warm the button pool from the real inventory so a combat loot event does not have to
+  -- create a secure button (agents.md hard rule 3).
+  itemFrames.Warm(math.min(200, #harvest.Items() + 20))
+
+  listen()
+  pipeline.Refresh('login')
+end
+
+--- Plain-frame deferral, never an AceEvent-mediated one (agents.md §Debugging).
+function init.Enable()
+  if InCombatLockdown() then
+    log.Debug('combat lockdown, deferring enable until PLAYER_REGEN_ENABLED')
+    local f = CreateFrame('Frame')
+    f:RegisterEvent('PLAYER_REGEN_ENABLED')
+    f:SetScript('OnEvent', function(self)
+      self:UnregisterAllEvents()
+      init.Enable()
+    end)
+    return
+  end
+  init.Start()
+end
+
+---@return boolean
+function init.IsShowing()
+  return windows.Count() > 0
+end
+
+function init.Toggle()
+  if init.IsShowing() then
+    windows.HideAll()
+  else
+    pipeline.Refresh('toggle')
+  end
+end
+
+local HELP = {
+  '/bos            client capability dump + harvested containers',
+  '/bos selftest   classifier fixtures',
+  '/bos perf       last refresh timings, pool and item-cache stats',
+  '/bos refresh    re-run the pipeline',
+  '/bos show|hide  show or hide the sorting windows',
+  '/bos debug      toggle debug logging',
+}
+
+---@param input string?
+function init.Slash(input)
+  local cmd = ((input or ''):match('^(%S+)') or ''):lower()
+
+  if cmd == 'selftest' then
+    printLines(selftest.Report())
+  elseif cmd == 'perf' then
+    local ctx = pipeline.Last()
+    print(ctx and context.Format(ctx) or 'no refresh has run yet')
+    print(pool.Stats())
+    print(enrich.Stats())
+  elseif cmd == 'refresh' then
+    pipeline.Refresh('slash')
+  elseif cmd == 'show' then
+    if InCombatLockdown() then
+      log.Error('cannot open bags during combat')
+    else
+      pipeline.Refresh('slash-show')
+    end
+  elseif cmd == 'hide' then
+    windows.HideAll()
+  elseif cmd == 'debug' then
+    local settings = db.Settings()
+    settings.debug = not settings.debug
+    log.SetDebug(settings.debug)
+    print('debug ' .. tostring(settings.debug))
+  elseif cmd == 'help' then
+    printLines(HELP)
+  else
+    print(string.format('%s %s', addon.title, addon.version))
+    printLines(client.Probe())
+    print('containers:')
+    printLines(harvest.Summary())
+  end
+end
+
+SLASH_BAGSOFsorting1 = '/bos'
+SlashCmdList['BAGSOFsorting'] = init.Slash
+
+events.On('ADDON_LOADED', function(loaded)
+  if loaded ~= addon.name then return end
+  db.Initialize()
+end)
+
+events.On('PLAYER_LOGIN', init.Enable)
+
+return init

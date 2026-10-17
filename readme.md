@@ -4,11 +4,24 @@ A bag addon for **World of Warcraft: Forever** (Camelot) that keeps the *Baggins
 separate bag windows, each split into labeled sections, plus user-defined custom bags — and
 fixes the thing Baggins is bad at: configuring it.
 
-Status: **spec / pre-code.** This repo currently contains the design, not the addon. Start with
+Status: **prototype (M0 + M1).** The pipeline runs — harvest → enrich → classify → assign → sort →
+render — with one Backpack window and three categories, on the Forever client. The configuration UI
+that is this project's reason to exist is still spec. Start with
 [`docs/00-vision-and-scope.md`](docs/00-vision-and-scope.md), review
 [`docs/02-requirements.md`](docs/02-requirements.md) and
 [`docs/05-config-ui.md`](docs/05-config-ui.md) (the two docs that decide whether this is worth
 building), then [`docs/06-milestones.md`](docs/06-milestones.md) for the build order.
+
+### What exists today
+
+```bash
+lua5.1 tests/run.lua   # 39 headless checks: rule grammar, precedence, and the whole pipeline
+luacheck .             # CI runs both
+```
+
+In-game: `/bos` (capability dump + harvested containers), `/bos selftest`, `/bos perf`,
+`/bos show|hide|refresh|debug|help`. See the open draft PR for what is proven and what is only
+written down.
 
 Name is plural on purpose: the product *is* several bags. `BagsOfSorting`, `BagsOfSortingDB`, `/bos`.
 

@@ -3,7 +3,8 @@
 A WoW: **Forever** (Blizzard codename *Camelot*) bag addon. Baggins' multi-window virtual-bag
 shape, with a configuration model and UI that a human can actually use.
 
-**Current phase: spec.** Code has not started. `docs/` is the source of truth for what to build;
+**Current phase: prototype (M0 + M1).** The pipeline, the rule grammar and one rendered Backpack
+window exist. The configuration UI does not. `docs/` is still the source of truth for what to build;
 change the spec there before changing direction in code.
 
 ---
@@ -249,13 +250,15 @@ not in the `.pkgmeta` ignore list.
 
 ```bash
 luacheck .                      # lint (see .luacheckrc; WoW globals declared)
+lua5.1 tests/run.lua            # headless pipeline + classifier checks (phases 1-7 touch no frames)
 lua5.1 -e "loadfile('X.lua')"  # syntax-only smoke
 # install for in-game test: copy/symlink into ../addons/BagsOfSorting/
 # runnable in-game checks: the `spike` issues #1–#11  (/script works on Forever, gated)
 ```
 
-There is no unit-test harness yet. M0 in `docs/06-milestones.md` creates the smallest one
-(luacheck + a `/bos selftest` slash command that asserts the classifier against fixture items).
+The harness in `tests/` is the smallest one M0 calls for: `luacheck` plus `/bos selftest`, which
+runs the same assertions `tests/run.lua` runs off the client. It proves the classifier and the
+pipeline wiring — not the Forever API calls (hard rule 1).
 
 ---
 

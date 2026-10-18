@@ -15,11 +15,11 @@ building), then [`docs/06-milestones.md`](docs/06-milestones.md) for the build o
 ### What exists today
 
 ```bash
-lua5.1 tests/run.lua   # 39 headless checks: rule grammar, precedence, and the whole pipeline
+lua5.1 tests/run.lua   # 58 headless checks: rule grammar, precedence, sort modes, flow, pipeline
 luacheck .             # CI runs both
 ```
 
-In-game: `/bos` (capability dump + harvested containers), `/bos selftest`, `/bos perf`,
+In-game: `/bos` (capability dump + harvested containers), `/bos perf`,
 `/bos show|hide|refresh|debug|help`. See the open draft PR for what is proven and what is only
 written down.
 

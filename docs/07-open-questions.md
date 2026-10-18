@@ -204,11 +204,11 @@ Partly answered by reading `origin/forever` (2026-10-15):
 | Bags start **combined** into one window | **yes** | `ContainerFrameCombinedBags`, `IsUsingCombinedBags` (ForeverPlus `BagWindow.lua`) |
 | `C_Bank` exists with `FetchNumPurchasedBankTabs`, `IsItemAllowedInBankType`, `FetchDepositedMoney` | **yes** | `Blizzard_APIDocumentationGenerated/BankDocumentation.lua` on `origin/forever` |
 | **Storage shape** | **confirmed in-game:** character = backpack + 4 bag slots + **reagent bag** (5th slot) + **keyring**; bank = **8 bank bag slots** + a base grid | user confirmation 2026-10-08. The earlier doubt about the keyring was a misread UI element — it is there |
-| **Base grid size** | **disputed: 48 or 96.** wowhead measured 48 in the beta; Blizzard's senior designer said "twice or four times as large… I think it's 96 slots or something like that" | A factor of two apart, and the harvest totals depend on it. Issue #9 measures it rather than picking a source |
-| Bank-bag index range | **5 → bank bags land on 6..13, the same indices as `Enum.BagIndex.CharacterBankTab_1..8`** | `Enum.BagIndex` on Forever has **no `BankBag_*` values** (`Keyring -1`, `Backpack 0`, `Bag_1..4`, `ReagentBag 5`, `CharacterBankTab_1..9 = 6..14`, `AccountBankTab_1..9 = 15..23`), yet `Camelot/BankFrame.lua:26` computes bank bags as `bagSlot + ITEM_INVENTORY_BANK_BAG_OFFSET`. Either the enum values are legacy or the base grid is tabbed — **issue #9 tells them apart by reading bag *names*, not just slot counts** |
+| **Base grid size** | **measured: 48** (6 rows × 8) | counted in-game 2026-10-17. wowhead's 48 is right; the designer's "96 slots or something like that" is not. Design budgeting uses 48 |
+| Bank-bag index range | **partly measured.** The base grid is **container index 6**. What lives at 7..14 is not yet known | `NUM_CHARACTER_BANK_SLOTS = 9` while the UI shows **8** bank bag slots, and `Enum.BagIndex` has **no `BankBag_*` values** (`Keyring -1`, `Backpack 0`, `Bag_1..4`, `ReagentBag 5`, `CharacterBankTab_1..9 = 6..14`, `AccountBankTab_1..9 = 15..23`), yet `Camelot/BankFrame.lua:26` computes bank bags as `bagSlot + ITEM_INVENTORY_BANK_BAG_OFFSET`. Issue #9's `/bos test 2` prints every index with its name and slot count, plus `C_Bank.BankBagTypeAndIDToInvSlot` for 1..9 |
 | Whether the client still answers bank container indices after the bank closes | **no longer a question we need an answer to** | Closed-bank search is out of the product (`FR-109`, Q15). We read bank containers only while the bank is open |
-| Whether the 48-slot base grid is a container index at all | **unknown, and it is the most important unknown in the harvest design** | If the total slots across all real container indices comes up short by the base grid's size (48 or 96 — see above), the base grid is not a container and needs a different reader. Issue #9 |
-| **Does the character bank have tabs at all, or is it one 48-slot grid?** | **unknown, and it decides what a "bank window" means** | Forever doubled the default bank to 48 slots (6×8) with 8 bag slots; Camelot pages at 88 slots per page, so 48 fits on one page. `BankTabData` has name/icon/depositFlags, but that shape is much more a guild-bank feature. Issue #9 |
+| Whether the 48-slot base grid is a container index at all | **yes — index 6**, which is `ITEM_INVENTORY_BANK_BAG_OFFSET + 1` and also `Enum.BagIndex.CharacterBankTab_1` | Hearthstone (item 6948) in the grid reads as `[6] slot 19` through `/bos find`; the same item in an equipped backpack bag reads as `[1] slot 1`. Measured 2026-10-17, issue #9. `data/harvest.lua` reads it like any other bag, and must de-duplicate by index — index 6 is reachable under two names |
+| **Does the character bank have tabs at all, or is it one 48-slot grid?** | **one grid today.** A **Page 1** tab is visible, there are **no purchase buttons**, and `FetchNumPurchasedBankTabs(Character) = 0` | Measured 2026-10-17. Camelot pages at 88 slots per page (`Camelot/BankFrame.xml:88`) and 48 fits on one page, so "Page 1" is the paging control for a single page rather than a tab strip you buy into. Whether more pages appear once bank bags exist is unmeasured, and indices 7..14 are still unassigned |
 | Whether inert `Enum.BagIndex.AccountBankTab_N` errors or returns 0 in a harvest loop | **unknown** | in-game only |
 | `AddonCompartment` available | **yes** | `Blizzard_Minimap/Blizzard_Minimap.toc`: `AddonCompartment.lua [AllowLoadGameType mainline]`, no camelot exclusion |
 | `/script` available for testing | **yes, gated** | `Blizzard_ChatFrameBase/Shared/SlashCommands.lua`: `SCRIPT` → `RunScript`, gated by `C_GameRules.IsGameRuleActive(Enum.GameRule.UserScriptsDisabled)` and a one-time dangerous-scripts popup. `/dump`, `/eventtrace`, `/framestack`, `/api` also present |
@@ -445,6 +445,49 @@ stability before we know what the UI needs would constrain the design for a hypo
 
 ---
 
+## Q23 — Are our windows usable during combat? — **OPEN. Measured on the client 2026-10-17: opening and closing were both refused.** Tracked as **issue #17**.
+
+Blizzard's bag frames open and close in combat because Blizzard owns them. Ours are ours, and the
+blocked part is not `Show`/`Hide` — it is **painting**: `ItemButtonMixin:SetItemLocation` →
+`SetItemSource`, which the client refuses during lockdown. A blocked call in the middle of
+`hide()` also aborted the hide before `frame:Hide()` ran, which is why closing failed too.
+
+Current behaviour, as of this writing: `frames/window.lua` defers the pooled-button release to
+regen, `core/init.lua`'s render defers to regen, and `init.Show` puts the last painted windows on
+screen immediately. The consequence is honest and needs saying out loud: **in combat our windows are
+readable but stale** — loot picked up during combat appears when regen arrives.
+
+| Option | What it buys | What it costs |
+|---|---|---|
+| **A — stale in combat** (current) | Blizzard's own click, drag, tooltip, modified-click and stack-split handlers keep working on our buttons (`FR-60`, `FR-49`) | contents lag until regen |
+| **B — plain (non-secure) frame buttons** | full control, paint anything any time | we reimplement pickup, link, tooltip, stack split and vendor drag, and a skinning addon no longer reaches the buttons for free |
+| **C — hybrid** | secure buttons normally, plain ones only while locked down | two button code paths and a swap at regen; the swap is where bugs live |
+
+**Recommendation:** A for the prototype, and decide for real at M4, where the drag spike makes the
+secure-button question unavoidable. Measure against BetterBags' behaviour in combat before choosing B.
+
+**Needed:** confirmation that "stale but reachable" is acceptable for v1, at M4.
+
+---
+
+## Q24 — Where do our windows sit, and may the player move them? — **DECIDED 2026-10-17: placed, not dragged (`FR-41`).** Implementation tracked as **issue #18**.
+
+The draggable window came from copying BetterBags. The product deliberately stays close to the
+client's own bag behaviour, and the client's bags do not move. So: the first window anchors where
+the client's backpack window opens, further windows stack above it up to a maximum height, then wrap
+to the left. No drag-to-move in v1.
+
+What this settles: `FR-41` (placement rule instead of drag + persistence), `docs/04`'s `position`
+field (reserved, unused while windows are placed), `FR-10b`/`FR-10c` (copy and link now have a
+deterministic placement rule rather than two windows fighting for one rectangle), and Q13 — EditMode
+is the way a player overrides placement, which is what `AC-54` tests at M2.
+
+Still open inside the decision, and it belongs to `layout/anchors.lua` at M2: what "maximum height"
+means in pixels and rows, whether the anchor is the client's window frame or the bag bar, and what
+happens when the client's bag window is hidden by another addon (`FR-51`).
+
+---
+
 ## Decisions needed **before M0 commits**
 
 Q1 (name), Q2 (dependencies), Q3 (section ↔ categories), Q5 (no migration), Q6 (export format),
@@ -452,4 +495,5 @@ Q11 (Default + copy + link), Q14 (distribution), Q15 (no offline search, no snap
 Q16 (no themes), Q17 (no DI), Q18 (group binding), Q19 (Ctrl+right-click), Q20 (help page),
 Q21 (issues not docs), Q22 (no published API; keep the model publishable) are decided.
 Q8 (dynamic categories) must be re-confirmed against Q18 before M5. Everything else is decided at the
-milestone that needs it: Q4/Q9/Q13 at M2, Q7 at the M3→M4 boundary.
+milestone that needs it: Q4/Q9/Q13 at M2, Q7 at the M3→M4 boundary. **Q23 (combat usability) is open**
+and lands at M4 with the drag spike; Q24 (window placement) is decided.

@@ -31,6 +31,8 @@ is the vanilla↔sorting toggle on the client's bag bar.
 
 Load order = `core → data → layout → frames → config → themes → filters → util → core/init`.
 `core/init.lua` last, like BetterBags, so every module exists before anything is enabled.
+`Bindings.xml` sits in the addon root and is **not** in the TOC: the client loads it itself, and it
+is what puts our keybinds in the client's own Key Bindings panel (`FR-64`).
 
 ---
 
@@ -51,7 +53,7 @@ One refresh, explicit phases (BetterBags' `Phase1..11` reduced to what we actual
 
 Rules:
 - Phases 1–7 are pure functions over a `Snapshot` table. **No phase touches a frame.** Only
-  `render` does. This is what makes the classifier testable (`/bos selftest`) and what makes the
+  `render` does. This is what makes the classifier testable (`lua5.1 tests/run.lua`) and what makes the
   category editor's live item list cheap: the editor runs 1–7 against the real harvest with a draft
   rule tree substituted and renders a list.
 - Each phase runs inside a `Context` (BetterBags pattern) carrying the triggering event, so a
@@ -367,7 +369,7 @@ ignore:
 ```
 
 No `externals:` section — v1 vendors nothing (`docs/07` Q2). `tests/` is excluded from the release
-but `/bos selftest` stays loadable in dev checkouts (`docs/06` M0).
+and is not in the TOC, so no test code loads in a dev checkout either (`FR-106`).
 
 `LICENSE` and `Media/` are **not** ignored: the license ships inside the package, and the icon is
 referenced by `## IconTexture`.

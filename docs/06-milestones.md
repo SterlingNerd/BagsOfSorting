@@ -32,7 +32,7 @@ Deliverables
   present, does `ITEM_DATA_LOAD_RESULT` arrive, is `IconDataProviderMixin` present, is
   `EditModeManagerFrame` present, what is `IsUsingCombinedBags`, what is
   `C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character)`
-- `tests/fixtures.lua` + `/bos selftest` stub (asserts nothing yet, but the harness works)
+- `tests/fixtures.lua` + the headless harness `tests/run.lua` (asserts nothing yet, but the harness works)
 - CI: GitHub Actions running `luacheck` on push (copy the shape of `../addons/Baggins/.github/workflows/check.yml`)
 - per-directory `README.md` stubs (`NFR-3`)
 
@@ -71,7 +71,12 @@ Deliverables
 - one hardcoded window ("Backpack") with 3 hardcoded categories (Junk / Armor / Everything-else)
   written **in the data model**, not in code — so the schema is exercised from day one
 - `core/async.lua` chunking + `core/events.lua` bucketing
-- `/bos perf` printing ms per pipeline phase, including item-data requests issued
+- `/bos perf` printing ms per pipeline phase, including item-data requests issued (**issue #20**: phase
+  deltas are unmeasurable on this client — `GetTime` is frame-quantized; `/bos test 13` measures across frames)
+- `Bindings.xml` + `config/keybinds.lua` and the Options → AddOns category from `config/settingspanel.lua`
+  (`FR-64`, `FR-88`, pulled forward from M6: a prototype with no keybind entry and no options entry
+  is one the player cannot find or configure). **Issue #13**: a binding set in Options does not survive
+  `/reload`, while another addon's binding does persist in the account's `bindings-cache.wtf`
 
 Exit criteria
 - **AC-14, AC-16** real inventory appears, nothing duplicated, unmatched items in the catch-all.
@@ -82,8 +87,9 @@ Exit criteria
   reload (issue #1).
 - **AC-97** a 40-ID manual category renders icons on first login and issues zero tier-3 requests on
   the second.
-- `/bos selftest` passes: fixture items × rule trees → expected category, including `any/all/none`
-  nesting and the precedence tie-breaks from `docs/04`.
+- `lua5.1 tests/run.lua` green: fixture items × rule trees → expected category, including
+  `any/all/none` nesting, the precedence tie-breaks from `docs/04`, every sort mode and the flow
+  boundaries.
 
 Risks
 - Tooltip-based and expansion-based fields may need data we cannot read cheaply on Forever. If
@@ -100,7 +106,14 @@ Risks
 
 Deliverables
 - `data/windows.lua`, `data/sections.lua`, `layout/flow.lua`, `layout/sizing.lua`, `layout/anchors.lua`
-- per-window `columns`, saved position/scale, `compact` windows, collapsed/hidden sections
+- per-window `columns`, scale, `compact` windows, collapsed/hidden sections
+- `layout/anchors.lua` implements the `FR-41` placement rule (`docs/07` Q24, **issue #18**): the first window where
+  the client's backpack window opens, further windows stacked above it to a maximum height, then
+  wrapping left. Windows are **not draggable** in v1; EditMode (Q13, `AC-54`) is the override
+- **new-item highlight** (`FR-47`): our own policy, drawn the way the client draws it — a bright glow
+  around the slot cycling bright → dim (`docs/reference/new-item-highlight-*.png`). Today our buttons
+  show it only by accident; `frames/item.lua` never calls `UpdateNewItem` (**issue #15** for what is
+  actually lit, **issue #16** for the overlays our paint path omits)
 - **sections bound to several categories** (`FR-11`): packing one block whose contents come from N
   categories, sub-ordered by category priority
 - `window.copy` command (`FR-10b`) — a bank window built from a backpack window in one action, and
@@ -222,6 +235,10 @@ Exit criteria
   work on real looted items.
 - **AC-72** a full layout (3 windows, 8 sections) can be built **without ever opening the settings
   window**.
+- **Q23 decided here**: combat usability — whether "readable but stale in combat" ships for v1, or
+  our buttons stop being secure (**issue #17**). Measure BetterBags' behaviour in combat before choosing (`docs/07` Q23).
+  The requirement it has to land on is **`FR-126`**: mid-combat loot visible immediately, unsorted is
+  acceptable, re-sort on regen.
 - **AC-4** configure handles disabled in combat with an explanation, no taint.
 - Re-run the M3 timed human test in configure mode only; target ≤ 6 interactions for a custom
   window + 2 sections.
@@ -260,7 +277,9 @@ Exit criteria
   both are edited.
 - **AC-79** fresh install with preset installed: usable layout, zero config.
 - **AC-92** export on one character, import on another, layout matches; collision policy exercised.
-- **AC-93** 20 open/close cycles on a full backpack → SavedVariables file does not grow.
+- **AC-93** 20 open/close cycles on a full backpack → SavedVariables file does not grow. Settle the
+  file-name question first (**issue #14**): the TOC declares `BagsOfSortingDB`, the client writes
+  `SavedVariables/BagsOfSorting.lua`
 - **AC-110** closed-bank search behaves honestly before and after visiting the bank.
 
 Risks
@@ -308,7 +327,9 @@ Exit criteria
 ## M7 — Ship (0.5–1 wk)
 
 - `.pkgmeta` packaging (LICENSE and Media/ included), release TOC version bump, CHANGELOG
-- remove debug scaffolding not gated behind `settings.debug` (**NFR-6**)
+- remove debug scaffolding not gated behind `settings.debug` (**NFR-6**) — including the decision on
+  `core/diag.lua` (**issue #21**): `/bos test <n>` and `/bos find` are in the TOC, so they ship unless
+  kept, gated on `settings.debug`, or moved to a dev-only TOC
 - README screenshots/GIFs replacing the placeholder, using `Media/Icon.png`
 - publish: GitHub `SterlingNerd/BagsOfSorting`, CurseForge project `1745962`, Wago `bGoYJY60`
   (`docs/07` Q14), `## X-Curse-Project-ID` / `## X-Wago-ID` already in the TOC
@@ -331,6 +352,8 @@ Not milestones; a queue. Each gets a milestone only when the one before it ships
    wild, because this is the feature that can sell something by accident.
 2. **Group bindings** (`FR-11b`) if category counts keep growing in real use — `Tradeskills.Enchanting ∗`
    binding a whole dotted family (`docs/07` Q18).
+3. **No re-flow while a vendor is open** (`FR-44b`, **issue #19**) — a sold slot becomes an empty slot in place and
+   the section re-flows when the vendor closes. Cheap to state, and it is what makes bulk sell safe.
 
 Offline search and the guild bank are **not in this queue** — they are out of the product (`FR-109`,
 `docs/07` Q15). A published config API is not in the queue either: we keep the model publishable
@@ -344,15 +367,19 @@ that has never had the addon, with the first-run experience tested by someone el
 ## Standing test discipline (every milestone)
 
 1. `luacheck` clean in CI.
-2. `/bos selftest` green — classifier fixtures grow with each new field.
-3. In-game checklist run on Forever and pasted into the milestone entry with the date and patch.
-   A milestone is not done until its AC lines have a dated entry. The runnable `/script` snippets for
-   these checks live in the **spike issues** (#1–#11), not in a docs file (`docs/07` Q21).
-4. `/bos perf` numbers recorded, not asserted.
-5. One manual "hostile" pass per milestone: full inventory, a dozens-of-categories config imported in
+2. `lua5.1 tests/run.lua` green in CI — classifier fixtures grow with each new field.
+3. `/bos test <n>` probes run for what they cover: 2 (bank arithmetic), 7 (keybind persistence),
+   11 (new-item textures), 13 (clock + pipeline cost). Probes live in `core/diag.lua` because
+   `/script` is one line capped near 255 characters.
+4. In-game checklist (`tests/CHECKLIST.md`) run on Forever and pasted into the milestone entry with
+   the date and patch. A milestone is not done until its AC lines have a dated entry. The runnable
+   snippets for the API questions live in the **spike issues** (#1–#11), not in a docs file
+   (`docs/07` Q21).
+5. `/bos perf` and `/bos test 13` numbers recorded, not asserted.
+6. One manual "hostile" pass per milestone: full inventory, a dozens-of-categories config imported in
    the `docs/01` shape, ~20 sections in one window, a 30-char section name, an item Blizzard has no
    info for, combat, death, `/reload` mid-combat.
-6. Coexistence pass against the installed addons (`FR-124`).
+7. Coexistence pass against the installed addons (`FR-124`).
 
 ## What would make us stop and re-plan
 

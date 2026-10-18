@@ -1,4 +1,5 @@
--- Headless pipeline test: `lua5.1 tests/run.lua`.
+-- Headless pipeline test: `lua5.1 tests/run.lua`. The addon does not load tests/, so this is
+-- the only test path.
 --
 -- Phases 1-7 are pure functions over data and never touch a frame (docs/03), so harvest,
 -- enrich, classify, assign, sort and flow can be run off the client against a stubbed
@@ -45,6 +46,7 @@ local ORDER = {
   'data/sort.lua',
   'data/pipeline.lua',
   'layout/flow.lua',
+  'core/diag.lua',
   'tests/fixtures.lua',
   'tests/selftest.lua',
 }
@@ -191,6 +193,33 @@ end
 
 -- AC-97 shape: only the never-seen ID costs a tier-3 request.
 check('tier-3 requests issued', pipeline.Last().requestsIssued, 1)
+
+-- /bos find: which container index holds an item. 1001 sits in the backpack, 999999 nowhere.
+check('find locates an item across container indices', addon.modules['Diag'].Find(1001), 1)
+check('find reports nothing for an absent item', addon.modules['Diag'].Find(999999), 0)
+
+-- ITEM_DATA_LOAD_RESULT also fires for requests Blizzard or another addon made. Caching that data
+-- is free and correct; counting it as one of ours is what made `pending` go negative.
+local enrich = addon.modules['Enrich']
+enrich.OnItemDataLoaded(1001, true)
+check('an unrequested item-data result is not counted as ours',
+  tonumber(enrich.Stats():match('pending=(-?%d+)')), 1)
+
+-- A window closed by its own X is out of the model, so a refresh cannot reopen it (FR-41).
+-- Through DB.SetWindowsOpen rather than poking the flag: that is the function the keybind,
+-- `/bos show` and `/bos hide` all call.
+local function testWindowVisibility()
+  local db = addon.modules['DB']
+  db.SetWindowsOpen(false)
+  pipeline.Refresh('close')
+  check('closed windows leave the model', #pipeline.Model(), 0)
+  db.SetWindowsOpen(true)
+  pipeline.Refresh('reopen')
+  check('reopened windows are back in the model', #pipeline.Model(), 1)
+  check('reopen clears the flag rather than setting it', db.Windows()[1].hidden, nil)
+end
+
+testWindowVisibility()
 
 for _, failure in ipairs(failures) do
   print('FAIL ' .. failure)

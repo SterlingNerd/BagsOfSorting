@@ -1,5 +1,7 @@
--- `/bos selftest` (FR-106): fixture items x rule trees -> expected category.
--- Runs in-game and headless (tests/run.lua), because phases 1-7 never touch a frame.
+-- Headless assertions: `lua5.1 tests/run.lua` (CI runs them).
+--
+-- Not loaded by the addon. Phases 1-7 never touch a frame (docs/03, NFR-4), so the whole
+-- classifier, sort and layout layer runs off the client against the stubs in run.lua.
 
 local _, addon = ...
 
@@ -173,6 +175,73 @@ local function testRules(state)
   check(state, 'quality >= 3 matches epic', matched, true)
 end
 
+--- FR-46: every sort mode, over the same seven fixtures. 1005 has no name, quality, ilvl or
+--- expansion, so the `or ''` / `or 0` guards in data/sort.lua decide where it lands.
+---@param state BoSTestState
+local function testSort(state)
+  local sort = addon:GetModule('Sort')
+  local fixtures = addon:GetModule('Fixtures')
+
+  local ENDS = {
+    nameThenQuality = { 1005, 1002 },
+    qualityThenName = { 1003, 1001 },
+    ilvl = { 1003, 1004 },
+    expansion = { 1005, 26042 },
+  }
+
+  for mode, ends in pairs(ENDS) do
+    local items = fixtures.Clone()
+    sort.Items(items, mode)
+    check(state, mode .. ' puts ' .. ends[1] .. ' first', items[1].itemID, ends[1])
+    check(state, mode .. ' puts ' .. ends[2] .. ' last', items[#items].itemID, ends[2])
+  end
+
+  local items = fixtures.Clone()
+  sort.Items(items, 'nope')
+  check(state, 'unknown mode falls back to nameThenQuality', items[1].itemID, 1005)
+
+  local empty = {}
+  sort.Items(empty, 'ilvl')
+  check(state, 'sorting an empty list is a no-op', #empty, 0)
+
+  check(state, 'every mode is listed for the UI', table.concat(sort.Modes(), ','),
+    'expansion,ilvl,nameThenQuality,qualityThenName')
+end
+
+--- FR-40 boundaries: a section narrower than its item count, and a window with nothing in it.
+---@param state BoSTestState
+local function testFlow(state)
+  local flow = addon:GetModule('Flow')
+  local constants = addon:GetModule('Constants')
+  local CELL = constants.BUTTON_SIZE + constants.BUTTON_GAP
+
+  local items = {}
+  for i = 1, 5 do items[i] = { itemID = i } end
+  local window = flow.Layout({ id = 'w', name = 'w', columns = 2, sections = { { items = items } } })
+  check(state, '5 items in 2 columns is 2 wide', window.sections[1].cols, 2)
+  check(state, '5 items in 2 columns wraps to 3 rows', window.sections[1].rows, 3)
+
+  local empty = flow.Layout({ id = 'e', name = 'e', columns = 3, sections = { { items = {} } } })
+  check(state, 'an empty section is not sized', empty.sections[1].cols, nil)
+  check(state, 'an empty window is still its column grid wide', empty.width,
+    3 * CELL + constants.WINDOW_PADDING * 2)
+  check(state, 'an empty window is still one row tall', empty.height,
+    constants.WINDOW_TITLE_HEIGHT + CELL + constants.WINDOW_PADDING)
+end
+
+--- `/bos perf` reports the refresh's own total, not the time elapsed since it started (AC-100).
+---@param state BoSTestState
+local function testContext(state)
+  local context = addon:GetModule('Context')
+  local ctx = context.New('test')
+  context.MarkPhase(ctx, 'harvest')
+  context.Finish(ctx)
+  local printed = context.Format(ctx):match('total=([%d%.]+)')
+  check(state, 'format reports the captured total', tonumber(printed),
+    tonumber(string.format('%.1f', ctx.totalMs)))
+  check(state, 'a phase is recorded', ctx.phases.harvest ~= nil, true)
+end
+
 --- Run everything and return (checks, failures).
 ---@return number checks
 ---@return string[] failures
@@ -183,19 +252,11 @@ function selftest.Run()
   testPrecedence(state)
   testItemIDLeaf(state)
   testRules(state)
+  testSort(state)
+  testFlow(state)
+  testContext(state)
 
   return state.checks, state.failures
-end
-
----@return string[]
-function selftest.Report()
-  local checks, failures = selftest.Run()
-  local lines = {}
-  for _, failure in ipairs(failures) do
-    lines[#lines + 1] = '|cffff5555FAIL|r ' .. failure
-  end
-  lines[#lines + 1] = string.format('selftest: %d checks, %d failures', checks, #failures)
-  return lines
 end
 
 return selftest

@@ -5,17 +5,24 @@
 ## Notes: Multi-window inventory organization with live, in-place configuration.
 ## Author: josh
 ## SavedVariables: BagsOfSortingDB
+## Category: Inventory
 ## X-Category: Inventory
 ## X-License: WTFPL
 ## X-Curse-Project-ID: 1745962
 ## X-Wago-ID: bGoYJY60
 ## OptionalDeps: Blizzard_EditMode, Masque, Pawn
 ## AddonCompartmentFunc: BagsOfSorting_OnAddonCompartmentClick
-## IconTexture: Interface\AddOns\BagsOfSorting\Media\Icon
+## IconTexture: Interface\AddOns\BagsOfSorting\Media\Icon.png
 
-# Load order: core -> filters -> data -> layout -> frames -> integrations -> tests -> core/init.
+# Load order: core -> filters -> data -> layout -> frames -> config -> integrations -> core/init.
+# Category is what the client's own AddonList groups the addon list by (AddonList.lua reads the
+# "Category" metadata); X-Category is CurseForge/Wago metadata the client never reads.
+# IconTexture keeps the .png extension: an extensionless lookup probes .blp and .tga only.
 # shortcut: docs/03 lists filters after frames. The field registry is data the classifier
 # reads on every leaf, so it loads before data/ instead of being looked up per leaf.
+# Bindings.xml is deliberately absent: the client loads it itself and listing it here would
+# load it twice. tests/ is absent too: the harness runs off the client (`lua5.1 tests/run.lua`),
+# so the addon loads zero test code in a dev checkout as well as in a release zip.
 core\boot.lua
 core\log.lua
 core\client.lua
@@ -44,9 +51,10 @@ frames\item.lua
 frames\section.lua
 frames\window.lua
 
+config\keybinds.lua
+config\settingspanel.lua
+
 integrations\compartment.lua
 
-tests\fixtures.lua
-tests\selftest.lua
-
+core\diag.lua
 core\init.lua

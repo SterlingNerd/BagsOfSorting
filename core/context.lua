@@ -48,16 +48,26 @@ function context.MarkPhase(ctx, phase)
   ctx.phases[phase] = (GetTime() - ctx.started) * 1000
 end
 
+--- Capture the refresh's own total. `/bos perf` runs long after the refresh it reports, so
+--- measuring at print time reports the time since the refresh started, not the refresh.
+---@param ctx BoSContext
+function context.Finish(ctx)
+  ctx.totalMs = (GetTime() - ctx.started) * 1000
+end
+
 ---@param ctx BoSContext
 ---@return string
 function context.Format(ctx)
-  local parts = { string.format('refresh(%s) total=%.1fms', ctx.reason, (GetTime() - ctx.started) * 1000) }
+  local total = ctx.totalMs or (GetTime() - ctx.started) * 1000
+  local parts = { string.format('refresh(%s) total=%.1fms', ctx.reason, total) }
   local order = { 'harvest', 'enrich', 'classify', 'assign', 'sort', 'flow', 'render' }
   local last = 0
   for _, phase in ipairs(order) do
     local t = ctx.phases[phase]
     if t then
-      parts[#parts + 1] = string.format('%s=%.1f', phase, t - last)
+      -- Two decimals: a level-1 backpack measures under 0.1ms per phase, and 0.0 records nothing
+      -- (AC-100/101 ask for numbers).
+      parts[#parts + 1] = string.format('%s=%.2f', phase, t - last)
       last = t
     end
   end

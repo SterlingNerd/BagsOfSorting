@@ -21,11 +21,18 @@ local log = addon:GetModule('Log')
 ---@type table<string, BoSWindowFrame>
 local byId = {}
 
+--- Sections whose release a combat lockdown made us defer.
+local pendingRelease = {}
+
 --- Windows stack upward from the bag bar in layout order until the player drags one.
 local function defaultAnchor(frame, index)
-  local anchor = _G.MainMenuBarBackpackButton or _G.BagsBar
+  -- Camelot's bags bar sits bottom-left and lays its buttons out leftward from the backpack
+  -- button (BagsBar.xml: direction = Enum.BagsDirection.Left). Anchor above the bar, not on it:
+  -- BOTTOMLEFT-on-BOTTOMLEFT put the window over the player's bags and the micro bar.
+  local anchor = (_G.BagsBar and _G.BagsBar:IsShown() and _G.BagsBar)
+    or _G.MainMenuBarBackpackButton
   if anchor then
-    frame:SetPoint('BOTTOMLEFT', anchor, 'BOTTOMLEFT', 0, (index - 1) * 40)
+    frame:SetPoint('BOTTOMLEFT', anchor, 'TOPLEFT', 0, 8 + (index - 1) * 40)
   else
     -- shortcut: no bag bar found (UI addon removed it), fall back to a fixed screen spot.
     frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', 20, 20 + (index - 1) * 40)
@@ -53,9 +60,14 @@ local function create(config)
   frame:SetFrameStrata('MEDIUM')
   frame:SetScale(config.scale or 1)
 
-  -- Closing a window is a model edit and the command layer is M3 (docs/06). Until then the
-  -- stock close button would be a half-feature, so it is hidden rather than wired.
-  if frame.CloseButton then frame.CloseButton:Hide() end
+  -- The stock X, through the template's own close callback (UIPanelCloseButton_OnClick ->
+  -- HideUIPanel). Closing is persisted on the window config, otherwise the next BAG_UPDATE
+  -- re-renders it straight back onto the screen. /bos show or the compartment entry reopens it.
+  frame.onCloseCallback = function()
+    config.hidden = true
+    log.Debug('closed window', config.id)
+    return true
+  end
 
   frame:SetScript('OnDragStart', frame.StartMoving)
   frame:SetScript('OnDragStop', function(self)
@@ -81,7 +93,14 @@ end
 
 ---@param wf BoSWindowFrame
 local function hide(wf)
-  releaseSections(wf)
+  -- Hiding our own frame is allowed in combat. Releasing pooled ItemButtons is not: reset() calls
+  -- SetItemLocation, the client blocks it during lockdown, and the blocked call aborted the hide
+  -- before frame:Hide() could run (checklist test 8). Defer the release to regen.
+  if InCombatLockdown() then
+    pendingRelease[wf] = true
+  else
+    releaseSections(wf)
+  end
   wf.frame:Hide()
 end
 
@@ -125,6 +144,21 @@ end
 
 function windows.HideAll()
   for _, wf in pairs(byId) do hide(wf) end
+end
+
+--- Release what a combat lockdown made us defer (agents.md hard rule 3).
+function windows.FlushReleases()
+  for wf in pairs(pendingRelease) do
+    releaseSections(wf)
+    pendingRelease[wf] = nil
+  end
+end
+
+--- Show windows that already have their buttons painted, without touching the buttons.
+function windows.ShowPainted()
+  for _, wf in pairs(byId) do
+    if #wf.sections > 0 and not wf.config.hidden then wf.frame:Show() end
+  end
 end
 
 ---@return number

@@ -1,0 +1,9 @@
+<!-- Keybinds (FR-64). The client loads this file itself: it must NOT be listed in the TOC.
+     Declaring the binding here is what puts it in the client's own Key Bindings panel
+     (Keybindings.lua enumerates every binding the C++ knows about and groups it by category).
+     No default key: B is Blizzard's OPENALLBAGS and an addon does not get to take it (docs/07 Q4). -->
+<Bindings>
+  <Binding name="BAGSOF_SORTING_TOGGLE" category="BINDING_HEADER_BAGSOF_SORTING">
+    BagsOfSorting_Toggle();
+  </Binding>
+</Bindings>

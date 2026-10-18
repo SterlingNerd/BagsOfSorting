@@ -146,6 +146,21 @@ function db.ItemCache()
   return db.sv.itemCache
 end
 
+--- Open or close every window. A closed window is out of the model, so no refresh reopens it;
+--- the window's own X writes the same `hidden` flag (FR-41).
+---@param open boolean
+function db.SetWindowsOpen(open)
+  for _, window in ipairs(db.Windows()) do
+    -- `open and nil or true` is always true, which is what this avoids: clear the flag or set
+    -- it, explicitly.
+    if open then
+      window.hidden = nil
+    else
+      window.hidden = true
+    end
+  end
+end
+
 --- The layout model changed: ask the pipeline to re-run (FR-26's entry point).
 function db.NotifyModelChanged()
   addon:GetModule('Events').Emit('BOS_MODEL_CHANGED')

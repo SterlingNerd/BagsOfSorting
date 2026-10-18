@@ -72,7 +72,9 @@ function pipeline.Assign(placements)
 
   for _, config in ipairs(db.Windows()) do
     -- Bank windows are M5: the bank container index space is issue #9's answer, not ours.
-    if config.kind == 'backpack' then
+    -- config.hidden is the window's own X: closed windows are not in the model at all, which
+    -- is what keeps windows.Prune from reopening them on the next refresh.
+    if config.kind == 'backpack' and not config.hidden then
       local window = {
         id = config.id,
         name = config.name,

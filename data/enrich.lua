@@ -111,7 +111,9 @@ function enrich.OnItemDataLoaded(itemID, success)
   if not full then return false end
 
   itemcache.Put(itemID, full)
-  resolved = resolved + 1
+  -- ITEM_DATA_LOAD_RESULT is a global event: Blizzard and other addons request data too. Only an
+  -- ID we asked for counts against the tier-3 accounting, otherwise `pending` goes negative.
+  if requested[itemID] then resolved = resolved + 1 end
   return true
 end
 

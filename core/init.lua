@@ -15,9 +15,10 @@ local harvest = addon:GetModule('Harvest')
 local enrich = addon:GetModule('Enrich')
 local pipeline = addon:GetModule('Pipeline')
 local windows = addon:GetModule('WindowFrames')
+local options = addon:GetModule('AddonOptions')
 local itemFrames = addon:GetModule('ItemFrames')
 local pool = addon:GetModule('Pool')
-local selftest = addon:GetModule('SelfTest')
+local diag = addon:GetModule('Diag')
 
 init.started = false
 
@@ -29,11 +30,19 @@ end
 ---@param shown table<string, boolean>
 ---@param ctx BoSContext
 local function render(models, shown, ctx)
+  if InCombatLockdown() then
+    -- Painting is what the client blocks during lockdown (SetItemLocation on a secure ItemButton),
+    -- so a window keeps whatever it last showed and re-renders on regen (docs/07 Q23).
+    windows.ShowPainted()
+    log.Debug('combat lockdown: render deferred to regen')
+    return
+  end
   for index, model in ipairs(models) do
     windows.Render(model, index)
   end
   windows.Prune(shown)
   context.MarkPhase(ctx, 'render')
+  context.Finish(ctx)
   log.Debug(context.Format(ctx))
 end
 
@@ -58,6 +67,11 @@ local function listen()
     end
   end)
   events.On('BOS_MODEL_CHANGED', function() pipeline.Refresh('model') end)
+  -- Everything a lockdown deferred lands here (docs/07 Q23).
+  events.On('PLAYER_REGEN_ENABLED', function()
+    windows.FlushReleases()
+    pipeline.Refresh('regen')
+  end)
 end
 
 function init.Start()
@@ -93,18 +107,31 @@ function init.IsShowing()
   return windows.Count() > 0
 end
 
+function init.Show()
+  db.SetWindowsOpen(true)
+  if InCombatLockdown() then
+    -- Bags must be reachable in combat; only the painting is blocked (docs/07 Q23).
+    windows.ShowPainted()
+    log.Debug('combat lockdown: showing the last painted windows until regen')
+  else
+    pipeline.Refresh('show')
+  end
+end
+
 function init.Toggle()
   if init.IsShowing() then
+    db.SetWindowsOpen(false)
     windows.HideAll()
   else
-    pipeline.Refresh('toggle')
+    init.Show()
   end
 end
 
 local HELP = {
   '/bos            client capability dump + harvested containers',
-  '/bos selftest   classifier fixtures',
   '/bos perf       last refresh timings, pool and item-cache stats',
+  '/bos test <n>   in-game probe: 2 bank, 7 keybind, 11 new-item, 13 clock+cost',
+  '/bos find <id>  which container index holds that item',
   '/bos refresh    re-run the pipeline',
   '/bos show|hide  show or hide the sorting windows',
   '/bos debug      toggle debug logging',
@@ -114,22 +141,21 @@ local HELP = {
 function init.Slash(input)
   local cmd = ((input or ''):match('^(%S+)') or ''):lower()
 
-  if cmd == 'selftest' then
-    printLines(selftest.Report())
-  elseif cmd == 'perf' then
+  if cmd == 'perf' then
     local ctx = pipeline.Last()
     print(ctx and context.Format(ctx) or 'no refresh has run yet')
     print(pool.Stats())
     print(enrich.Stats())
+  elseif cmd == 'test' then
+    diag.Run(tonumber((input or ''):match('(%d+)')))
+  elseif cmd == 'find' then
+    diag.Find(tonumber((input or ''):match('(%d+)')))
   elseif cmd == 'refresh' then
     pipeline.Refresh('slash')
   elseif cmd == 'show' then
-    if InCombatLockdown() then
-      log.Error('cannot open bags during combat')
-    else
-      pipeline.Refresh('slash-show')
-    end
+    init.Show()
   elseif cmd == 'hide' then
+    db.SetWindowsOpen(false)
     windows.HideAll()
   elseif cmd == 'debug' then
     local settings = db.Settings()
@@ -152,6 +178,7 @@ SlashCmdList['BAGSOFsorting'] = init.Slash
 events.On('ADDON_LOADED', function(loaded)
   if loaded ~= addon.name then return end
   db.Initialize()
+  options.Register()
 end)
 
 events.On('PLAYER_LOGIN', init.Enable)

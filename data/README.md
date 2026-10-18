@@ -1,7 +1,7 @@
 # data
 
 Phases 1-7 of the pipeline. Pure data: nothing here creates or touches a frame (NFR-4), which
-is what makes the classifier testable (`/bos selftest`, `tests/run.lua`) and what will make the
+is what makes the classifier testable (`lua5.1 tests/run.lua`) and what will make the
 category editor's live match list cheap.
 
 | File | Phase | What it does |

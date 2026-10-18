@@ -21,24 +21,27 @@ end
 local caps = {
   isForever = isCamelot,
   isRetailLike = isMainline or isCamelot,
-  hasWarbank = false,             -- Forever ships no warbank (agents.md)
-  hasReagentBank = false,         -- no REAGENT_BANK_TAB on this client
-  hasBlizzSort = false,           -- no BlizzSortBags: new-item handling is ours (FR-47)
+  hasWarbank = C_Warbank ~= nil,
+  hasReagentBank = has(Enum, 'BagIndex') and Enum.BagIndex.ReagentBag ~= nil,
+  hasBlizzSort = BlizzSortBags ~= nil,
   hasContainerQuestInfo = has(C_Container, 'GetContainerItemQuestInfo'),
-  hasModernMoney = isCamelot,     -- atlas coin textures
+  hasModernMoney = GetCoinTextureString ~= nil,
   hasAsyncItemFetch = has(C_Item, 'RequestLoadItemDataByID'),
   hasSearchMatcher = has(ItemButtonUtil, 'GetItemContextMatchResultForItem'),
   hasSearchMatcherContainer = has(ItemButtonUtil, 'GetItemContextMatchResultForContainer'),
   hasIconPicker = IconDataProviderMixin ~= nil,
   hasEditMode = EditModeManagerFrame ~= nil,
   hasSettingsAPI = has(Settings, 'RegisterAddOnCategory'),
-  hasWowStyle1Dropdown = WowStyle1DropdownTemplate ~= nil,
-  hasClassicDropdown = UIDropDownMenuTemplate ~= nil,
-  -- The bag window shell we build from (docs/07 Q16: the client's own bag visuals).
-  hasBagWindowTemplate = PortraitFrameFlatTemplate ~= nil,
-  hasItemButtonTemplate = ContainerFrameItemButtonTemplate ~= nil,
   itemButtonType = 'ItemButton',
 }
+
+-- Asserted from `wow-ui-source` instead of measured on the running client. The dump marks these,
+-- so an assumption is never read as a measurement.
+local ASSUMED = { itemButtonType = true }
+
+-- Frame templates (`ContainerFrameItemButtonTemplate`, `WowStyle1DropdownTemplate`, ...) are not
+-- probed here: they resolve through the frame-tree registry, not globals, so `X ~= nil` is always
+-- false whether or not the client ships them. The addon building its own frames is the test.
 
 ---@param key string
 ---@return any
@@ -69,10 +72,9 @@ function client.Probe()
   for _, key in ipairs({
     'itemButtonType', 'hasWarbank', 'hasReagentBank', 'hasBlizzSort', 'hasContainerQuestInfo',
     'hasModernMoney', 'hasAsyncItemFetch', 'hasSearchMatcher', 'hasSearchMatcherContainer',
-    'hasIconPicker', 'hasEditMode', 'hasSettingsAPI', 'hasWowStyle1Dropdown', 'hasClassicDropdown',
-    'hasBagWindowTemplate', 'hasItemButtonTemplate',
+    'hasIconPicker', 'hasEditMode', 'hasSettingsAPI',
   }) do
-    line('%s=%s', key, tostring(caps[key]))
+    line('%s=%s%s', key, tostring(caps[key]), ASSUMED[key] and ' (assumed)' or '')
   end
 
   local constants = addon:GetModule('Constants')
@@ -80,7 +82,10 @@ function client.Probe()
     line('%s=%s', key, tostring(constants[key]))
   end
 
-  line('combinedBags=%s', tostring(IsUsingCombinedBags and IsUsingCombinedBags()))
+  -- `IsUsingCombinedBags` is not a global on this client; it is a method on Blizzard's own
+  -- ContainerFrameSettingsManager, which agents.md hard rule 8 says we must not call from addon
+  -- code (it builds and stores state). Presence only, never a call.
+  line('combinedBagsManager=%s', tostring(ContainerFrameSettingsManager ~= nil))
 
   if KEYRING_CONTAINER ~= nil then
     line('keyring index=%s slots=%s', tostring(KEYRING_CONTAINER),

@@ -19,6 +19,10 @@ local CELL = constants.BUTTON_SIZE + constants.BUTTON_GAP
 
 local function create()
   local frame = CreateFrame('Frame')
+  -- Lua-created frames take mouse input by default, and a section covers the whole window body:
+  -- left as-is it swallows every press, so the window could not be dragged at all. The item
+  -- buttons are children and keep their own input.
+  frame:EnableMouse(false)
   frame:SetFrameLevel(1)
   local title = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
   title:SetPoint('TOPLEFT', 0, 0)

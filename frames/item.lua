@@ -84,6 +84,10 @@ function itemFrames.Paint(entry, item, parent)
   SetItemButtonTexture(entry.button, entry.item.icon or 0)
   SetItemButtonQuality(entry.button, item.quality, item.link, false, item.isBound)
   SetItemButtonCount(entry.button, item.stackCount > 1 and item.stackCount or nil)
+  -- shortcut: Blizzard's UpdateContainerButtonInfo also runs UpdateNewItem, UpdateQuestItem,
+  -- UpdateJunkItem, UpdateItemContextMatching, UpdateCooldown and SetReadable on its own buttons.
+  -- M1 only needs the icon, quality border and count to prove the pipeline; the overlays arrive
+  -- with the milestone that owns each one (FR-47 new items, FR-45 quest, FR-65 junk).
 
   entry.parent:Show()
   entry.button:Show()

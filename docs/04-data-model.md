@@ -34,12 +34,13 @@ BagsOfSortingDB = {
       kind     = "backpack",          -- "backpack" | "bank"
       priority = 1,                   -- tiebreak within same kind
       openWithAll = true,
+      hidden   = false,                -- closed with the window's own X; absent means open
       columns  = 5,
       compact  = false,               -- shrink to content, hide when empty
       scale    = 1.0,
       icon     = "INV_Misc_Bag_10",   -- bare Interface\ICONS\ name, from the client's icon picker
       overlay  = nil,                 -- optional our-own-art overlay drawn on top of `icon`
-      position = { point="BOTTOMLEFT", x=..., y=... },   -- saved drag position
+      position = { point="BOTTOMLEFT", x=..., y=... },   -- reserved: unused while windows are placed, not dragged (FR-41, Q24)
       anchor   = { enabled=false, corner="auto" },
       copyFrom = nil,                 -- window id this one was created from (FR-10b): provenance
                                       -- only, NOT inheritance. Editing the source never edits this.

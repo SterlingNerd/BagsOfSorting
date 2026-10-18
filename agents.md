@@ -36,7 +36,7 @@ If a task contradicts `docs/02-requirements.md` or `docs/05-config-ui.md`, stop 
 | `LE_EXPANSION_*` | reports `LE_EXPANSION_CLASSIC` (Vanilla ruleset) | parent `../agents.md` |
 | Engine | modern: `C_Container`, `C_Item`, `C_Spell`, secret values, `ItemLocation` | verified |
 | Flavor dir | `_classic_beta_`, `.flavor.info` = `wow_classic_beta` | verified |
-| Bags start **combined** into one window | yes (`ContainerFrameCombinedBags`, `IsUsingCombinedBags`) | `origin/forever` + `../addons/ForeverPlus/Modules/BagWindow.lua` |
+| Bags start **combined** into one window | `ContainerFrameCombinedBags` exists and the accessor is the **method** `ContainerFrameSettingsManager:IsUsingCombinedBags()` — there is **no global `IsUsingCombinedBags`** (measured nil on the live client). Reading combined-vs-individual means calling that manager, which hard rule 8 forbids (`GetBagsShown()` on the same manager tainted Blizzard's bag code). Derive it from the container indices we already harvest instead | `origin/forever` `Blizzard_UIPanels_Game/Mainline/ContainerFrame.lua:194+`, `/bos` dump 2026-10-17 |
 | EditMode's **Bags** system | the bag **button bar**, not the bag window | `../addons/ForeverPlus/Modules/BagWindow.lua` |
 | `/script` available | yes, gated (`C_GameRules … UserScriptsDisabled`, one-time dangerous-scripts popup); `/dump`, `/eventtrace`, `/framestack`, `/api` too | `origin/forever` `Blizzard_ChatFrameBase/Shared/SlashCommands.lua` |
 | Addon Compartment | present on camelot (`AddonCompartment.lua [AllowLoadGameType mainline]`, no camelot exclusion) | `origin/forever` `Blizzard_Minimap/Blizzard_Minimap.toc` |
@@ -45,9 +45,12 @@ If a task contradicts `docs/02-requirements.md` or `docs/05-config-ui.md`, stop 
 | Reagent bag slot | present | `CharacterReagentBagMixin` in the same Camelot file; `ForeverPlus/Modules/BagSlots.lua` counts it |
 | `C_Bank` | present, but **it reads no items** — its whole surface is tabs, money and locks (`FetchPurchasedBankTabIDs`, `FetchNumPurchasedBankTabs`, `FetchMaxNumBankTabs`, `FetchDepositedMoney`, `AutoDepositItemsIntoBank`, `IsItemAllowedInBankType`, `CanUseBank`, `CloseBankFrame`, `UpdateBankTabSettings`). **Bank contents arrive only through the container API** | `origin/forever` `BankDocumentation.lua`, full function list |
 | `Enum.BagIndex` on Forever | 27 values, -3..23: `Accountbanktab -3`, `Characterbanktab -2`, `Keyring -1`, `Backpack 0`, `Bag_1..4 = 1..4`, `ReagentBag 5`, `CharacterBankTab_1..9 = 6..14`, `AccountBankTab_1..9 = 15..23`. **There are no `BankBag_*` values** | `BagIndexConstantsDocumentation.lua` |
-| **Storage shape (confirmed in-game, 2026-10-08)** | **Character:** backpack + **4 bag slots** + a **reagent bag** (the 5th slot) + a **keyring**. **Bank:** **8 bank bag slots** + a base grid whose size is **disputed between 48 and 96 slots** — issue #9 measures it | user confirmation + the news sources above |
-| The arithmetic that follows | `NUM_BAG_SLOTS = 4`, `NUM_REAGENTBAG_SLOTS = 1` → `NUM_TOTAL_EQUIPPED_BAG_SLOTS = 5` → `ITEM_INVENTORY_BANK_BAG_OFFSET = 5`. Eight bank bags therefore land on **indices 6..13** — exactly where `Enum.BagIndex.CharacterBankTab_1..8` also sits. Either those enum values are legacy on this client, or the base grid's tabs are what lives there and bank bags are elsewhere. **Issue #9's probe decides which**, and it is the single most important number in the harvest design | `Constants.lua:168-174`, `BagIndexConstantsDocumentation.lua`, `Camelot/BankFrame.lua:26` |
-| **Bank size: the sources disagree** | wowhead measured the beta at **48 default slots** (six rows of eight, eight locked bag slots beneath). Blizzard's senior game designer Josh Greenfield said in the Blizzcon interview *"I believe it's either twice or four times as large… I think it's 96 slots or something like that."* **48 and 96 are a factor of two apart, and the harvest design depends on the real number** — measure it, do not assume either | wowhead 382995 (2026-09-21), wowforever.be, warcrafttavern (2026-09-16) quoting mmorpg.com |
+| **Storage shape** | **Character:** backpack + **4 bag slots** + a **reagent bag** (the 5th slot) + a **keyring** (32 slots). **Bank:** a base grid of **48 slots (six rows of eight), counted in-game 2026-10-17**, plus **8 bank bag slots visible in the UI** while `NUM_CHARACTER_BANK_SLOTS` reports **9** — `/bos test 2` and `/bos find` decide which nine the client has inventory slots for | in-game 2026-10-17 (bank open, no bank bag owned yet) + `/bos` dump |
+| **Measured on the live client (`/bos`, 2026-10-17, level 1, no bags equipped)** | `NUM_BAG_SLOTS=4` · `NUM_REAGENTBAG_SLOTS=1` → `NUM_TOTAL_EQUIPPED_BAG_SLOTS=5` → `ITEM_INVENTORY_BANK_BAG_OFFSET=5` · `REAGENTBAG_INDEX=5` · `KEYRING_CONTAINER=-1` with **32 slots** · **`NUM_CHARACTER_BANK_SLOTS=9`** · `C_Bank.ShouldUsePlayerBagsInBank()=true` · `FetchNumPurchasedBankTabs(Character)=0` · global `IsUsingCombinedBags` **absent** (the accessor is `ContainerFrameSettingsManager:IsUsingCombinedBags()`, which we must not call) · `ItemButtonUtil.GetItemContextMatchResultForItem` and `...ForContainer` **both present** · `Settings.RegisterAddOnCategory`, `EditModeManagerFrame`, `IconDataProviderMixin`, `C_Item.RequestLoadItemDataByID`, `C_Container.GetContainerItemQuestInfo` present · `C_Warbank`, `Enum.BagIndex.ReagentBag`, `BlizzSortBags` absent · `Enum.GameRule.UserScriptsDisabled` inactive (`/script` allowed) | `/bos` capability dump, `core/client.lua` |
+| The arithmetic that follows | `NUM_BAG_SLOTS = 4`, `NUM_REAGENTBAG_SLOTS = 1` → `NUM_TOTAL_EQUIPPED_BAG_SLOTS = 5` → `ITEM_INVENTORY_BANK_BAG_OFFSET = 5`. **Nine** bank bag slots therefore land on **indices 6..14** — exactly where `Enum.BagIndex.CharacterBankTab_1..9` also sits. Either those enum values are legacy on this client, or the base grid's tabs are what lives there and bank bags are elsewhere. `ShouldUsePlayerBagsInBank() = true` points the same way as the second option. **Issue #9's probe decides which**, and it is the single most important number in the harvest design | `Constants.lua:168-174`, `BagIndexConstantsDocumentation.lua`, `Camelot/BankFrame.lua:26`, the `/bos` dump above |
+| **The base grid IS a container: index 6** | Hearthstone (item 6948) placed in the 6×8 grid reports **`[6] slot 19`**; the same item in an equipped backpack bag reports `[1] slot 1`, so the search works rather than fluking. Index 6 is `ITEM_INVENTORY_BANK_BAG_OFFSET + 1`, which is also `Enum.BagIndex.CharacterBankTab_1` — the grid is a container addressed with the bank-tab names. **Issue #9's world B** | `/bos find 6948` in-game 2026-10-17 |
+| Bank window chrome | A **Page 1** tab is visible on the bank window and there are **no purchase buttons**; `FetchNumPurchasedBankTabs(Character) = 0`. Camelot pages at 88 slots per page (`BankFrame.xml:88`) and a 48-slot grid fits on one page, so "Page 1" is the paging control for a single page rather than a tab strip you buy into. Whether further pages exist is unmeasured (no bank bag owned yet) | in-game 2026-10-17 + `Camelot/BankFrame.lua:86-101` |
+| **Bank size: settled at 48** | Counted in-game 2026-10-17: the base grid is **six rows of eight**. wowhead's 48 matches; Josh Greenfield's "I think it's 96 slots or something like that" does not. The harvest design budgets **48** | in-game 2026-10-17, wowhead 382995 (2026-09-21) |
 | Inventory pressure is being reduced elsewhere | a **mounts window** removes mounts from bags, and **transmog** stores appearances without keeping the item. Both shrink what the bags actually have to hold, so capacity assumptions should not be built on Classic-era bag math | warcrafttavern, same article |
 | Camelot bank paging threshold | `BankPanel` on Camelot sets `maximumTotalSlotsPerPage = 88` (Mainline default is 96). A 48-slot bank fits on **one page**, so the client may present the bank as one continuous grid even if tabs exist underneath. `GetNumPagesForBankType` returns 1 page when `ShouldUsePlayerBagsInBank()` is false | `Blizzard_UIPanels_Game/Camelot/BankFrame.xml:88`, `Camelot/BankFrame.lua:86-101` |
 | `C_CurrencyInfo` | present and large: `PlayerMoney`, `AccountMoney`, `GetCoinText`, `GetCoinTextureString`, `GetBackpackCurrencyInfo`, `GetCurrencyListInfo`, `GetCurrencyListSize`, `GetCurrencyLink`, `GetCurrencyIDFromLink`, `SetCurrencyBackpack`, `PickupCurrency`, `IsAccountWideCurrency`, `FetchCurrencyDataFromAccountCharacters`, `CurrencyDisplayUpdate`. Forever has a currency tab on the character panel — **money and currency display is the client's API, not ours to rebuild** (`FR-48`) | `CurrencyInfoDocumentation.lua`, `CurrencyConstantsDocumentation.lua` on `origin/forever` |
@@ -59,6 +62,9 @@ If a task contradicts `docs/02-requirements.md` or `docs/05-config-ui.md`, stop 
 | Consequence for harvesting | **never enumerate `Enum.BagIndex` to find containers.** Derive from the constants, `pcall` each index, de-duplicate. Reading one index under two names counts the same items twice — the classic wrong-totals bug. Issues #9, #10, #11 | derived from the rows above |
 | `C_Bank.IsItemAllowedInBankType(bankType, itemLocation)` | the only bank-restriction predicate on this client (there is no `C_Item.CanItemFitInContainer`). Check it **before** a deposit, not after a failure | `BankDocumentation.lua` |
 | `Enum.BagSlotFlags` | 10 values, 1..512 (`DisableAutoSort`, `ClassEquipment`, `ClassConsumables`, `ClassProfessionGoods`, `ClassJunk`, `ClassQuestItems`, `ExcludeJunkSell`, `ClassReagents`, `ExpansionCurrent`, `ExpansionLegacy`) | `BagConstantsDocumentation.lua` |
+| New-item glow | `ContainerFrameItemButtonTemplate` wires `OnEnter = ContainerFrameItemButton_OnEnter`, which calls `OnUpdate` → `C_NewItems.RemoveNewItem(bagID, slot)` and hides `NewItemTexture`. Our pooled buttons inherit it, so hovering our buttons clears the client's new-item state for the mirrored slots. The glow itself is set by `ContainerFrameItemButtonMixin:UpdateNewItem(quality)` from Blizzard's own container update path — our paint path does not call it, and the highlight on our buttons is inconsistent because of that (`FR-47`, `/bos test 11`). The client's own highlight is a bright glow around the slot cycling bright → dim: `docs/reference/new-item-highlight-*.png` | `origin/forever` `ContainerFrame.lua:1687-1731`, `:1871-1900`, in-game 2026-10-17 |
+| `GetTime()` resolution | **frame-quantized on this client**: 1e6 Lua iterations measured **0 ms** in-game (2026-10-17). A phase timed inside one refresh is therefore unmeasurable — `/bos perf` phase numbers read `0.00` no matter how slow the pipeline is. Measure across frames instead: `/bos test 13` runs the pipeline 100×10 times spread over frames and reports ms per refresh. Neither `GetRealTime` nor `C_Profiler` is referenced anywhere in `origin/forever` FrameXML | `/script` probe 2026-10-17, `git grep origin/forever -- Interface` |
+| `/script` limits | one line, capped near **255 characters**: the chat edit box sends a single line and `RunScript` compiles one chunk. A longer snippet is truncated and Lua reports `'end' expected near '<eof>'`, which reads like a code bug and is not one. In-game probes live in `core/diag.lua` (`/bos test <n>`) for this reason | in-game 2026-10-17, `wow-forever-api` skill |
 | `C_Item.GetItemInfo` | `MayReturnNothing = true` — the client only knows items it has seen | `ItemDocumentation.lua` |
 | Async item fetch | `C_Item.RequestLoadItemDataByID(itemID)` → `ITEM_DATA_LOAD_RESULT`; Blizzard's own `AsyncCallbackSystemMixin` (`ASYNC_ITEM`) is the reference and loads on camelot | `Blizzard_ObjectAPI/Mainline/AsyncCallbackSystem.lua` |
 | Icon picker | `IconDataProviderMixin` (`GetNumIcons`, `GetIconByIndex`, `GetIconForSaving`, `GetIndexOfIcon`) + `IconSelectorPopupFrameTemplate` | `Blizzard_FrameXMLBase/IconDataProvider.lua` |
@@ -78,13 +84,14 @@ addon.hasWarbank = addon.isRetail and not addon.isForever   -- Forever ships no 
 - `CharacterReagentBag0Slot`, `KeyRingButton`
 - modern money frame with atlas textures (`coin-gold/silver/copper`)
 - `C_Container.GetContainerItemQuestInfo`
+- `ItemButtonUtil.GetItemContextMatchResultForItem` and `ItemButtonUtil.GetItemContextMatchResultForContainer` — measured present on the live client 2026-10-17, so the context matcher for search/filtering is the client's own
 
 ### Forever does NOT have (classic-like, or absent entirely)
 - reagent bank tab (`REAGENT_BANK_TAB`)
 - Warbands / account (warbank) bank — `Enum.BagIndex.AccountBankTab_N` exists but is inert
 - item crafting quality overlays, pet-battle levels in tooltips
-- `ItemButtonUtil.GetItemContextMatchResultForContainer`
-- Blizzard auto-sort (`BlizzSortBags`)
+- `ItemButtonUtil` context matchers are **present** (see the HAS list above) — earlier doubt about them came from a source read, not from the client
+- Blizzard auto-sort (`BlizzSortBags`) — absent, measured on the live client
 
 Anything not in those two lists is **unverified**: confirm in-game or with
 `wow-ui-source` `origin/forever` before writing a code path for it. Add confirmed facts to this
@@ -93,6 +100,11 @@ table — this file is the client-fact cache.
 ### Forever UI toolkit (verified against `../wow-ui-source` `origin/forever`)
 
 Present, use these instead of any widget library:
+
+Frame **templates** (`ContainerFrameItemButtonTemplate`, `WowStyle1DropdownTemplate`,
+`PortraitFrameFlatTemplate`, …) are not globals — they resolve through the frame-tree registry, so
+`X ~= nil` reads false even when the client ships them. `/bos` does not probe templates; the test is
+building a frame with one.
 
 | Vanilla piece | Evidence on `origin/forever` |
 |---|---|
@@ -223,6 +235,10 @@ move our windows. ThreatMeter deliberately does not call it.
   the two references.
 - **Naming:** addon folder / `addonName` / repo = **`BagsOfSorting`**, TOC title **`Bags of Sorting`**
   (plural decided, `docs/07` Q1), SavedVariables `BagsOfSortingDB`, slash command `/bos`.
+  **To investigate:** the client writes the file as `SavedVariables/BagsOfSorting.lua` while the TOC
+  declares `BagsOfSortingDB` and the file's own contents assign `BagsOfSortingDB = { … }`. Data
+  persists correctly today; the file name simply does not match the declared name. Settle it before
+  the SavedVariables growth harness (issue #8) baselines a file path.
 - **File layout:** one concern per file, `core/`, `data/`, `layout/`, `frames/`, `config/`,
   `filters/`, `integrations/`, `util/`. **No `themes/`** (`docs/07` Q16: use the client's own bag
   visuals so the user's skinning addon works). Each directory gets a `README.md` (BetterBags does
@@ -253,11 +269,13 @@ luacheck .                      # lint (see .luacheckrc; WoW globals declared)
 lua5.1 tests/run.lua            # headless pipeline + classifier checks (phases 1-7 touch no frames)
 lua5.1 -e "loadfile('X.lua')"  # syntax-only smoke
 # install for in-game test: copy/symlink into ../addons/BagsOfSorting/
-# runnable in-game checks: the `spike` issues #1–#11  (/script works on Forever, gated)
+# in-game probes: /bos test <n>  (core/diag.lua) — 2 bank, 7 keybind, 11 new-item, 13 clock+cost
+# the manual half: tests/CHECKLIST.md; API questions: the `spike` issues #1–#11
 ```
 
-The harness in `tests/` is the smallest one M0 calls for: `luacheck` plus `/bos selftest`, which
-runs the same assertions `tests/run.lua` runs off the client. It proves the classifier and the
+The harness in `tests/` is the smallest one M0 calls for: `luacheck` plus `lua5.1 tests/run.lua`,
+which loads the real modules against a stubbed container API. `tests/` is **not in the TOC**, so the
+addon loads no test code in a dev checkout or in a release zip. It proves the classifier and the
 pipeline wiring — not the Forever API calls (hard rule 1).
 
 ---

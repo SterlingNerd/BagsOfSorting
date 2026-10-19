@@ -416,24 +416,6 @@ local tests = {
       { text = 'capture: which buttons are lit now', run = probes[11] },
     },
   },
-  [27] = {
-    issue = 27,
-    what = 'the /bos test capture path itself (the mechanism, not the client)',
-    needs = 'at an open bank with one item you can move back out again',
-    steps = {
-      { text = 'setup: which tests are pending, then start event logging', run = function()
-          local ids = {}
-          for _, t in ipairs(diag.Tests()) do ids[#ids + 1] = tostring(t.id) end
-          record('pending tests', table.concat(ids, ', '))
-          probes[3]()
-        end },
-      { text = 'deposit one item into the base grid, then withdraw it' },
-      { text = 'capture: stop event logging, then the container dump', run = function()
-          probes[3]()
-          probes[2]()
-        end },
-    },
-  },
   [22] = {
     issue = 22,
     what = "BetterBags' combat behaviour (input to the Q23 decision)",

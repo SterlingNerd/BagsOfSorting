@@ -214,11 +214,13 @@ check('tier-3 requests issued', pipeline.Last().requestsIssued, 1)
 -- /bos find: which container index holds an item. 1001 sits in the backpack, 999999 nowhere.
 check('find locates an item across container indices', addon.modules['Diag'].Find(1001), 1)
 check('find reports nothing for an absent item', addon.modules['Diag'].Find(999999), 0)
--- /bos test 3: the PLAYERBANKSLOTS_CHANGED payload read both ways, so the in-game paste carries
--- the answer rather than a bare number.
+-- /bos test 3: the PLAYERBANKSLOTS_CHANGED payload is a **bank bag slot 1..9**, not a container
+-- index (measured 2026-10-19), so the probe converts it the way Camelot does.
 local diag = addon.modules['Diag']
-check('bank slot payload read as a container index', diag.ExplainBankSlot(1), 'Bag 1 [1] 3 slots')
-check('bank slot payload read as a slot in the base grid', select(2, diag.ExplainBankSlot(1)), 'empty')
+_G.ITEM_INVENTORY_BANK_BAG_OFFSET = 5
+contents[7] = {}
+check('bank bag slot payload converts to its container index',
+  diag.ExplainBankSlot(2), 'bank bag slot 2 -> container [7] Bag 7 0 slots')
 check('bank slot payload ignores a non-number', diag.ExplainBankSlot(nil), nil)
 
 -- The keybind mirror (issue #13): the client writes our action to bindings-cache.wtf and it

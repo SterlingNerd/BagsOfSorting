@@ -9,10 +9,11 @@
 -- shortcut: backpack side only. Issue #9 (closed 2026-10-18) settled the bank side: index 6 is the
 -- 48-slot grid, 7..14 are the bank bag slots, and index 6 answers 0 slots while the bank is closed —
 -- so bank containers enter the discovered list on BANKFRAME_OPENED and leave on BANKFRAME_CLOSED.
--- A purchased bank bag (measured 2026-10-19) is part of that same paged grid: a 6-slot bag in the
--- first bank bag slot added 6 slots to the bank window and has no window of its own. Harvesting the
--- bank is therefore containers 6..14, nothing special-cased per bag. Wiring it is M5 work; the
--- index-level numbers for the purchased bag are issue #25.
+-- A purchased bank bag (measured 2026-10-19, issue #25) is a second container in that same paged grid:
+-- index 7 answers the slot count of the bag item placed in it (6 -> 0 -> 8 across a swap), `GetBagName`
+-- calls it `Bank` like every other bank container, and its contents read at index 7 with bag-relative
+-- slots. Harvesting the bank is therefore containers 6..14, nothing special-cased per bag. Wiring it is
+-- M5 work.
 
 local _, addon = ...
 

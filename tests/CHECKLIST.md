@@ -75,24 +75,6 @@ Measured 2026-10-18 (level 1, two bags equipped, no bank bag purchased): `grid c
 per page 88 page 1`, `[6] Bank 48`, `[7]..[14] Bank 0`, `bank bag 1..9 → 63..71`, total **116** =
 keyring 32 + backpack 20 + 6 + 6 + reagent 4 + grid 48. All four questions that run answers are closed.
 
-**Run D — with a purchased bank bag (issue #25).** Buy the slot, put a bag in it, then `/bos test 2`
-with the bank open. Run `/bos test 3` **before** a purchase and repeat after it, so the two events that
-need a purchase to fire are caught rather than assumed.
-
-| Line | Question it answers |
-|---|---|
-| `bank slot [7] … 6` | which index carries the purchased bag, and what `GetBagName` calls it |
-| `grid + bags 6..14 total slots …` | whether paging has to grow past one 88-slot page |
-| `purchased tab ids` | whether the bag slot appears in the API's own purchased-tab list |
-| `next purchasable tab cost / canAfford` | what the next slot costs and whether it is affordable |
-
-Observed 2026-10-19 (first bank bag slot bought, a 6-slot bag placed in it): the bank window gained
-**6 slots** (48 → 54), the bag **cannot be opened on its own**, and its contents **travel with it**
-between the bank and the character while still displaying in the bank. The window is one paged view over
-grid + bags — which is what `data/harvest.lua` reading 6..14 as plain containers already assumes.
-
-
-
 **Run B — bank closed: `/bos test 2` again** (`bank window shown false` is what tells the two
 pastes apart). Measured 2026-10-18: index 6 reads **0 slots closed, 48 open**, `FetchPurchasedBankTabData`
 returns 0 entries closed and 1 open, `CanPurchaseBankTab` flips to false, `FetchViewableBankTypes`
@@ -117,16 +99,59 @@ close the bank, re-open.
   with `BAG_UPDATE -1` alongside. The existing bucketed `BAG_UPDATE` listener covers bank refresh;
   no bank timer.
 - `ITEM_LOCK_CHANGED` slots are grid-relative inside container 6 (`6 1`, `6 48`), not a global bank
-  slot number.
-- **`PLAYERBANKSLOTS_CHANGED` never fired** across either run, through deposits and withdrawals. Bank
-  refresh is `BAG_UPDATE(6)` plus `ITEM_LOCK_CHANGED(6, slot)`; the payload question is moot.
+  slot number. Inside a bank bag they are bag-relative (`7 5`, `7 3`).
+- **`PLAYERBANKSLOTS_CHANGED` does not fire for deposits or withdrawals** across either run — bank
+  refresh is `BAG_UPDATE(6)` plus `ITEM_LOCK_CHANGED(6, slot)`. It **does** fire when the bag in a bank
+  slot changes, and then its payload is the bank bag slot 1..9, not a container index (Run D, 2026-10-19).
 
-**Still to run** — moved to **issue #25** when issue #9 closed:
+**Run D — with a purchased bank bag (issue #25).** Buy the slot, put a bag in it, then `/bos test 2`
+with the bank open. Run `/bos test 3` as **one** logging session — deposit into the bag → deposit into
+the grid → withdraw from the bag → take the bag out of the bank slot and put a different one in it →
+stop. Starting the logger a second time wipes the first run (probe 3 calls `fresh('bankEvents')`), and
+`/bos test 2` likewise keeps only its latest run per bucket, so run probe 2 **after** the actions.
 
-1. Once a bank bag is affordable, run A again: a purchased bag's slot count, whether 7..14 then
-   report real counts, and whether paging grows past one page.
-2. `BANK_TABS_CHANGED` and `BANK_BAG_SLOT_FLAGS_UPDATED` are still unobserved — run `/bos test 3`
-   across a purchase and see whether either fires.
+Measured 2026-10-19 (one bag slot owned; a 6-slot bag swapped out for an 8-slot Red Linen Bag):
+
+| Line | Answer |
+|---|---|
+| `bank slot [7] Bank 8` | the bag is container index **7**, and `GetBagName` calls it **`Bank`** — the same name as the grid and every unpurchased slot. The container API never reports the bag item's name |
+| `grid containers 2 total slots 56 per page 88 page 1`, `grid 6 48`, `grid 7 8` | the client's own panel builds the view from **two containers**, 6 and 7, on one page |
+| `purchased tab data 2` → `tab 6 Tab 1 … 48`, `tab 7 Tab 2 … 8` | the bag slot is a second `BankTabData` entry: `ID 7, "Tab 2", icon 134400, depositFlags 0` |
+| `purchased tab ids 6,7`, `tabs … purchased 2` | it is in the API's own purchased-tab list, and it counts as a purchased tab |
+| `grid + bags 6..14 total slots 56 — still one page`, `total container slots 124` | 48 + 8 = 56 bank slots, 124 across every index (was 116 with no bag) |
+| slot count across the swap | 6 → 0 → 8: **the container's slot count follows the bag item placed in it** |
+| `next purchasable tab cost 10000 canAfford false` | the next slot is 1 gold, rising per slot, and this character could not buy it |
+
+Events from the same session: `ITEM_LOCK_CHANGED 7 5` then `BAG_UPDATE 7` for a deposit **into the bag**
+(bag-relative slot 1..8), `ITEM_LOCK_CHANGED 7 3` then `BAG_UPDATE 7` for the withdraw, and
+`ITEM_LOCK_CHANGED 6 27` + `BAG_UPDATE 6` for the grid — so a bank bag's contents are read at its own
+container index. **`PLAYERBANKSLOTS_CHANGED` fires when the bag in a bank slot changes**, payload
+**`2` = bank bag slot 1..9, not a container index** (`ITEM_INVENTORY_BANK_BAG_OFFSET + 2 = 7`); moving
+the bag also fired `ITEM_LOCK_CHANGED 33` / `32` (one argument: an inventory slot) and `BAG_UPDATE 3`
+for the receiving character bag slot.
+
+Same run, one more fact: equipped bags read `[1] Small Red Pouch, [2] nil, [3] Scorched Leather Pouch`
+after the swap where the same session had read `[2] Scorched Leather Pouch, [3] nil` before it. The
+client re-slots equipped bags, so **character bag slot indices are positions, not identities**.
+
+`/bos find` prints to chat only — it is not captured in SavedVariables — so the bag-relative read above
+came from the event lines rather than from a `find` paste.
+
+**Run E — bag flags (issue #2's last step).** Two `/script` lines, both under the 255-character limit;
+CCat captures them into `out.txt`:
+
+```
+/script for i=0,NUM_TOTAL_EQUIPPED_BAG_SLOTS do local f={} for n,v in pairs(Enum.BagSlotFlags) do if C_Container.GetBagSlotFlag(i,v) then f[#f+1]=n end end print(i,C_Container.GetBagName(i),table.concat(f,',')) end
+```
+```
+/script for i=6,14 do local f={} for n,v in pairs(Enum.BagSlotFlags) do if C_Container.GetBagSlotFlag(i,v) then f[#f+1]=n end end print(i,C_Container.GetBagName(i),table.concat(f,',')) end
+```
+
+Measured 2026-10-19: **every container printed with no flags** — the equipped pouches, the reagent bag
+(`Apprentice's Herb Pouch`, index 5) and bank containers 6..14 alike.
+
+**Still to run**, both gated on gold: `BANK_TABS_CHANGED` / `BANK_BAG_SLOT_FLAGS_UPDATED` need a real
+purchase, and paging past one page needs grid + bags > 88 (48 plus three 20-slot bank bags).
 
 **Record:** the buckets as a dated comment on the issue, then the verdicts into `agents.md` and
 `docs/07` Q10 — done for the 2026-10-18 run.

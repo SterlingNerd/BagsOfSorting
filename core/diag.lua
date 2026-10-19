@@ -90,10 +90,10 @@ probes[2] = function()
       end
     end
 
-    -- Purchased-bag shape (issue #25). Observed 2026-10-19: buying the first bank bag slot and putting
-    -- a 6-slot bag in it added 6 slots to the bank window, the bag cannot be opened on its own, and its
-    -- contents travel with it between the bank and the character. So the window is one paged view over
-    -- grid + bags, and the number that decides paging is the sum across 6..14 against 88 slots a page.
+    -- Purchased-bag shape (issue #25, measured 2026-10-19): the bag sits at index 7, is named `Bank`
+    -- like every other bank container, and answers the slot count of whatever bag item is placed in it
+    -- (6 -> 0 -> 8 across a swap). The panel lists it as a second container in the same paged grid.
+    -- What these lines still watch for: paging past one 88-slot page, and a second bag slot appearing.
     local gridIndex = (ITEM_INVENTORY_BANK_BAG_OFFSET or 5) + 1
     local bankTotal = 0
     for index = gridIndex, gridIndex + (NUM_CHARACTER_BANK_SLOTS or 9) - 1 do
@@ -135,26 +135,22 @@ local BANK_EVENTS = {
   'PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED', 'ITEM_LOCK_CHANGED', 'BAG_UPDATE',
 }
 
---- Is the number in PLAYERBANKSLOTS_CHANGED a container index or a slot inside the grid? Read it
---- both ways at fire time, so the paste carries the answer instead of a number a human has to
---- cross-reference against probe 2 afterwards.
----@param slot number?
+--- PLAYERBANKSLOTS_CHANGED carries a **bank bag slot number 1..9**, not a container index (measured
+--- 2026-10-19: payload 2 twice, once per change of the bag in bank slot 2). Camelot converts it the
+--- same way — `ITEM_INVENTORY_BANK_BAG_OFFSET + bagSlot` — so the probe prints the container it means.
+---@param bagSlot number?
 ---@return string? asContainer
----@return string? asGridSlot
-function diag.ExplainBankSlot(slot)
-  if type(slot) ~= 'number' then return nil end
-  local gridIndex = (ITEM_INVENTORY_BANK_BAG_OFFSET or 5) + 1
-  local _, name = pcall(C_Container.GetBagName, slot)
-  local okSlots, slots = pcall(C_Container.GetContainerNumSlots, slot)
+function diag.ExplainBankSlot(bagSlot)
+  if type(bagSlot) ~= 'number' then return nil end
+  local container = (ITEM_INVENTORY_BANK_BAG_OFFSET or 5) + bagSlot
+  local _, name = pcall(C_Container.GetBagName, container)
+  local okSlots, slots = pcall(C_Container.GetContainerNumSlots, container)
   local asContainer = okSlots
-    and (tostring(name) .. ' [' .. slot .. '] ' .. tostring(slots) .. ' slots')
-    or ('[' .. slot .. '] not a container')
-  local okItem, info = pcall(C_Container.GetContainerItemInfo, gridIndex, slot)
-  local asGridSlot = (okItem and info and info.itemID)
-    and (tostring(info.itemName) .. ' x' .. tostring(info.stackCount or 1)) or 'empty'
-  say('    as container index: ' .. asContainer)
-  say(string.format('    as slot in grid [%d]: %s', gridIndex, asGridSlot))
-  return asContainer, asGridSlot
+    and string.format('bank bag slot %d -> container [%d] %s %s slots',
+      bagSlot, container, tostring(name), tostring(slots))
+    or string.format('bank bag slot %d -> container [%d] not a container', bagSlot, container)
+  say(asContainer)
+  return asContainer
 end
 
 --- 3 — what drives a bank refresh (issue #9 steps 10-11). Run at the bank to start logging, do

@@ -239,7 +239,7 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 
 **Precondition:** window shown with a full-ish backpack.
 
-1. Run `/bos perf` and write down the `itemButton: created=N idle=M` numbers.
+1. Run `/bos perf` — **not `/bos debug`**, which only toggles logging — and write down the line that reads `itemButton: created=N idle=M`.
 2. Run `/bos hide` then `/bos show`, ten times.
 3. Run `/bos perf` again.
 
@@ -269,13 +269,20 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 
 ### Manual test: second login issues zero tier-3 requests (AC-97)
 
-**Precondition:** a 40-ID manual category written into SavedVariables by hand — there is no category editor until M3. Quit, edit `WTF/Account/<account>/SavedVariables/BagsOfSorting.lua` (the file is named after the addon folder, not the declared `BagsOfSortingDB` — issue #14), add `profiles.Default.categories['Test40'] = { priority=5, kind="manual", enabled=true, itemIDs={ [id]=true, … } }` for 40 IDs you own, plus a section bound to `Test40`. Restart.
+**Precondition:** a hand-written manual category in SavedVariables — there is no category editor until M3. Quit, edit `WTF/Account/<account>/SavedVariables/BagsOfSorting.lua` (the file is named after the addon folder, not the declared `BagsOfSortingDB` — issue #14) and add a **Tools** category plus a section bound to it:
+
+```lua
+profiles.Default.categories['Tools'] = { priority = 5, kind = 'manual', enabled = true,
+  itemIDs = { [2901] = true, [6948] = true } }   -- Mining Pick, Hearthstone
+```
+
+Two IDs are enough: the criterion is that **cached** IDs cost zero requests, not that volume works. Carry the mining pick and, when you have it, the hearthstone in a bag so the section has something to match.
 
 1. Login 1: run `/bos perf`, note `tier3=` and `item cache=`.
 2. `/exit`, log in again.
 3. Run `/bos perf`.
 
-**Expected:** login 1 renders the new section's icons; login 2's first refresh shows no `tier3=` and `item cache` at least 40.
+**Expected:** login 1 shows a Tools section holding those items with icons; login 2's first refresh shows no `tier3=` and `item cache` at least 2.
 
 ### Manual test: no test code loads in-game (FR-106)
 

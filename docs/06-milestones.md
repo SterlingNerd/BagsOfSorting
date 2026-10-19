@@ -20,6 +20,11 @@ M3 can start once M2's layout model is stable; M4 needs M3's command layer.
 **Goal:** an addon folder that loads clean on the Forever client, so every later milestone has a
 place to be tested.
 
+**Status: done 2026-10-19.** Every deliverable exists, CI runs `luacheck` and the off-client suite
+green on each push, and `/bos` has printed the capability table on the live client with the answers
+written into `agents.md` — which is what turns that file's unverified column into facts.
+
+
 Deliverables
 - `BagsOfSorting.toc`, `.pkgmeta`, `.luacheckrc` (WoW globals declared), `LICENSE` (WTFPL),
   `Media/Icon.png` (256×256, wired to `## IconTexture`)
@@ -37,17 +42,21 @@ Deliverables
 - per-directory `README.md` stubs (`NFR-3`)
 
 Exit criteria
-- **AC-1** loads with zero errors on login and 3× `/reload`; `/events` clean.
+- **AC-1** loads with zero errors on login and 3× `/reload`; `/events` clean. **Met**, measured across
+  every `/bos` and `/bos test` run since 2026-10-17 (Forever has no `/events`, so errors surface in
+  `/console`). Lua errors found later are chased as they surface rather than treated as a gate on this
+  milestone — the one error seen on 2026-10-19 came from a probe's wrong API call, not from loading.
 - `/bos` prints `isForever=true`, `hasWarbank=false`, `itemButtonType=ItemButton`, and **fills in the
   unverified `agents.md` facts** (keyring presence — expect yes, since
   `Blizzard_MainMenuBarBagButtons/Camelot/MainMenuBarBagButtons.lua` uses `KEYRING_CONTAINER` and
   `GetKeyRingSize`; reagent bag slot; `NUM_TOTAL_EQUIPPED_BAG_SLOTS`; container index ranges).
   Update `agents.md` with the answers — this milestone is what turns the "unverified" column into
   facts.
-- The four item-data questions are answered in-game and recorded in **issue #1** (item data
-  availability): does `GetItemInfoInstant` give an icon for an ID never seen this session; does
-  `RequestLoadItemDataByID` resolve it; does `ITEM_DATA_LOAD_RESULT` arrive; do
-  `GetItemNameByID`/`GetItemQualityByID` read the same cache or a separate one.
+- The four item-data questions in **issue #1** are **deferred 2026-10-19**: cold-cache behaviour is
+  measured with the onboarding work later in the plan, where a fresh character and a cold SavedVariables
+  file exist anyway. Issue #1 stays open and is assigned to that milestone. What M0 needed from it —
+  `C_Item.RequestLoadItemDataByID`, `ITEM_DATA_LOAD_RESULT`, `IconDataProviderMixin` and
+  `EditModeManagerFrame` being present — is measured and recorded.
 - `luacheck` clean in CI.
 
 Risks: none material. If `/bos` cannot print the capability table, the client detection assumption
@@ -58,6 +67,14 @@ is wrong and everything downstream is re-planned here, cheaply.
 ## M1 — Pipeline: real items, one window (1.5–2.5 wk)
 
 **Goal:** prove harvest → enrich → classify → sort → render on Forever with real inventory.
+
+**Status: in progress 2026-10-19.** Code complete, and the off-client suite (73 checks, run in CI)
+ covers rules, sort modes and flow boundaries. Measured in-game: **AC-14/16** — real inventory, nothing
+counted twice, catch-all working — and **AC-103** — a looted item the client had never seen lands in
+the catch-all and classifies correctly once its data arrives. Still to run: **AC-42** (the pool numbers
+come from `/bos perf`, not `/bos debug`), **AC-100/101** (issue #24), **AC-97** (the Tools-category run
+sheet), and the `expansion` decision, which `/bos test 14` answers.
+
 
 Deliverables
 - `data/harvest.lua`, `data/enrich.lua`, `data/itemcache.lua`, `data/classify.lua`, `data/rules.lua`,

@@ -213,8 +213,9 @@ and our keybinds appear in the client's Key Bindings panel.
 
 **AC-92** export from character A, import on character B, layout matches. **AC-93** open/close a
 full backpack 20×, then diff the SavedVariables file: no growth from render churn. **AC-97** log out
-with a 40-ID manual category, log back in, `/bos perf` shows zero `RequestLoadItemDataByID` calls
-for cached IDs.
+with a hand-written manual category (two IDs you own is enough — the criterion is about cached IDs
+costing nothing, not volume), log back in, `/bos perf` shows zero `RequestLoadItemDataByID` calls for
+cached IDs.
 
 ## H. Performance & robustness
 

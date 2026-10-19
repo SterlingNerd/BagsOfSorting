@@ -134,7 +134,8 @@ end
 local HELP = {
   '/bos            client capability dump + harvested containers',
   '/bos perf       last refresh timings, pool and item-cache stats',
-  '/bos test <n>   in-game probe: 2 bank containers, 3 bank events, 7 keybind, 11 new-item, 13 clock+cost',
+  '/bos test <n>   in-game probe: 2 bank containers, 3 bank events, 7 keybind, 11 new-item, '
+    .. '13 clock+cost, 14 expansion field',
   '/bos find <id>  which container index holds that item',
   '/bos refresh    re-run the pipeline',
   '/bos show|hide  show or hide the sorting windows',

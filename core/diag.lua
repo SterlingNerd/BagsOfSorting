@@ -250,6 +250,64 @@ probes[13] = function()
   diag.Bench()
 end
 
+--- 14 — is the `expansion` field readable here, and is position 15 of C_Item.GetItemInfo really the
+--- expansion ID? `data/enrich.lua` reads it as the 15th return, so a wrong position misclassifies
+--- every expansion rule without ever erroring. M1's risk list asks whether expansion is cheap enough
+--- to keep in the v1 field set (docs/02 FR-21). Run it with items in your bags: it only reads.
+probes[14] = function()
+  fresh('expansion')
+  local harvest = addon:GetModule('Harvest')
+  local enrich = addon:GetModule('Enrich')
+  local field = addon:GetModule('FieldRegistry').Get('expansion')
+  local labels = {}
+  for _, v in ipairs(field and field.values() or {}) do labels[v.v] = v.label end
+
+  local items = harvest.Items()
+  say('harvested items', #items)
+  if #items == 0 then
+    say('nothing in the bags to read — pick up an item first')
+    return
+  end
+
+  -- The whole return list, numbered, for one item: position 15 has to be checked against the
+  -- name/quality/ilvl around it, not trusted from another client's ordering.
+  local first = items[1].itemID
+  local rets = { pcall(C_Item.GetItemInfo, first) }
+  if rets[1] then
+    say(string.format('C_Item.GetItemInfo(%d) returns by position:', first))
+    for i = 2, #rets do say(string.format('  %d %s', i - 1, tostring(rets[i]))) end
+  else
+    say(string.format('C_Item.GetItemInfo(%d) errored: %s', first, tostring(rets[2])))
+  end
+
+  local full = enrich.ReadFull(first)
+  say('enrich.ReadFull position 15 -> expansion', full and tostring(full.expansion) or 'nil',
+    labels[full and full.expansion or -1] or '')
+
+  -- The free read only: ReadFull never issues a request, so this is what a refresh can know
+  -- without waiting for tier 3.
+  local answered, withExpansion, values = 0, 0, {}
+  for _, item in ipairs(items) do
+    local read = enrich.ReadFull(item.itemID)
+    if read then
+      answered = answered + 1
+      if read.expansion ~= nil then
+        withExpansion = withExpansion + 1
+        values[read.expansion] = (values[read.expansion] or 0) + 1
+      end
+    end
+  end
+  say('free read answered', answered, 'of', #items, 'items; expansion present', withExpansion)
+  for id, count in pairs(values) do
+    say(string.format('  expansion %s (%s) x%d', tostring(id), labels[id] or 'unknown', count))
+  end
+  say('verdict: expansion is',
+    answered == 0 and 'NOT readable without a request — drop the field (docs/02 FR-21)'
+    or (withExpansion == 0 and 'readable but always nil — drop the field (docs/02 FR-21)'
+      or 'readable for items the client already knows'))
+end
+
+
 --- Which container index holds this item? Answers "is the base grid a container?" with an item you
 --- can see and place on purpose, rather than with slot arithmetic. Read-only: `GetContainerItemInfo`
 --- reads, it builds nothing (agents.md hard rule 8).
@@ -281,7 +339,7 @@ function diag.Run(n)
   local probe = probes[n]
   if not probe then
     print('probes: 2 bank containers (#9) · 3 bank events (#9) · 7 keybind persistence '
-      .. '· 11 new-item textures · 13 clock + pipeline cost')
+      .. '· 11 new-item textures · 13 clock + pipeline cost · 14 expansion field')
     return
   end
   local ok, err = pcall(probe)

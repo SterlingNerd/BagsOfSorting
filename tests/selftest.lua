@@ -229,16 +229,17 @@ local function testFlow(state)
     constants.WINDOW_TITLE_HEIGHT + CELL + constants.WINDOW_PADDING)
 end
 
---- `/bos perf` reports the refresh's own total, not the time elapsed since it started (AC-100).
+--- `/bos perf` says plainly that a single-frame refresh cannot be timed here, and still keeps the
+--- captured total for a cross-frame harness (AC-100, issue #20).
 ---@param state BoSTestState
 local function testContext(state)
   local context = addon:GetModule('Context')
   local ctx = context.New('test')
   context.MarkPhase(ctx, 'harvest')
   context.Finish(ctx)
-  local printed = context.Format(ctx):match('total=([%d%.]+)')
-  check(state, 'format reports the captured total', tonumber(printed),
-    tonumber(string.format('%.1f', ctx.totalMs)))
+  check(state, 'format says a single-frame refresh is untimed instead of printing 0.00',
+    context.Format(ctx):match('unmeasurable in one frame') ~= nil, true)
+  check(state, 'the refresh total is still captured', ctx.totalMs ~= nil, true)
   check(state, 'a phase is recorded', ctx.phases.harvest ~= nil, true)
 end
 

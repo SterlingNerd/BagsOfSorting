@@ -68,12 +68,17 @@ is wrong and everything downstream is re-planned here, cheaply.
 
 **Goal:** prove harvest → enrich → classify → sort → render on Forever with real inventory.
 
-**Status: in progress 2026-10-19.** Code complete, and the off-client suite (73 checks, run in CI)
- covers rules, sort modes and flow boundaries. Measured in-game: **AC-14/16** — real inventory, nothing
-counted twice, catch-all working — and **AC-103** — a looted item the client had never seen lands in
-the catch-all and classifies correctly once its data arrives. Still to run: **AC-42** (the pool numbers
-come from `/bos perf`, not `/bos debug`), **AC-100/101** (issue #24), **AC-97** (the Tools-category run
-sheet), and the `expansion` decision, which `/bos test 14` answers.
+**Status: in progress 2026-10-19.** Code complete, and the off-client suite (83 checks, run in CI)
+covers rules, the priority ladder, sort modes and flow boundaries. Measured in-game: **AC-14/16** — real
+inventory, nothing counted twice, grey items in Junk, armour in Armor, the rest in the catch-all —
+**AC-103** — a looted item the client had never seen lands in the catch-all and classifies correctly once
+its data arrives — and **AC-100/101** (2.20 ms per refresh on build 70450). The `expansion` question is
+answered and the field is out of the v1 set.
+
+Left, all of it in-game: the **priority ladder** on the real item (5411 Winterhoof Cleansing Totem is
+Armor *and* a quest item, so it must land in Quest Items), **AC-97** with the shipped Tools category,
+and **AC-42** (pool numbers come from `/bos perf`, not `/bos debug`). All three are run sheets in
+`tests/CHECKLIST.md`; the first two are tracked as **issue #26**.
 
 
 Deliverables
@@ -123,8 +128,9 @@ Risks
   `C_Item.GetItemInfo` is confirmed as `expansionID` against `ItemDocumentation.lua` — but all 14 items
   in the real inventory report `0` (Classic), so the field cannot discriminate on a Vanilla-ruleset
   client. Removed from the v1 field set (`docs/02` FR-21) as a recorded removal, not a silent gap.
-- Secret-value handling for `C_Item` on Forever: verify `ItemLocation:CreateFromBagAndSlot` paths
-  work for bank tabs.
+- Secret-value handling for `C_Item` on Forever: verify `ItemLocation:CreateFromBagAndSlot` paths work
+  for bank tabs. **Moves to M5** (2026-10-19): nothing harvests a bank container until the bank wiring
+  lands there, so there is nothing to verify at M1.
 
 ---
 

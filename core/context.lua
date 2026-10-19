@@ -58,19 +58,14 @@ end
 ---@param ctx BoSContext
 ---@return string
 function context.Format(ctx)
-  local total = ctx.totalMs or (GetTime() - ctx.started) * 1000
-  local parts = { string.format('refresh(%s) total=%.1fms', ctx.reason, total) }
-  local order = { 'harvest', 'enrich', 'classify', 'assign', 'sort', 'flow', 'render' }
-  local last = 0
-  for _, phase in ipairs(order) do
-    local t = ctx.phases[phase]
-    if t then
-      -- Two decimals: a level-1 backpack measures under 0.1ms per phase, and 0.0 records nothing
-      -- (AC-100/101 ask for numbers).
-      parts[#parts + 1] = string.format('%s=%.2f', phase, t - last)
-      last = t
-    end
-  end
+  -- No phase deltas and no total: GetTime is frame-quantized on Forever, and every phase plus the
+  -- refresh total happens inside one frame, so each of them prints 0.00 and reads as a pass. A
+  -- number that is always zero is worse than no number (issue #20). The figure AC-100/AC-101
+  -- records is the across-frames one from `/bos test 13`; MarkPhase stays as the hook a
+  -- cross-frame harness would use.
+  local parts = { string.format(
+    'refresh(%s) timings: unmeasurable in one frame (GetTime is frame-quantized) — /bos test 13 measures across frames',
+    ctx.reason) }
   if ctx.requestsIssued > 0 then
     parts[#parts + 1] = string.format('tier3=%d', ctx.requestsIssued)
   end

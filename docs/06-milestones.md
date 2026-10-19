@@ -71,8 +71,9 @@ Deliverables
 - one hardcoded window ("Backpack") with 3 hardcoded categories (Junk / Armor / Everything-else)
   written **in the data model**, not in code — so the schema is exercised from day one
 - `core/async.lua` chunking + `core/events.lua` bucketing
-- `/bos perf` printing ms per pipeline phase, including item-data requests issued (**issue #20**: phase
-  deltas are unmeasurable on this client — `GetTime` is frame-quantized; `/bos test 13` measures across frames)
+- `/bos perf` reporting what a refresh did (item-data requests issued, pool stats) and `/bos test 13` for
+  ms per refresh (**issue #20** closed: `GetTime` is frame-quantized, so `/bos perf` says it cannot time a
+  single-frame refresh instead of printing `0.00` per phase)
 - `Bindings.xml` + `config/keybinds.lua` and the Options → AddOns category from `config/settingspanel.lua`
   (`FR-64`, `FR-88`, pulled forward from M6: a prototype with no keybind entry and no options entry
   is one the player cannot find or configure). **Issue #13** closed: the binding does persist —
@@ -324,7 +325,7 @@ Exit criteria
 - **AC-66, AC-67, AC-68** affinity compaction, empty-bag, and combat refusal all behave as written in
   `docs/02`.
 - **AC-124** run alongside `ForeverPlus`, `Leatrix_Plus`, `Baggins`, `BetterBags`; record what breaks.
-- `/bos perf` numbers meet or beat the M1-recorded numbers after the feature load.
+- `/bos test 13` numbers meet or beat the M1-recorded numbers after the feature load.
 - **NFR-1** own-code LOC check: under ~8,000. If over, write down which module blew up and why.
 
 ---

@@ -419,5 +419,5 @@ an invertible command, it does not ship.
 | Fix a miscategorized item in ≤ 3 interactions | right-click → Exclude from category → done |
 | Add 40 known item IDs to a category in ≤ 3 interactions | paste → Apply → done |
 | Zero interactions to understand why an item is where it is | inspector is one right-click away |
-| Category editor list updates within 1 frame of a chip edit | `/bos perf` logs editor latency |
+| Category editor list updates within 1 frame of a chip edit | observed in-game; `/bos perf` cannot time a single frame (issue #20) |
 | A config with dozens of categories and a hundred-plus sections is navigable | the `docs/01` shape rebuilt in ≤ 30 minutes, utility panes used only for Find |

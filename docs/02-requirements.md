@@ -82,7 +82,7 @@ right-click a misfiled item → Exclude from category → it is gone on the next
 `/reload`.
 **AC-23** two categories both matching an epic sword; changing priority 10→5 moves it, live, no
 reload. **AC-27** right-click any item → "Why here?" and confirm the named rule is the one you
-wrote. **AC-26** editing one rule re-classifies only the affected categories — `/bos perf` shows the phase delta.
+wrote. **AC-26** editing one rule re-classifies only the affected categories — verified by what actually re-classifies, not by a phase delta (`/bos perf` cannot time phases on this client, issue #20).
 **AC-28** save a search as a category; loot a new matching item; it lands in that category.
 **AC-29** create a category with no rules → UI says it matches nothing.
 
@@ -229,7 +229,7 @@ for cached IDs.
 | FR-106 | S | The fixture-based classifier assertions run **off the client** (`lua5.1 tests/run.lua`, run by CI). The addon loads no test code: `tests/` is not in the TOC and is excluded from the release package. |
 | FR-107 | S | Log-only failure: a rule that errors is disabled and reported, not allowed to break the refresh loop. |
 
-**AC-100/101** measured with a profiling command (`/bos perf`) printing ms per phase. **AC-103**
+**AC-100/101** measured with `/bos test 13` (ms per refresh sampled across frames) plus `/bos perf` for what a refresh did; per-phase ms is unmeasurable on this client (issue #20). **AC-103**
 loot a never-seen item, confirm it lands in the catch-all first and moves to the correct category
 within 2 s; then `/script C_Item.RequestLoadItemDataByID(26042)` on an item never seen and confirm
 the pending button resolves without a reload.

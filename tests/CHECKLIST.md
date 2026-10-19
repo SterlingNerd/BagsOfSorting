@@ -250,7 +250,7 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 **Precondition:** a normally full backpack (not a level-1 character), windows open.
 
 1. Run `/bos test 13`. It first measures the clock (1e6 Lua iterations) and then runs the pipeline many times across frames.
-   If the clock line reports `0`, `GetTime` is frame-quantized on this client — which it is, measured 2026-10-17 — so every per-phase number in `/bos perf` reads `0.00` no matter how slow the pipeline is. Record that before reading any timing.
+   If the clock line reports `0`, `GetTime` is frame-quantized on this client — measured 2026-10-17 — which is why `/bos perf` prints `timings: unmeasurable in one frame` instead of per-phase numbers (issue #20). The `bench:` line is the timing that gets recorded.
 2. Run `/bos perf` five times for the pool and cache numbers.
 3. Paste the clock line, the `bench:` line and the five `/bos perf` lines into the M1 entry in `docs/06` with the date and patch.
 

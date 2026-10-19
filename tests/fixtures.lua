@@ -45,6 +45,23 @@ fixtures.items = {
     type = 'Tradeskill', subtype = 'Cloth', equipSlot = 'INVTYPE_NON_EQUIP', classID = 7, subClassID = 5,
     isQuestItem = false, stackCount = 8, bagID = 1, slot = 2, dataReady = true,
   },
+  -- Three real items, copied from the live item cache. 5411 is the one that matters: it is **type
+  -- Armor and a quest item**, so where it lands is a priority question, not a rule question.
+  {
+    itemID = 5411, name = 'Winterhoof Cleansing Totem', quality = 1, ilvl = 1, expansion = 0,
+    type = 'Armor', subtype = 'Miscellaneous', equipSlot = 'INVTYPE_NON_EQUIP',
+    isQuestItem = true, stackCount = 1, bagID = 0, slot = 5, dataReady = true,
+  },
+  {
+    itemID = 2901, name = 'Mining Pick', quality = 1, ilvl = 4, expansion = 0,
+    type = 'Weapon', subtype = 'Miscellaneous', equipSlot = 'INVTYPE_WEAPON',
+    isQuestItem = false, stackCount = 1, bagID = 0, slot = 6, dataReady = true,
+  },
+  {
+    itemID = 6948, name = 'Hearthstone', quality = 1, ilvl = 1, expansion = 0,
+    type = 'Miscellaneous', subtype = 'Junk', equipSlot = 'INVTYPE_NON_EQUIP',
+    isQuestItem = false, stackCount = 1, bagID = 1, slot = 3, dataReady = true,
+  },
 }
 
 ---@return BoSItem[]

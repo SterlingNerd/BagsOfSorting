@@ -125,7 +125,19 @@ close the bank, re-open.
 5. Add up the item counts across the window's sections.
 6. Scan for any item drawn in two sections.
 
-**Expected:** every container you own appears exactly once; each `filled` matches the stock window; section totals equal the sum of `filled`; no item appears twice; the grey item is in **Junk**, the armour in **Armor**, everything else in **Everything else**.
+**Expected:** every container you own appears exactly once; each `filled` matches the stock window; section totals equal the sum of `filled`; no item appears twice; the grey item is in **Junk**, the armour in **Armor**, everything else in **Everything else**. Measured 2026-10-19: containers once each, no duplicates, grey items in Junk, armour in Armor, the rest in Everything else.
+
+### Manual test: the priority ladder (issue #26)
+
+**Precondition:** the mining pick (2901) and, above all, **5411 Winterhoof Cleansing Totem** in a bag — it is `type = Armor` *and* a quest item, so two categories claim it.
+
+1. `/reload` so schema version 2 runs and adds Quest Items and Tools.
+2. `/bos show`.
+3. Find 5411 in the window.
+4. Find the mining pick.
+5. Run `/bos find 5411` and `/bos find 2901` to confirm they are where the window says they are.
+
+**Expected:** section order Junk, Quest Items, Tools, Armor, Everything else. 5411 sits in **Quest Items**, not Armor (priority 5 beats 20). The mining pick sits in **Tools**, not Everything else, even though it is a Weapon — a curated list beats a type rule (8 beats 20). A grey item still lands in **Junk** (10 beats 20). If 5411 is still in Armor the migration did not run: check `version` in the SavedVariables file is 2.
 
 ### Manual test: window sits above the bags bar, not on it (FR-41)
 
@@ -269,23 +281,7 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 
 ### Manual test: second login issues zero tier-3 requests (AC-97)
 
-**Precondition:** a hand-written manual category in SavedVariables — there is no category editor until M3. Quit, edit `WTF/Account/<account>/SavedVariables/BagsOfSorting.lua` (the file is named after the addon folder, not the declared `BagsOfSortingDB` — issue #14) and add a **Tools** category plus a section bound to it:
-
-```lua
--- inside ["profiles"] = { ["Default"] = { ["categories"] = {
-["Tools"] = {
-  ["enabled"] = true,
-  ["kind"] = "manual",
-  ["priority"] = 15,
-  ["duplicate"] = false,
-  ["itemIDs"] = { [2901] = true, [6948] = true },   -- Mining Pick, Hearthstone
-},
-
--- and inside that window's ["sections"] list, next to s1 / s2 / s3
-{ ["id"] = "s4", ["name"] = "Tools", ["categories"] = { "Tools" } },
-```
-
-Two IDs are enough: the criterion is that **cached** IDs cost zero requests, not that volume works. Carry the mining pick (and the hearthstone when you have it) in a bag so the section has something to match. **No Tools category appears until this edit is made** — the addon ships Junk / Armor / Everything else and never invents categories.
+**Precondition:** the shipped **Tools** category (Mining Pick 2901, Hearthstone 6948). It arrives with schema version 2 (`core/db.lua` `MIGRATIONS[2]`, issue #26), which adds it to a SavedVariables file that already exists without touching the window position, the item cache or the existing sections — no hand editing. Carry both items in a bag so the section has something to match. Two IDs are enough: the criterion is that **cached** IDs cost zero requests, not that volume works.
 
 1. Login 1: run `/bos perf`, note `tier3=` and `item cache=`.
 2. `/exit`, log in again.

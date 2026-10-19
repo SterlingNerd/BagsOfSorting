@@ -14,7 +14,7 @@ local db = addon:NewModule('DB')
 
 local log = addon:GetModule('Log')
 
-db.CURRENT_VERSION = 1
+db.CURRENT_VERSION = 2
 
 ---@class BoSSettings
 -- Only settings something actually reads are present (FR-80: a setting with no UI home is
@@ -39,13 +39,35 @@ local DEFAULT_PROFILE = {
       compact = false,
       scale = 1.0,
       sections = {
+        -- Section ids are not renumbered: a file already in the wild holds s1..s3, and migration 2
+        -- appends s4/s5 to it. Display order is this list; classification order is category priority.
         { id = 's1', name = 'Junk', categories = { 'Junk' } },
+        { id = 's4', name = 'Quest Items', categories = { 'Quest Items' } },
+        { id = 's5', name = 'Tools', categories = { 'Tools' } },
         { id = 's2', name = 'Armor', categories = { 'Armor' } },
         { id = 's3', name = 'Everything else', categories = { '__catchall' } },
       },
     },
   },
   categories = {
+    -- Priority is the ladder the classifier walks, ascending (docs/04 §Precedence 1). A quest item
+    -- must never fall to a generic rule, and a curated manual list beats a generic rule too.
+    ['Quest Items'] = {
+      priority = 5,
+      kind = 'rules',
+      enabled = true,
+      duplicate = false,
+      -- The same flag the tooltip's red "Quest item" line comes from: the harvest reads it from
+      -- C_Container.GetContainerItemQuestInfo, not from the tooltip.
+      rules = { op = 'all', children = { { field = 'isQuestItem', cmp = '=', value = true } } },
+    },
+    ['Tools'] = {
+      priority = 8,
+      kind = 'manual',
+      enabled = true,
+      duplicate = false,
+      itemIDs = { [2901] = true, [6948] = true },   -- Mining Pick, Hearthstone
+    },
     ['Junk'] = {
       priority = 10,
       kind = 'rules',
@@ -81,6 +103,36 @@ end
 
 --- Migrations are numbered, additive, pure functions over the profile table (docs/04).
 local MIGRATIONS = {}
+
+--- 1 → 2: the shipped category set grew (Quest Items, Tools) and the window gained their sections.
+--- Additive and idempotent — a profile that already has a category or a section keeps what it has —
+--- and new sections land **before** the catch-all so the layout still ends with "Everything else".
+MIGRATIONS[2] = function(profile)
+  profile.categories = profile.categories or {}
+  for name, category in pairs(DEFAULT_PROFILE.categories) do
+    if profile.categories[name] == nil then
+      profile.categories[name] = deepCopy(category)
+    end
+  end
+  for _, window in ipairs(profile.windows or {}) do
+    window.sections = window.sections or {}
+    local have = {}
+    for _, section in ipairs(window.sections) do have[section.name] = true end
+    for _, section in ipairs(DEFAULT_PROFILE.windows[1].sections) do
+      if not have[section.name] and section.categories[1] ~= '__catchall' then
+        local at = #window.sections + 1
+        for i, existing in ipairs(window.sections) do
+          if existing.categories[1] == '__catchall' then
+            at = i
+            break
+          end
+        end
+        table.insert(window.sections, at, deepCopy(section))
+      end
+    end
+  end
+end
+
 
 function db.Migrate()
   while db.sv.version < db.CURRENT_VERSION do

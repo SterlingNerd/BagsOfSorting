@@ -175,7 +175,7 @@ local function testRules(state)
   check(state, 'quality >= 3 matches epic', matched, true)
 end
 
---- FR-46: every sort mode, over the same seven fixtures. 1005 has no name, quality, ilvl or
+--- FR-46: every sort mode, over the same ten fixtures. 1005 has no name, quality, ilvl or
 --- expansion, so the `or ''` / `or 0` guards in data/sort.lua decide where it lands.
 ---@param state BoSTestState
 local function testSort(state)
@@ -183,7 +183,7 @@ local function testSort(state)
   local fixtures = addon:GetModule('Fixtures')
 
   local ENDS = {
-    nameThenQuality = { 1005, 1002 },
+    nameThenQuality = { 1005, 5411 },
     qualityThenName = { 1003, 1001 },
     ilvl = { 1003, 1004 },
     expansion = { 1005, 26042 },

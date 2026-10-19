@@ -85,8 +85,10 @@ Deliverables
 - `filters/registry.lua` + 7 fields: `type`, `subtype`, `quality`, `ilvl`, `name`, `equipSlot`,
   `isQuestItem` (`expansion` measured out of the v1 set — see Risks below)
 - `frames/window.lua`, `frames/item.lua` (pooled, `ItemButton` type), `frames/section.lua`
-- one hardcoded window ("Backpack") with 3 hardcoded categories (Junk / Armor / Everything-else)
-  written **in the data model**, not in code — so the schema is exercised from day one
+- one hardcoded window ("Backpack") with 5 hardcoded categories — Quest Items, Tools (manual:
+  Mining Pick, Hearthstone), Junk, Armor, Everything-else — written **in the data model**, not in
+  code, so the schema is exercised from day one, plus a schema version 2 migration that adds them to a
+  SavedVariables file already in the wild (**issue #26**)
 - `core/async.lua` chunking + `core/events.lua` bucketing
 - `/bos perf` reporting what a refresh did (item-data requests issued, pool stats) and `/bos test 13` for
   ms per refresh (**issue #20** closed: `GetTime` is frame-quantized, so `/bos perf` says it cannot time a

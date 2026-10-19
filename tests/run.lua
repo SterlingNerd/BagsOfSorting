@@ -83,8 +83,8 @@ for _, item in ipairs(fixtures.items) do byID[item.itemID] = item end
 -- remaining probed indices are empty, which is a result harvest must tolerate.
 local contents = {
   [-1] = { 1005 },
-  [0] = { 1001, 1002, 1003, 1004 },
-  [1] = { 26042, 1006 },
+  [0] = { 1001, 1002, 1003, 1004, 5411, 2901 },
+  [1] = { 26042, 1006, 6948 },
 }
 
 -- 1005 is the item the client has never seen: container info knows its name and quality,
@@ -145,7 +145,7 @@ local containers = harvest.Discover()
 check('containers discovered (keyring, backpack, one bag)', #containers, 3)
 
 local items = harvest.Items()
-check('harvested slot count', #items, 7)
+check('harvested slot count', #items, 10)
 
 pipeline.Refresh('smoke')
 local model = pipeline.Model()
@@ -153,7 +153,7 @@ local model = pipeline.Model()
 check('one window in the model', #model, 1)
 local window = model[1]
 check('window name', window and window.name, 'Backpack')
-check('empty sections are skipped', window and #window.sections, 3)
+check('every shipped section has something in it', window and #window.sections, 5)
 
 local function sectionByName(name)
   for _, section in ipairs(window.sections or {}) do
@@ -168,12 +168,28 @@ end
 
 check('Junk holds the grey item', countSection('Junk'), 1)
 check('Armor holds the cloth armour', countSection('Armor'), 1)
-check('catch-all holds the rest', countSection('Everything else'), 5)
+check('Quest Items holds both quest items', countSection('Quest Items'), 2)
+check('Tools holds the mining pick and the hearthstone', countSection('Tools'), 2)
+check('catch-all holds the rest', countSection('Everything else'), 4)
 
 local catchall = sectionByName('Everything else')
-check('catch-all packs 5 items into 5 columns', catchall and catchall.cols, 5)
+check('catch-all packs 4 items into 4 columns', catchall and catchall.cols, 4)
 check('catch-all needs one row', catchall and catchall.rows, 1)
-check('window is 5 columns wide', window and window.width, 5 * 38 + 16)
+check('window is never narrower than its column budget', window and window.width, 5 * 38 + 16)
+
+-- Priority ladder, measured against the real item that motivated it: Winterhoof Cleansing Totem is
+-- type Armor *and* a quest item. Junk (10) also matches nothing here, Armor (20) does.
+local function sectionOf(itemID)
+  for _, section in ipairs(window.sections) do
+    for _, item in ipairs(section.items) do
+      if item.itemID == itemID then return section.name end
+    end
+  end
+end
+check('a quest item that is also Armor wins on priority (5411)', sectionOf(5411), 'Quest Items')
+check('the manual list beats the type rule (2901 is a Weapon)', sectionOf(2901), 'Tools')
+check('grey armour is still junk (1001 is quality 0 Armor)', sectionOf(1001), 'Junk')
+check('an ordinary weapon is not a tool', sectionOf(1002), 'Everything else')
 
 -- FR-15: with duplication off, every harvested item is drawn exactly once.
 local drawn, seen = 0, {}
@@ -201,7 +217,7 @@ check('find reports nothing for an absent item', addon.modules['Diag'].Find(9999
 -- /bos test 3: the PLAYERBANKSLOTS_CHANGED payload read both ways, so the in-game paste carries
 -- the answer rather than a bare number.
 local diag = addon.modules['Diag']
-check('bank slot payload read as a container index', diag.ExplainBankSlot(1), 'Bag 1 [1] 2 slots')
+check('bank slot payload read as a container index', diag.ExplainBankSlot(1), 'Bag 1 [1] 3 slots')
 check('bank slot payload read as a slot in the base grid', select(2, diag.ExplainBankSlot(1)), 'empty')
 check('bank slot payload ignores a non-number', diag.ExplainBankSlot(nil), nil)
 
@@ -258,6 +274,41 @@ local function testWindowVisibility()
 end
 
 testWindowVisibility()
+
+-- Migration 1→2 is the code that touches a player's existing file: it must add the new categories
+-- and land their sections before the catch-all without renumbering or reordering what they had.
+local function testMigration()
+  local db = addon.modules['DB']
+  db.sv.version = 1
+  db.sv.profiles.Default = {
+    windows = { { id = 'w1', name = 'Backpack', kind = 'backpack', sections = {
+      { id = 's1', name = 'Junk', categories = { 'Junk' } },
+      { id = 's2', name = 'Armor', categories = { 'Armor' } },
+      { id = 's3', name = 'Everything else', categories = { '__catchall' } },
+    } } },
+    categories = {
+      ['Junk'] = { priority = 10, kind = 'rules', enabled = true,
+        rules = { op = 'all', children = { { field = 'quality', cmp = '=', value = 0 } } } },
+      ['Armor'] = { priority = 20, kind = 'rules', enabled = true,
+        rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Armor' } } } },
+      ['__catchall'] = { priority = 999, kind = 'rules', enabled = true,
+        rules = { op = 'all', children = { { field = 'none', cmp = '=', value = true } } } },
+    },
+  }
+  db.Migrate()
+  check('migration bumps the schema version', db.sv.version, 2)
+  check('the new categories arrive',
+    db.Profile().categories['Quest Items'] ~= nil and db.Profile().categories['Tools'] ~= nil, true)
+  local order = {}
+  for _, section in ipairs(db.Profile().windows[1].sections) do order[#order + 1] = section.name end
+  check('new sections land before the catch-all, existing ones keep their place',
+    table.concat(order, ','), 'Junk,Armor,Quest Items,Tools,Everything else')
+  db.Migrate()
+  check('migrating twice changes nothing', #db.Profile().windows[1].sections, 5)
+end
+
+testMigration()
+
 
 for _, failure in ipairs(failures) do
   print('FAIL ' .. failure)

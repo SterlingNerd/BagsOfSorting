@@ -75,6 +75,23 @@ Measured 2026-10-18 (level 1, two bags equipped, no bank bag purchased): `grid c
 per page 88 page 1`, `[6] Bank 48`, `[7]..[14] Bank 0`, `bank bag 1..9 → 63..71`, total **116** =
 keyring 32 + backpack 20 + 6 + 6 + reagent 4 + grid 48. All four questions that run answers are closed.
 
+**Run D — with a purchased bank bag (issue #25).** Buy the slot, put a bag in it, then `/bos test 2`
+with the bank open. Run `/bos test 3` **before** a purchase and repeat after it, so the two events that
+need a purchase to fire are caught rather than assumed.
+
+| Line | Question it answers |
+|---|---|
+| `bank slot [7] … 6` | which index carries the purchased bag, and what `GetBagName` calls it |
+| `grid + bags 6..14 total slots …` | whether paging has to grow past one 88-slot page |
+| `purchased tab ids` | whether the bag slot appears in the API's own purchased-tab list |
+| `next purchasable tab cost / canAfford` | what the next slot costs and whether it is affordable |
+
+Observed 2026-10-19 (first bank bag slot bought, a 6-slot bag placed in it): the bank window gained
+**6 slots** (48 → 54), the bag **cannot be opened on its own**, and its contents **travel with it**
+between the bank and the character while still displaying in the bank. The window is one paged view over
+grid + bags — which is what `data/harvest.lua` reading 6..14 as plain containers already assumes.
+
+
 
 **Run B — bank closed: `/bos test 2` again** (`bank window shown false` is what tells the two
 pastes apart). Measured 2026-10-18: index 6 reads **0 slots closed, 48 open**, `FetchPurchasedBankTabData`

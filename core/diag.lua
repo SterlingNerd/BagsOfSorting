@@ -89,6 +89,32 @@ probes[2] = function()
         say('  bank bag', i, tostring(C_Bank.BankBagTypeAndIDToInvSlot(Enum.BankType.Character, i)))
       end
     end
+
+    -- Purchased-bag shape (issue #25). Observed 2026-10-19: buying the first bank bag slot and putting
+    -- a 6-slot bag in it added 6 slots to the bank window, the bag cannot be opened on its own, and its
+    -- contents travel with it between the bank and the character. So the window is one paged view over
+    -- grid + bags, and the number that decides paging is the sum across 6..14 against 88 slots a page.
+    local gridIndex = (ITEM_INVENTORY_BANK_BAG_OFFSET or 5) + 1
+    local bankTotal = 0
+    for index = gridIndex, gridIndex + (NUM_CHARACTER_BANK_SLOTS or 9) - 1 do
+      local okName, name = pcall(C_Container.GetBagName, index)
+      local okSlots, slots = pcall(C_Container.GetContainerNumSlots, index)
+      if okSlots and slots then bankTotal = bankTotal + slots end
+      say(string.format('  bank slot [%d] %s %s', index,
+        okName and tostring(name) or 'ERR', okSlots and tostring(slots) or 'ERR'))
+    end
+    say('grid + bags 6..14 total slots', bankTotal,
+      bankTotal > 88 and '— more than one 88-slot page' or '— still one page')
+    local ids = C_Bank.FetchPurchasedBankTabIDs
+      and C_Bank.FetchPurchasedBankTabIDs(Enum.BankType.Character)
+    say('purchased tab ids', table.concat(ids or {}, ','))
+    local nextTab = C_Bank.FetchNextPurchasableBankTabData
+      and C_Bank.FetchNextPurchasableBankTabData(Enum.BankType.Character)
+    if nextTab then
+      say('next purchasable tab cost', tostring(nextTab.tabCost), 'canAfford',
+        tostring(nextTab.canAfford), 'title', tostring(nextTab.purchasePromptTitle))
+    end
+
   end
   -- The decisive number: every container index the client answers for, and what they sum to.
   -- If the sum is short by the base grid you counted by eye, the grid is not a container index.
@@ -341,8 +367,8 @@ end
 function diag.Run(n)
   local probe = probes[n]
   if not probe then
-    print('probes: 2 bank containers (#9) · 3 bank events (#9) · 7 keybind persistence '
-      .. '· 11 new-item textures · 13 clock + pipeline cost · 14 expansion field')
+    print('probes: 2 bank containers + bank bags (#9, #25) · 3 bank events (#9) '
+      .. '· 7 keybind persistence · 11 new-item textures · 13 clock + pipeline cost · 14 expansion field')
     return
   end
   local ok, err = pcall(probe)

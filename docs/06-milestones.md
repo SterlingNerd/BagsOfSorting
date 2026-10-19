@@ -68,19 +68,25 @@ is wrong and everything downstream is re-planned here, cheaply.
 
 **Goal:** prove harvest → enrich → classify → sort → render on Forever with real inventory.
 
-**Status: in progress 2026-10-19.** Code complete, and the off-client suite (83 checks, run in CI)
-covers rules, the priority ladder, sort modes and flow boundaries. Measured in-game: **AC-14/16** — real
-inventory, nothing counted twice, grey items in Junk, armour in Armor, the rest in the catch-all —
-**AC-103** — a looted item the client had never seen lands in the catch-all and classifies correctly once
-its data arrives — **AC-100/101** (2.20 ms per refresh on build 70450) — **AC-97** (`/exit` then re-login:
-`item cache=113, tier3 requested=0 resolved=0 pending=0`) — and the **priority ladder** on the real item:
-Tools, Quest Items and Junk all classify as designed once schema version 2 has run, which puts 5411
-Winterhoof Cleansing Totem (Armor *and* a quest item) in Quest Items rather than Armor. The `expansion`
-question is answered and the field is out of the v1 set.
+**Status: done 2026-10-19.** Code complete, and the off-client suite (83 checks, run in CI) covers
+rules, the priority ladder, sort modes and flow boundaries. Every exit criterion is measured on the live
+client:
 
-Left: **AC-42** — `/bos perf`, ten `/bos hide` + `/bos show` cycles, `/bos perf` again, `created`
-unchanged. One cycle is already on the record from the AC-97 run (`itemButton: created=25` before and
-after a show, `idle` returning from 7 to 25), so this is a confirmation run, not an open question.
+- **AC-14/16** — real inventory, nothing counted twice, grey items in Junk, armour in Armor, the rest in
+  the catch-all.
+- **AC-42** — `itemButton: created=25` before and after several hotkey show/hide cycles, `idle` returning
+  to 25 with the window closed: no button created per cycle. The capture does not count the cycles, so
+  the number is "several", not a counted ten.
+- **AC-100/101** — 2.20 ms per refresh (1000 refreshes over 10 frames, 2204 ms) on `_classic_beta_`
+  1.60.1 build 70450.
+- **AC-103** — a looted item the client had never seen lands in the catch-all and classifies correctly
+  once its data arrives.
+- **AC-97** — `/exit` then a fresh login: `item cache=113, tier3 requested=0 resolved=0 pending=0`.
+- **Priority ladder** — Tools, Quest Items and Junk all classify as designed once schema version 2 ran,
+  which puts 5411 Winterhoof Cleansing Totem (Armor *and* a quest item) in Quest Items, not Armor.
+
+`expansion` is measured out of the v1 field set. Cold-cache item data (issue #1) is deferred to the
+onboarding work later in the plan, and the bank-tab `ItemLocation` check moved to M5.
 
 
 Deliverables

@@ -272,7 +272,9 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 2. Run `/bos hide` then `/bos show`, ten times.
 3. Run `/bos perf` again.
 
-**Expected:** `created` is unchanged from step 1 (no new button per slot, AC-42); `idle` returns to the same number each cycle.
+**Expected:** `created` is unchanged from step 1 (no new button per slot, AC-42); `idle` returns to the same number each cycle. Measured 2026-10-19: `itemButton: created=25` on both readings with several hotkey show/hide cycles between them, `idle` 7 with the window open and 25 with it closed — every button released, none created per cycle.
+
+Note when reading the output: **a hide runs no refresh** (`windows.HideAll()` releases the pool; only show and the pipeline refresh). So the `refresh(<reason>)` line is the *last refresh*, while the `created=`/`idle=` line is live. Read the pool line for AC-42.
 
 ### Manual test: timings recorded, not asserted (AC-100, AC-101)
 

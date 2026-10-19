@@ -269,7 +269,7 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 
 ### Manual test: second login issues zero tier-3 requests (AC-97)
 
-**Precondition:** a 40-ID manual category written into SavedVariables by hand — there is no category editor until M3. Quit, edit `WTF/…/BagsOfSortingDB.lua`, add `profiles.Default.categories['Test40'] = { priority=5, kind="manual", enabled=true, itemIDs={ [id]=true, … } }` for 40 IDs you own, plus a section bound to `Test40`. Restart.
+**Precondition:** a 40-ID manual category written into SavedVariables by hand — there is no category editor until M3. Quit, edit `WTF/Account/<account>/SavedVariables/BagsOfSorting.lua` (the file is named after the addon folder, not the declared `BagsOfSortingDB` — issue #14), add `profiles.Default.categories['Test40'] = { priority=5, kind="manual", enabled=true, itemIDs={ [id]=true, … } }` for 40 IDs you own, plus a section bound to `Test40`. Restart.
 
 1. Login 1: run `/bos perf`, note `tier3=` and `item cache=`.
 2. `/exit`, log in again.

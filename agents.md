@@ -32,7 +32,8 @@ If a task contradicts `docs/02-requirements.md` or `docs/05-config-ui.md`, stop 
 | Fact | Value | Source |
 |---|---|---|
 | `WOW_PROJECT_ID` | `18` (`WOW_PROJECT_CAMELOT`) | verified in `../addons/Baggins`, `../addons/BetterBags` |
-| Interface version | `16001` (patch 1.60.1, build 70170) | `Baggins.toc`, `BetterBags_Camelot.toc` |
+| Interface version | `16001`; the installed client is **1.60.1 build 70450** (`wow_classic_beta`) | `Baggins.toc`, `BetterBags_Camelot.toc`, `.build.info` on the game machine 2026-10-19 |
+| `C_Item.GetItemInfo` return order | 18 outputs, and the live client matches `ItemDocumentation.lua` position for position: 1 name, 2 link, 3 quality, 4 itemLevel, 5 minLevel, 6 type, 7 subtype, 8 stackCount, 9 equipLoc, 10 texture, 11 sellPrice, 12 classID, 13 subclassID, 14 bindType, **15 expansionID**, 16 setID (nilable), 17 isCraftingReagent, 18 description. `data/enrich.lua` reads 1/3/4/6/7/10/15 and is correct. **`expansion` is 0 (Classic) for every item this Vanilla-ruleset client knows**, so it is out of the v1 filter field set (`docs/02` FR-21) | `/bos test 14` 2026-10-19 (Linen Bandage 1251 dumped by position; 14 harvested items, all `0`), `ItemDocumentation.lua:626-656` |
 | `LE_EXPANSION_*` | reports `LE_EXPANSION_CLASSIC` (Vanilla ruleset) | parent `../agents.md` |
 | Engine | modern: `C_Container`, `C_Item`, `C_Spell`, secret values, `ItemLocation` | verified |
 | Flavor dir | `_classic_beta_`, `.flavor.info` = `wow_classic_beta` | verified |

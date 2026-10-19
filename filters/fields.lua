@@ -1,6 +1,9 @@
 -- The v1 field set (FR-21), registered as data.
 --
--- M1's eight: type, subtype, quality, ilvl, name, expansion, equipSlot, isQuestItem.
+-- M1's seven: type, subtype, quality, ilvl, name, equipSlot, isQuestItem.
+-- `expansion` is measured out, not missing (`/bos test 14`, 2026-10-19): position 15 of
+-- C_Item.GetItemInfo is confirmed as expansionID, but every item this Vanilla-ruleset client knows
+-- reports 0 (Classic), so a rule on it can never discriminate. Recorded in docs/02 FR-21.
 -- Plus two the model needs to be expressible at all:
 --   itemID  — `itemID in {…}` is a leaf inside a rule tree (FR-24) and the most-used rule
 --             type in the measured configs (docs/01)
@@ -22,10 +25,6 @@ local QUALITY_LABELS = {
   [Q.Epic] = 'Epic', [Q.Legendary] = 'Legendary', [Q.Artifact] = 'Artifact', [Q.Heirloom] = 'Heirloom',
 }
 
--- GetItemInfo's expansionID. Forever is a Vanilla-ruleset client, so most items are 0.
-local EXPANSION_LABELS = {
-  [0] = 'Classic', [1] = 'Burning Crusade', [2] = 'Lich King', [3] = 'Cataclysm', [4] = 'Mists of Pandaria',
-}
 
 local function qualityName(value)
   return QUALITY_LABELS[value] or tostring(value)
@@ -91,21 +90,6 @@ register({
   read = function(item) return item.name end,
 })
 
-register({
-  key = 'expansion', label = 'Expansion', valueKind = 'enum',
-  cmps = { '=', '!=' },
-  expensive = true,   -- tier-3 only (GetItemInfo expansionID)
-  values = function()
-    local out = {}
-    for id, label in pairs(EXPANSION_LABELS) do out[#out + 1] = { v = id, label = label } end
-    table.sort(out, function(a, b) return a.v < b.v end)
-    return out
-  end,
-  read = function(item) return item.expansion end,
-  sentence = function(rule)
-    return string.format('expansion %s %s', cmpSymbol(rule.cmp), EXPANSION_LABELS[rule.value] or tostring(rule.value))
-  end,
-})
 
 register({
   key = 'equipSlot', label = 'Equip slot', valueKind = 'string',

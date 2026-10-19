@@ -44,7 +44,9 @@ local function render(models, shown, ctx)
   windows.Prune(shown)
   context.MarkPhase(ctx, 'render')
   context.Finish(ctx)
-  log.Debug(context.Format(ctx))
+  -- Bench refreshes are a synthetic loop (probe 13 runs 1000 of them); logging each one buries the
+  -- chat capture in identical lines.
+  if ctx.reason ~= 'bench' then log.Debug(context.Format(ctx)) end
 end
 
 events.On('BOS_REFRESH_DONE', render)

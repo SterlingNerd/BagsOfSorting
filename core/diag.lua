@@ -242,6 +242,9 @@ end
 
 --- 13 — how fine a clock this client hands us, then the pipeline cost measured with it.
 probes[13] = function()
+  -- Every timing recorded from now on carries the build it was measured on (issue #24).
+  print('build:', GetBuildInfo())
+
   local started = GetTime()
   local sum = 0
   for _ = 1, 1e6 do sum = sum + 1 end

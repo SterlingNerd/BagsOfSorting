@@ -82,8 +82,8 @@ Deliverables
 - the three-tier item lookup from `docs/03` §Item data is not always there: tier-1
   `GetItemInfoInstant`, tier-2 persisted cache, tier-3 `RequestLoadItemDataByID` +
   `ITEM_DATA_LOAD_RESULT`, batched and cancellable (`AsyncCallbackSystemMixin` as the reference)
-- `filters/registry.lua` + 8 fields: `type`, `subtype`, `quality`, `ilvl`, `name`, `expansion`,
-  `equipSlot`, `isQuestItem`
+- `filters/registry.lua` + 7 fields: `type`, `subtype`, `quality`, `ilvl`, `name`, `equipSlot`,
+  `isQuestItem` (`expansion` measured out of the v1 set — see Risks below)
 - `frames/window.lua`, `frames/item.lua` (pooled, `ItemButton` type), `frames/section.lua`
 - one hardcoded window ("Backpack") with 3 hardcoded categories (Junk / Armor / Everything-else)
   written **in the data model**, not in code — so the schema is exercised from day one
@@ -101,20 +101,26 @@ Deliverables
 Exit criteria
 - **AC-14, AC-16** real inventory appears, nothing duplicated, unmatched items in the catch-all.
 - **AC-42** button pool stays flat across 10 open/close cycles (`/bos perf` reports pool stats).
-- **AC-100/101** timings recorded in `docs/06` as actual numbers, not targets.
+- **AC-100/101** timings recorded in `docs/06` as actual numbers, not targets. **Met 2026-10-19**, on
+  `_classic_beta_` 1.60.1 build **70450** (`.build.info`), level-1 character, 14 harvested items, 113
+  cached: `/bos test 13` → `bench: 1000 refreshes over 10 frames, 2204ms total, 2.20ms per refresh`,
+  of which at least 160ms is frame time, not pipeline. `/bos perf` alongside it:
+  `itemButton: created=34 idle=20`, `section: created=2 idle=0`, `item cache=113, tier3 requested=0`.
 - **AC-103** loot an item never seen by the client; it lands in catch-all, then re-sorts when info
   arrives. Then `C_Item.RequestLoadItemDataByID` on a cold ID and confirm it resolves without a
   reload (issue #1).
-- **AC-97** a 40-ID manual category renders icons on first login and issues zero tier-3 requests on
-  the second.
+- **AC-97** a hand-written manual category (Tools: Mining Pick 2901, Hearthstone 6948) renders icons
+  on first login and issues zero tier-3 requests on the second.
 - `lua5.1 tests/run.lua` green: fixture items × rule trees → expected category, including
   `any/all/none` nesting, the precedence tie-breaks from `docs/04`, every sort mode and the flow
   boundaries.
 
 Risks
-- Tooltip-based and expansion-based fields may need data we cannot read cheaply on Forever. If
-  `expansion` is unavailable, drop it from the v1 field set and record it in `docs/02` (FR-21) as a
-  removal, not a silent gap.
+- Tooltip-based and expansion-based fields may need data we cannot read cheaply on Forever.
+  **Resolved 2026-10-19** by `/bos test 14`: `expansion` is readable, and position 15 of
+  `C_Item.GetItemInfo` is confirmed as `expansionID` against `ItemDocumentation.lua` — but all 14 items
+  in the real inventory report `0` (Classic), so the field cannot discriminate on a Vanilla-ruleset
+  client. Removed from the v1 field set (`docs/02` FR-21) as a recorded removal, not a silent gap.
 - Secret-value handling for `C_Item` on Forever: verify `ItemLocation:CreateFromBagAndSlot` paths
   work for bank tabs.
 

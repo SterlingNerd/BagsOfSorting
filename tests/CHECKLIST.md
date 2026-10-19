@@ -272,11 +272,20 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 **Precondition:** a hand-written manual category in SavedVariables — there is no category editor until M3. Quit, edit `WTF/Account/<account>/SavedVariables/BagsOfSorting.lua` (the file is named after the addon folder, not the declared `BagsOfSortingDB` — issue #14) and add a **Tools** category plus a section bound to it:
 
 ```lua
-profiles.Default.categories['Tools'] = { priority = 5, kind = 'manual', enabled = true,
-  itemIDs = { [2901] = true, [6948] = true } }   -- Mining Pick, Hearthstone
+-- inside ["profiles"] = { ["Default"] = { ["categories"] = {
+["Tools"] = {
+  ["enabled"] = true,
+  ["kind"] = "manual",
+  ["priority"] = 15,
+  ["duplicate"] = false,
+  ["itemIDs"] = { [2901] = true, [6948] = true },   -- Mining Pick, Hearthstone
+},
+
+-- and inside that window's ["sections"] list, next to s1 / s2 / s3
+{ ["id"] = "s4", ["name"] = "Tools", ["categories"] = { "Tools" } },
 ```
 
-Two IDs are enough: the criterion is that **cached** IDs cost zero requests, not that volume works. Carry the mining pick and, when you have it, the hearthstone in a bag so the section has something to match.
+Two IDs are enough: the criterion is that **cached** IDs cost zero requests, not that volume works. Carry the mining pick (and the hearthstone when you have it) in a bag so the section has something to match. **No Tools category appears until this edit is made** — the addon ships Junk / Armor / Everything else and never invents categories.
 
 1. Login 1: run `/bos perf`, note `tier3=` and `item cache=`.
 2. `/exit`, log in again.

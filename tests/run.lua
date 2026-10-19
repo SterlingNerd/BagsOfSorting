@@ -19,6 +19,11 @@ _G.CreateFrame = function()
 end
 _G.UIParent = {}
 _G.GetTime = os.clock
+-- The capture stamp (core/diag.lua) reads these; the harness answers them so a captured step can
+-- run headless.
+_G.GetBuildInfo = function() return '1.16.0', 1, 'x86_64' end
+_G.UnitName = function() return 'Tester' end
+_G.GetRealmName = function() return 'Test Realm' end
 _G.Enum = {
   ItemQuality = {
     Poor = 0, Common = 1, Uncommon = 2, Rare = 3, Epic = 4, Legendary = 5, Artifact = 6, Heirloom = 7,
@@ -222,6 +227,32 @@ contents[7] = {}
 check('bank bag slot payload converts to its container index',
   diag.ExplainBankSlot(2), 'bank bag slot 2 -> container [7] Bag 7 0 slots')
 check('bank slot payload ignores a non-number', diag.ExplainBankSlot(nil), nil)
+
+-- /bos test: pending list, run sheet, and captured steps lettered a, b, c… A fixture stands in for
+-- a real pending test so deleting one never breaks the harness.
+local captured = 0
+diag.Add(900, {
+  issue = 900,
+  what = 'fixture',
+  needs = 'none',
+  steps = {
+    { text = 'a manual action' },
+    { text = 'first capture', run = function() captured = captured + 1 end },
+    { text = 'second capture', run = function() captured = captured + 1 end },
+  },
+})
+check('the first captured step is letter a', diag.Test(900, 'a'), 'first capture')
+check('the second is letter b', diag.Test(900, 'b'), 'second capture')
+check('a letter past the last captured step runs nothing', diag.Test(900, 'c'), nil)
+check('an unknown test id runs nothing', diag.Test(9001), nil)
+check('captured steps ran', captured, 2)
+-- One bucket per test, opened by the first captured step: two step headers plus the ingest reminder.
+check('one bucket per test', #addon.modules['DB'].sv.diag['900'], 3)
+check('the bucket opens with the first step header',
+  addon.modules['DB'].sv.diag['900'][1]:match('^--- 900a'), '--- 900a')
+check('the run sheet answers with the test name', diag.Test(900), 'fixture')
+diag.Command('900b')
+check('the slash dispatcher reaches the same step', captured, 3)
 
 -- The keybind mirror (issue #13): the client writes our action to bindings-cache.wtf and it
 -- survives a restart, but /reload re-registers Bindings.xml and can drop it. Whatever the client

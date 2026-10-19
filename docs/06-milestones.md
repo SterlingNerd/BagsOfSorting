@@ -103,7 +103,7 @@ Deliverables
   code, so the schema is exercised from day one, plus a schema version 2 migration that adds them to a
   SavedVariables file already in the wild (**issue #26**)
 - `core/async.lua` chunking + `core/events.lua` bucketing
-- `/bos perf` reporting what a refresh did (item-data requests issued, pool stats) and `/bos test 13` for
+- `/bos perf` reporting what a refresh did (item-data requests issued, pool stats) and `/bos test clock` for
   ms per refresh (**issue #20** closed: `GetTime` is frame-quantized, so `/bos perf` says it cannot time a
   single-frame refresh instead of printing `0.00` per phase)
 - `Bindings.xml` + `config/keybinds.lua` and the Options → AddOns category from `config/settingspanel.lua`
@@ -118,7 +118,7 @@ Exit criteria
 - **AC-42** button pool stays flat across 10 open/close cycles (`/bos perf` reports pool stats).
 - **AC-100/101** timings recorded in `docs/06` as actual numbers, not targets. **Met 2026-10-19**, on
   `_classic_beta_` 1.60.1 build **70450** (`.build.info`), level-1 character, 14 harvested items, 113
-  cached: `/bos test 13` → `bench: 1000 refreshes over 10 frames, 2204ms total, 2.20ms per refresh`,
+  cached: `/bos test clock` → `bench: 1000 refreshes over 10 frames, 2204ms total, 2.20ms per refresh`,
   of which at least 160ms is frame time, not pipeline. `/bos perf` alongside it:
   `itemButton: created=34 idle=20`, `section: created=2 idle=0`, `item cache=113, tier3 requested=0`.
 - **AC-103** loot an item never seen by the client; it lands in catch-all, then re-sorts when info
@@ -132,7 +132,7 @@ Exit criteria
 
 Risks
 - Tooltip-based and expansion-based fields may need data we cannot read cheaply on Forever.
-  **Resolved 2026-10-19** by `/bos test 14`: `expansion` is readable, and position 15 of
+  **Resolved 2026-10-19** by `/bos test expansion`: `expansion` is readable, and position 15 of
   `C_Item.GetItemInfo` is confirmed as `expansionID` against `ItemDocumentation.lua` — but all 14 items
   in the real inventory report `0` (Classic), so the field cannot discriminate on a Vanilla-ruleset
   client. Removed from the v1 field set (`docs/02` FR-21) as a recorded removal, not a silent gap.
@@ -364,7 +364,7 @@ Exit criteria
 - **AC-66, AC-67, AC-68** affinity compaction, empty-bag, and combat refusal all behave as written in
   `docs/02`.
 - **AC-124** run alongside `ForeverPlus`, `Leatrix_Plus`, `Baggins`, `BetterBags`; record what breaks.
-- `/bos test 13` numbers meet or beat the M1-recorded numbers after the feature load.
+- `/bos test clock` numbers meet or beat the M1-recorded numbers after the feature load.
 - **NFR-1** own-code LOC check: under ~8,000. If over, write down which module blew up and why.
 
 ---
@@ -420,7 +420,7 @@ that has never had the addon, with the first-run experience tested by someone el
    the date and patch. A milestone is not done until its AC lines have a dated entry. The runnable
    snippets for the API questions live in the **spike issues** (#1–#11), not in a docs file
    (`docs/07` Q21).
-5. `/bos perf` and `/bos test 13` numbers recorded, not asserted.
+5. `/bos perf` and `/bos test clock` numbers recorded, not asserted.
 6. One manual "hostile" pass per milestone: full inventory, a dozens-of-categories config imported in
    the `docs/01` shape, ~20 sections in one window, a 30-char section name, an item Blizzard has no
    info for, combat, death, `/reload` mid-combat.

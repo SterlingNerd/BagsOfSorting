@@ -1,16 +1,23 @@
--- `/bos test <n>`: the in-game half of the checklist (`tests/CHECKLIST.md`). Each probe prints
--- what a human pastes into the milestone entry in `docs/06` or into the spike issue it answers.
--- Off-client assertions live in `tests/run.lua`; these are the ones that need the live client.
+-- The in-game half of manual testing. Two things live here:
 --
--- They live in the addon rather than in `/script` because `/script` is a single line capped near
--- 255 characters — long enough to truncate a probe and report `'end' expected near '<eof>'`, which
--- reads like a Lua bug and is not one.
+--   tests    short QA or investigation tasks tied to an open issue. `/bos test` lists the pending
+--            ones, `/bos test 42` prints its run sheet, `/bos test 42b` runs one captured step.
+--            An entry is added when a story needs measuring and deleted as part of ingesting the
+--            capture. The workflow is `.pi/skills/bos-test-capture/SKILL.md`.
+--   helpers  reusable captures a test step calls (dump, log, flags, keybind, newitem, clock,
+--            expansion). Reachable from chat for ad-hoc investigation; they are not pending tests.
+--
+-- Everything a test captures goes to SavedVariables (`BagsOfSortingDB.diag.<issue>`) as well as to
+-- chat. Off-client assertions live in `tests/run.lua`; these are the ones that need the live client.
+-- Nothing here runs through `/script`: it is one line capped near 255 characters, which truncates a
+-- real probe and reports `'end' expected near '<eof>'` — that reads like a Lua bug and is not one.
 
 local _, addon = ...
 
 ---@class Diag: BoSModule
 local diag = addon:NewModule('Diag')
 
+-- Internal numeric keys. The names in HELPERS at the bottom of this file are what you type.
 local probes = {}
 local db = addon:GetModule('DB')
 
@@ -21,8 +28,14 @@ local db = addon:GetModule('DB')
 -- core/diag.lua ships at all; if it becomes dev-only, this goes with it.
 local MAX_LINES = 400
 local bucket = 'probe'
+-- True while a test step runs. A helper that resets its own bucket must not wipe the capture of the
+-- test that called it.
+local inTest = false
 
-local function say(...)
+--- Write one captured line: to your own chat frame via `print`, and to the current bucket in
+--- SavedVariables. `print` is local-only — nothing here calls SendChatMessage, so no probe output is
+--- ever said, shouted or broadcast to another player.
+local function record(...)
   local parts = { ... }
   for i = 1, #parts do parts[i] = tostring(parts[i]) end
   local line = table.concat(parts, ' ')
@@ -42,26 +55,26 @@ local function fresh(name)
   db.sv.diag[name] = {}
 end
 
---- 2 — the bank arithmetic issue #9 is blocked on. Stand at an open bank with bank bags equipped.
+--- dump — the bank arithmetic issue #9 is blocked on. Stand at an open bank with bank bags equipped.
 probes[2] = function()
   -- Run it twice — once with the bank open, once closed — and the two runs land in two buckets,
   -- so the diff is readable off disk without a paste.
   fresh(BankFrame and BankFrame:IsShown() and 'bankOpen' or 'bankClosed')
-  say('constants', NUM_BAG_SLOTS, NUM_REAGENTBAG_SLOTS, NUM_TOTAL_EQUIPPED_BAG_SLOTS,
+  record('constants', NUM_BAG_SLOTS, NUM_REAGENTBAG_SLOTS, NUM_TOTAL_EQUIPPED_BAG_SLOTS,
     ITEM_INVENTORY_BANK_BAG_OFFSET, NUM_CHARACTER_BANK_SLOTS)
-  say('bank window shown', BankFrame and tostring(BankFrame:IsShown()) or 'no BankFrame global')
+  record('bank window shown', BankFrame and tostring(BankFrame:IsShown()) or 'no BankFrame global')
   if C_Bank then
-    say('usePlayerBagsInBank', C_Bank.ShouldUsePlayerBagsInBank())
-    say('viewable bank types', table.concat(C_Bank.FetchViewableBankTypes() or {}, ','))
-    say('tabs', 'max', C_Bank.FetchMaxNumBankTabs(Enum.BankType.Character),
+    record('usePlayerBagsInBank', C_Bank.ShouldUsePlayerBagsInBank())
+    record('viewable bank types', table.concat(C_Bank.FetchViewableBankTypes() or {}, ','))
+    record('tabs', 'max', C_Bank.FetchMaxNumBankTabs(Enum.BankType.Character),
       'hasMax', C_Bank.HasMaxBankTabs(Enum.BankType.Character),
       'purchased', C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character),
       'canPurchase', C_Bank.CanPurchaseBankTab(Enum.BankType.Character),
       'lockedReason', tostring(C_Bank.FetchBankLockedReason(Enum.BankType.Character)))
     local tabs = C_Bank.FetchPurchasedBankTabData(Enum.BankType.Character) or {}
-    say('purchased tab data', #tabs)
+    record('purchased tab data', #tabs)
     for _, tab in ipairs(tabs) do
-      say('  tab', tab.ID, tab.name, tab.icon, tab.depositFlags,
+      record('  tab', tab.ID, tab.name, tab.icon, tab.depositFlags,
         C_Container.GetContainerNumSlots(tab.ID))
     end
     -- The client's own answer to "is the grid one container or several": Camelot's BankPanel
@@ -73,20 +86,20 @@ probes[2] = function()
       local ok, sum, perPage, page = pcall(function()
         return panel:GetTotalSlotsInAllTabs(), panel:GetMaximumTotalSlotsPerPage(), panel.currentPage
       end)
-      say('grid containers', #grid, 'total slots', ok and sum or 'ERR',
+      record('grid containers', #grid, 'total slots', ok and sum or 'ERR',
         'per page', ok and perPage or 'ERR', 'page', ok and page or 'ERR')
       for _, tab in ipairs(grid) do
-        say('  grid', tab.ID, C_Container.GetContainerNumSlots(tab.ID))
+        record('  grid', tab.ID, C_Container.GetContainerNumSlots(tab.ID))
       end
     else
-      say('grid containers: BankPanel.purchasedBankTabData unreachable — is the bank open?')
+      record('grid containers: BankPanel.purchasedBankTabData unreachable — is the bank open?')
     end
     if C_Bank.BankBagTypeAndIDToInvSlot then
       -- Nine slots reported, eight visible. Camelot's RefreshBagButtons draws buttons for bag
       -- slots 2..max and skips 1 ("we start with the first bag purchased"), so which of these 9
       -- has an inventory slot is the 9-vs-8 answer.
       for i = 1, (NUM_CHARACTER_BANK_SLOTS or 0) do
-        say('  bank bag', i, tostring(C_Bank.BankBagTypeAndIDToInvSlot(Enum.BankType.Character, i)))
+        record('  bank bag', i, tostring(C_Bank.BankBagTypeAndIDToInvSlot(Enum.BankType.Character, i)))
       end
     end
 
@@ -100,18 +113,18 @@ probes[2] = function()
       local okName, name = pcall(C_Container.GetBagName, index)
       local okSlots, slots = pcall(C_Container.GetContainerNumSlots, index)
       if okSlots and slots then bankTotal = bankTotal + slots end
-      say(string.format('  bank slot [%d] %s %s', index,
+      record(string.format('  bank slot [%d] %s %s', index,
         okName and tostring(name) or 'ERR', okSlots and tostring(slots) or 'ERR'))
     end
-    say('grid + bags 6..14 total slots', bankTotal,
+    record('grid + bags 6..14 total slots', bankTotal,
       bankTotal > 88 and '— more than one 88-slot page' or '— still one page')
     local ids = C_Bank.FetchPurchasedBankTabIDs
       and C_Bank.FetchPurchasedBankTabIDs(Enum.BankType.Character)
-    say('purchased tab ids', table.concat(ids or {}, ','))
+    record('purchased tab ids', table.concat(ids or {}, ','))
     local nextTab = C_Bank.FetchNextPurchasableBankTabData
       and C_Bank.FetchNextPurchasableBankTabData(Enum.BankType.Character)
     if nextTab then
-      say('next purchasable tab cost', tostring(nextTab.tabCost), 'canAfford',
+      record('next purchasable tab cost', tostring(nextTab.tabCost), 'canAfford',
         tostring(nextTab.canAfford), 'title', tostring(nextTab.purchasePromptTitle))
     end
 
@@ -123,10 +136,10 @@ probes[2] = function()
     local okName, name = pcall(C_Container.GetBagName, index)
     local okSlots, slots = pcall(C_Container.GetContainerNumSlots, index)
     if okSlots and slots then total = total + slots end
-    say(string.format('  [%d] %s %s', index,
+    record(string.format('  [%d] %s %s', index,
       okName and tostring(name) or 'ERR', okSlots and tostring(slots) or 'ERR'))
   end
-  say('total container slots', total)
+  record('total container slots', total)
 end
 
 local BANK_EVENTS = {
@@ -149,11 +162,11 @@ function diag.ExplainBankSlot(bagSlot)
     and string.format('bank bag slot %d -> container [%d] %s %s slots',
       bagSlot, container, tostring(name), tostring(slots))
     or string.format('bank bag slot %d -> container [%d] not a container', bagSlot, container)
-  say(asContainer)
+  record(asContainer)
   return asContainer
 end
 
---- 3 — what drives a bank refresh (issue #9 steps 10-11). Run at the bank to start logging, do
+--- log — what drives a bank refresh (issue #9 steps 10-11). Run at the bank to start logging, do
 --- **one action at a time**, run it again to stop. It lives in the addon rather than in /script
 --- because the logger snippet is longer than the client's ~255-character /script line.
 local bankLogger
@@ -161,35 +174,35 @@ probes[3] = function()
   if bankLogger then
     bankLogger:UnregisterAllEvents()
     bankLogger = nil
-    say('bank event logging off')
+    record('bank event logging off')
     return
   end
-  fresh('bankEvents')
+  if not inTest then fresh(bucket) end
   bankLogger = CreateFrame('Frame')
   local count = 0
   bankLogger:SetScript('OnEvent', function(self, event, ...)
     count = count + 1
     local args = { ... }
     for i = 1, #args do args[i] = tostring(args[i]) end
-    say(string.format('#%d %s %s', count, event, table.concat(args, ' ')))
+    record(string.format('#%d %s %s', count, event, table.concat(args, ' ')))
     if event == 'PLAYERBANKSLOTS_CHANGED' then diag.ExplainBankSlot((...)) end
   end)
   for _, name in ipairs(BANK_EVENTS) do bankLogger:RegisterEvent(name) end
-  say('bank event logging on — one action at a time, then /bos test 3 again to stop')
+  record('bank event logging on — one action at a time, then /bos test 3 again to stop')
 end
 
---- 7 — does the client keep the key the player bound? Run before a reload, after it, and after a
+--- keybind — does the client keep the key the player bound? Run before a reload, after it, and after a
 --- logout. Compare against `grep BAGSOF_SORTING ../account/bindings-cache.wtf`.
 probes[7] = function()
   bucket = 'keybind'
-  say('--- probe 7 run ---')
-  say('BAGSOF_SORTING_TOGGLE =', tostring(GetBindingKey('BAGSOF_SORTING_TOGGLE')))
-  say('category', tostring(BINDING_HEADER_BAGSOF_SORTING),
+  record('--- probe 7 run ---')
+  record('BAGSOF_SORTING_TOGGLE =', tostring(GetBindingKey('BAGSOF_SORTING_TOGGLE')))
+  record('category', tostring(BINDING_HEADER_BAGSOF_SORTING),
     'label', tostring(BINDING_NAME_BAGSOF_SORTING_TOGGLE))
   -- Which side is broken: the client's binding table, or only its bindings file. `stored` is ours;
   -- if it survives while the client's key does not, the mirror is doing the work, and
   -- `grep BAGSOF_SORTING ../account/bindings-cache.wtf` says whether the client ever wrote it.
-  say('binding set', GetCurrentBindingSet(),
+  record('binding set', GetCurrentBindingSet(),
     'registered index', tostring(C_KeyBindings.GetBindingIndex('BAGSOF_SORTING_TOGGLE')),
     'stored', tostring((db.sv.global.keybinds or {}).BAGSOF_SORTING_TOGGLE))
 end
@@ -203,14 +216,14 @@ local function lit(button, label)
   for _, key in ipairs(LIT) do
     local texture = button[key]
     if texture and texture:IsShown() and (texture:GetAlpha() or 0) > 0 then
-      print(label, key, texture:GetAtlas() or tostring(texture:GetTexture() or ''),
+      record(label, key, texture:GetAtlas() or tostring(texture:GetTexture() or ''),
         string.format('alpha=%.2f', texture:GetAlpha()))
     end
   end
 end
 
---- 11 — what is actually glowing, on our buttons and on the client's own. Loot something new first,
---- then run this **before** hovering anything: hovering is what clears the state.
+--- newitem — what is actually glowing, on our buttons and on the client's own. Loot something new
+--- first, then run this **before** hovering anything: hovering is what clears the state.
 probes[11] = function()
   local ours = 0
   for i = 1, 400 do
@@ -220,11 +233,11 @@ probes[11] = function()
       lit(button, 'ours ' .. i)
     end
   end
-  print('our visible buttons', ours)
+  record('our visible buttons', ours)
 
   local blizzard = ContainerFrameCombinedBags and ContainerFrameCombinedBags.items
   if not blizzard then
-    print('client bag buttons: ContainerFrameCombinedBags.items not reachable, compare by eye')
+    record('client bag buttons: ContainerFrameCombinedBags.items not reachable, compare by eye')
     return
   end
   for _, slots in pairs(blizzard) do
@@ -262,7 +275,7 @@ function diag.Bench(perFrame, frames)
   step()
 end
 
---- 13 — how fine a clock this client hands us, then the pipeline cost measured with it.
+--- clock — how fine a clock this client hands us, then the pipeline cost measured with it.
 probes[13] = function()
   -- Every timing recorded from now on carries the build it was measured on (issue #24).
   print('build:', GetBuildInfo())
@@ -275,7 +288,7 @@ probes[13] = function()
   diag.Bench()
 end
 
---- 14 — is the `expansion` field readable here, and is position 15 of C_Item.GetItemInfo really the
+--- expansion — is the `expansion` field readable here, and is position 15 of C_Item.GetItemInfo really the
 --- expansion ID? `data/enrich.lua` reads it as the 15th return, so a wrong position misclassifies
 --- every expansion rule without ever erroring. M1's risk list asks whether expansion is cheap enough
 --- to keep in the v1 field set (docs/02 FR-21). Run it with items in your bags: it only reads.
@@ -288,9 +301,9 @@ probes[14] = function()
   for _, v in ipairs(field and field.values() or {}) do labels[v.v] = v.label end
 
   local items = harvest.Items()
-  say('harvested items', #items)
+  record('harvested items', #items)
   if #items == 0 then
-    say('nothing in the bags to read — pick up an item first')
+    record('nothing in the bags to read — pick up an item first')
     return
   end
 
@@ -299,14 +312,14 @@ probes[14] = function()
   local first = items[1].itemID
   local rets = { pcall(C_Item.GetItemInfo, first) }
   if rets[1] then
-    say(string.format('C_Item.GetItemInfo(%d) returns by position:', first))
-    for i = 2, #rets do say(string.format('  %d %s', i - 1, tostring(rets[i]))) end
+    record(string.format('C_Item.GetItemInfo(%d) returns by position:', first))
+    for i = 2, #rets do record(string.format('  %d %s', i - 1, tostring(rets[i]))) end
   else
-    say(string.format('C_Item.GetItemInfo(%d) errored: %s', first, tostring(rets[2])))
+    record(string.format('C_Item.GetItemInfo(%d) errored: %s', first, tostring(rets[2])))
   end
 
   local full = enrich.ReadFull(first)
-  say('enrich.ReadFull position 15 -> expansion', full and tostring(full.expansion) or 'nil',
+  record('enrich.ReadFull position 15 -> expansion', full and tostring(full.expansion) or 'nil',
     labels[full and full.expansion or -1] or '')
 
   -- The free read only: ReadFull never issues a request, so this is what a refresh can know
@@ -322,11 +335,11 @@ probes[14] = function()
       end
     end
   end
-  say('free read answered', answered, 'of', #items, 'items; expansion present', withExpansion)
+  record('free read answered', answered, 'of', #items, 'items; expansion present', withExpansion)
   for id, count in pairs(values) do
-    say(string.format('  expansion %s (%s) x%d', tostring(id), labels[id] or 'unknown', count))
+    record(string.format('  expansion %s (%s) x%d', tostring(id), labels[id] or 'unknown', count))
   end
-  say('verdict: expansion is',
+  record('verdict: expansion is',
     answered == 0 and 'NOT readable without a request — drop the field (docs/02 FR-21)'
     or (withExpansion == 0 and 'readable but always nil — drop the field (docs/02 FR-21)'
       or 'readable for items the client already knows'))
@@ -340,6 +353,7 @@ end
 ---@return number containersFound
 function diag.Find(itemID)
   if not itemID then print('usage: /bos find <itemID>') return end
+  bucket = 'find'
   local found = 0
   for index = -3, 23 do
     local okSlots, slots = pcall(C_Container.GetContainerNumSlots, index)
@@ -348,27 +362,178 @@ function diag.Find(itemID)
         local ok, info = pcall(C_Container.GetContainerItemInfo, index, slot)
         if ok and info and info.itemID == itemID then
           found = found + 1
-          print(string.format('  [%d] slot %d  %s x%s', index, slot,
+          record(string.format('  [%d] slot %d  %s x%s', index, slot,
             tostring(info.itemName), tostring(info.stackCount or 1)))
         end
       end
     end
   end
-  print(string.format('containers holding item %d: %d', itemID, found))
+  record(string.format('containers holding item %d: %d', itemID, found))
   return found
 end
 
---- Run one probe by number.
----@param n number?
-function diag.Run(n)
-  local probe = probes[n]
-  if not probe then
-    print('probes: 2 bank containers + bank bags (#9, #25) · 3 bank events (#9) '
-      .. '· 7 keybind persistence · 11 new-item textures · 13 clock + pipeline cost · 14 expansion field')
+--- One container's specialty flags, read from `Enum.BagSlotFlags` rather than guessed (FR-19).
+---@param index number
+local function flagsOne(index)
+  local found = {}
+  for name, flag in pairs(Enum.BagSlotFlags or {}) do
+    if C_Container.GetBagSlotFlag(index, flag) then found[#found + 1] = name end
+  end
+  record(index, tostring(C_Container.GetBagName(index)), table.concat(found, ','))
+end
+
+--- Equipped bags, then the bank containers. This is what issue #2 measured with two /script lines;
+--- a test step calls it instead.
+local function flagsScan()
+  for index = 0, (NUM_TOTAL_EQUIPPED_BAG_SLOTS or 5) do flagsOne(index) end
+  local grid = (ITEM_INVENTORY_BANK_BAG_OFFSET or 5) + 1
+  for index = grid, grid + (NUM_CHARACTER_BANK_SLOTS or 9) - 1 do flagsOne(index) end
+end
+
+-- The names you type. A test step calls the same functions.
+local HELPERS = {
+  dump = probes[2], log = probes[3], keybind = probes[7], newitem = probes[11],
+  clock = probes[13], expansion = probes[14], flags = flagsScan,
+}
+
+-- ---------------------------------------------------------------------------
+-- Pending manual tests: one entry per open issue, added when a story needs measuring and deleted
+-- when its capture is ingested. `issue` is the GitHub issue the run sheet answers; the id is what
+-- you type. A step is { text = ..., run = ... }: text is the line the run sheet prints, and a step
+-- with no run is a manual action and gets no letter — the captured steps on either side of it are
+-- what make the capture readable.
+-- ---------------------------------------------------------------------------
+local tests = {
+  [15] = {
+    issue = 15,
+    what = 'what draws the new-item glow on our buttons (FR-47)',
+    needs = 'loot one new item first, then hover nothing before step a',
+    steps = {
+      { text = 'setup: which of our buttons are lit, and the client buttons too', run = probes[11] },
+      { text = 'hover the glowing button, wait two seconds, look at the slot' },
+      { text = 'capture: which buttons are lit now', run = probes[11] },
+    },
+  },
+  [22] = {
+    issue = 22,
+    what = "BetterBags' combat behaviour (input to the Q23 decision)",
+    needs = 'BetterBags loaded with its bags open, and a target to attack',
+    steps = {
+      { text = 'setup: which addons are loaded, then start event logging', run = function()
+          record('BetterBags', tostring(IsAddOnLoaded('BetterBags')),
+            'Leatrix_Plus', tostring(IsAddOnLoaded('Leatrix_Plus')),
+            'ForeverPlus', tostring(IsAddOnLoaded('ForeverPlus')))
+          probes[3]()
+        end },
+      { text = 'attack a target and take damage; open and close a BetterBags window during combat' },
+      { text = 'capture: stop event logging', run = probes[3] },
+    },
+  },
+}
+
+local function letterOf(n) return string.char(96 + n) end
+
+local function capturedCount(id)
+  local n = 0
+  for _, step in ipairs(tests[id].steps) do
+    if step.run then n = n + 1 end
+  end
+  return n
+end
+
+--- The pending list.
+---@return {id:number, what:string, needs:string}[]
+function diag.Tests()
+  local out = {}
+  for id, t in pairs(tests) do out[#out + 1] = { id = id, what = t.what, needs = t.needs } end
+  table.sort(out, function(a, b) return a.id < b.id end)
+  return out
+end
+
+--- Add a test at runtime. The off-client harness uses it to exercise the dispatcher without
+--- borrowing an entry from the pending list.
+function diag.Add(id, spec) tests[id] = spec end
+
+--- Print the run sheet (no letter) or run one captured step. Captured steps are lettered a, b, c…
+--- in order, and the first one opens the bucket for this test; later ones append to it.
+---@param id number
+---@param letter string?
+---@return string? the step text that ran, the test name when the sheet was printed, nil for a bad letter
+function diag.Test(id, letter)
+  local t = tests[id]
+  if not t then return nil end
+
+  if not letter then
+    print(string.format('Test %d (issue #%d): %s', id, t.issue, t.what))
+    print('pre-conditions: ' .. t.needs)
+    local n = 0
+    for _, step in ipairs(t.steps) do
+      if step.run then
+        n = n + 1
+        print(string.format('- /bos test %d%s  %s', id, letterOf(n), step.text))
+      else
+        print('- ' .. step.text)
+      end
+    end
+    print('/reload, then ../sync.sh')
+    return t.what
+  end
+
+  local want, n, total = letter:byte() - 96, 0, capturedCount(id)
+  for _, step in ipairs(t.steps) do
+    if step.run then
+      n = n + 1
+      if n == want then
+        if n == 1 then fresh(tostring(id)) else bucket = tostring(id) end
+        record(string.format('--- %d%s %s | build %s | %s - %s ---', id, letterOf(n), step.text,
+          GetBuildInfo(), tostring(UnitName('player')), tostring(GetRealmName())))
+        inTest = true
+        local ok, err = pcall(step.run)
+        inTest = false
+        if not ok then record('step failed: ' .. tostring(err)) end
+        if n == total then
+          record(string.format('captured %d%s — paste the [%d] bucket into issue #%d, then remove '
+            .. 'test %d from core/diag.lua', id, letterOf(n), id, t.issue, id))
+        end
+        return step.text
+      end
+    end
+  end
+  return nil
+end
+
+--- `/bos test` with whatever follows it: nothing (the list), an id, an id + letter, or a helper name.
+---@param rest string?
+function diag.Command(rest)
+  rest = rest or ''
+
+  local id = tonumber(rest:match('^(%d+)'))
+  if id then
+    if not tests[id] then
+      print('no test ' .. id .. ' — /bos test lists the pending ones')
+      return
+    end
+    local letter = rest:match('^%d+(%a)')
+    if not diag.Test(id, letter and letter:lower()) then print('no such step: ' .. rest) end
     return
   end
-  local ok, err = pcall(probe)
-  if not ok then print('probe ' .. tostring(n) .. ' failed: ' .. tostring(err)) end
+
+  local name = rest:match('^(%a+)')
+  local helper = name and HELPERS[name]
+  if helper then
+    bucket = name
+    inTest = false
+    local ok, err = pcall(helper)
+    if not ok then print('helper ' .. name .. ' failed: ' .. tostring(err)) end
+    return
+  end
+
+  local pending = diag.Tests()
+  print(string.format('pending tests (%d)', #pending))
+  for _, t in ipairs(pending) do
+    print(string.format('  %d  %s  —  %s', t.id, t.what, t.needs))
+  end
+  print('helpers: dump · log · flags · keybind · newitem · clock · expansion')
 end
 
 return diag

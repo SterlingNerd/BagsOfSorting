@@ -1,10 +1,20 @@
 # In-game checklist (Forever)
 
 The manual half of the test story: everything here is untestable off the client because it is a
-frame, a keybind, a protected action or a live Blizzard API. Run it on Forever, then paste the
-results into the milestone entry in `docs/06` with the date and patch (standing discipline #3).
+frame, a keybind, a protected action or a live Blizzard API.
 
-`/script` is gated on Forever: expect the one-time dangerous-scripts popup the first time.
+**Pending tests are not listed here.** `/bos test` lists them — short QA or investigation tasks tied
+to an open issue, defined in `core/diag.lua` and deleted once their capture is ingested. `/bos test
+<id>` prints one run sheet. The workflow — writing a test, running it, syncing, ingesting the result,
+and deleting the entry — is `.pi/skills/bos-test-capture/SKILL.md`.
+
+What stays here is the standing acceptance checklist: milestone acceptance criteria, and what those
+runs found. Verdicts go to `agents.md` and `docs/06` with the date and patch (standing discipline
+#3); the raw capture goes to the issue as a dated comment.
+
+`/script` is gated on Forever: expect the one-time dangerous-scripts popup the first time. A test step
+reaches the same API from the addon instead, which is why the run sheets here do not hand out
+`/script` lines.
 
 ## Setup (once per branch)
 
@@ -36,125 +46,11 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 **Precondition:** standing at an open bank. Bank bags help but are not required — if you cannot afford one yet, say so in the paste, because "eight slots visible, none filled" is itself an answer.
 
 1. Run `/bos` and copy the whole output into **issue #2**.
-2. Run `/bos test 2` at the bank and paste the output into **issue #9** — the full bank run sheet is below.
+2. Run `/bos test dump` at the bank and compare it against the storage-shape rows in `agents.md`.
 3. Write the numbers you can see next to the paste: base grid rows × columns (measured 2026-10-17: **6 × 8 = 48**) and how many bank bag slots the UI shows (**8**, against `NUM_CHARACTER_BANK_SLOTS = 9`).
 4. Update the `unverified` rows in `agents.md` with what the client actually said.
 
-**Expected:** `NUM_BAG_SLOTS=4`, `NUM_REAGENTBAG_SLOTS=1`, `NUM_TOTAL_EQUIPPED_BAG_SLOTS=5`, `KEYRING_CONTAINER=-1` with 32 slots. The `total container slots` line must account for the 48-slot base grid — if it comes up short by 48, the grid is not a container index (see the next test). The `bank bag` lines say whether the client has inventory slots for 8 or 9.
-
-### Manual test: is the bank's base grid a container? (issue #9, FR-14)
-
-**Precondition:** at an open bank. Move your hearthstone (item ID **6948**) into the **base grid** — the 6×8 area, not a bag — where you can see it. Keep the bank open for every step.
-
-1. Run `/bos find 6948`.
-2. Move the hearthstone into an equipped backpack bag and run `/bos find 6948` again.
-3. Move it back into the base grid and run `/bos test 2`, then compare the index from step 1 with the per-index list.
-
-**Expected:** step 1 prints an index and a slot for the hearthstone while it sits in the grid — **that index is the base grid**, and `data/harvest.lua` can read it like any other bag. Measured 2026-10-17: `[6] slot 19`, and the same item moved into an equipped backpack bag reported `[1] slot 1`. Step 2 must report a backpack index (0..5) instead, which proves the search itself works. If step 1 finds nothing while the item is visibly in the grid, the grid is not a container index and the harvest loop needs a different reader — the most important possible finding, and the one issue #9 exists to settle.
-
-### Manual test: bank container model and refresh events (issue #9)
-
-**Precondition:** at a bank. Bank bags are not required — with none purchased the probes still
-answer the grid questions, and "no bank bag owned yet" is itself part of the answer.
-
-**Capture:** every probe writes its output to SavedVariables as well as to chat, so a long run is
-never truncated by the chat window. `/reload` or log out, then read
-`../account/SavedVariables/BagsOfSorting.lua` → `BagsOfSortingDB.diag.bankOpen`, `.bankClosed`,
-`.bankEvents`, `.keybind`. Paste from that file into **issue #9**, one bucket per block.
-
-**Run A — bank open: `/bos test 2`.** What each line decides:
-
-| Line | Question it answers |
-|---|---|
-| `grid containers N` + the `grid` lines | is the 48-slot base grid **one container** or several? `N = 1` with 48 slots closes it |
-| `[6] …` and `[7]`..`[14]` in the index list | names and slot counts. Unpurchased bank bag slots must read 0 or ERR; a real bag name at 7..14 with none purchased means those indices are something else |
-| `bank bag 1..9` | which of the nine slots has an inventory slot — the 9-vs-8 question |
-| `total container slots` | must equal keyring 32 + backpack + equipped bags + the grid. Short by the grid means the grid is not a container index |
-| `tabs max/hasMax/purchased/canPurchase/lockedReason`, `viewable bank types` | whether there is a tab strip to honour at all (issue #10's `depositFlags` depend on this) |
-Measured 2026-10-18 (level 1, two bags equipped, no bank bag purchased): `grid containers 1 total slots 48
-per page 88 page 1`, `[6] Bank 48`, `[7]..[14] Bank 0`, `bank bag 1..9 → 63..71`, total **116** =
-keyring 32 + backpack 20 + 6 + 6 + reagent 4 + grid 48. All four questions that run answers are closed.
-
-**Run B — bank closed: `/bos test 2` again** (`bank window shown false` is what tells the two
-pastes apart). Measured 2026-10-18: index 6 reads **0 slots closed, 48 open**, `FetchPurchasedBankTabData`
-returns 0 entries closed and 1 open, `CanPurchaseBankTab` flips to false, `FetchViewableBankTypes`
-empties, and the total drops 116 → 68. So the bank half of the container list is re-discovered on
-`BANKFRAME_OPENED` and dropped on `BANKFRAME_CLOSED` (AC-13), and no `C_Bank` predicate is readable
-while the bank is closed.
-
-**Run C — refresh events: `/bos test 3`**, then **one action at a time**, waiting for the print after
-each: withdraw one item → deposit one item → move a bank bag between bank bag slots (skip it if none
-is owned) → close the bank → open the bank. Run `/bos test 3` again to stop logging. Turn `/bos debug`
-off first: our own refresh lines interleave with the event lines.
-
-Measured 2026-10-18, two runs — the second: deposit into grid slot 1, deposit into slot 48, withdraw,
-close the bank, re-open.
-
-- `BANKFRAME_OPENED` and `BANKFRAME_CLOSED` fire with **no payload**, and opening fires **no
-  `BAG_UPDATE`**. Combined with index 6 reading 0 slots while closed, the bank container can only
-  enter the discovered list through an explicit `BANKFRAME_OPENED` handler — waiting for a container
-  event never works.
-- A deposit or withdraw produces `ITEM_LOCK_CHANGED(containerID, slot)` then `BAG_UPDATE(containerID)`
-  on **both** sides: `6 1` + `BAG_UPDATE 6` for the grid, `0 1` + `BAG_UPDATE 0` for the backpack,
-  with `BAG_UPDATE -1` alongside. The existing bucketed `BAG_UPDATE` listener covers bank refresh;
-  no bank timer.
-- `ITEM_LOCK_CHANGED` slots are grid-relative inside container 6 (`6 1`, `6 48`), not a global bank
-  slot number. Inside a bank bag they are bag-relative (`7 5`, `7 3`).
-- **`PLAYERBANKSLOTS_CHANGED` does not fire for deposits or withdrawals** across either run — bank
-  refresh is `BAG_UPDATE(6)` plus `ITEM_LOCK_CHANGED(6, slot)`. It **does** fire when the bag in a bank
-  slot changes, and then its payload is the bank bag slot 1..9, not a container index (Run D, 2026-10-19).
-
-**Run D — with a purchased bank bag (issue #25).** Buy the slot, put a bag in it, then `/bos test 2`
-with the bank open. Run `/bos test 3` as **one** logging session — deposit into the bag → deposit into
-the grid → withdraw from the bag → take the bag out of the bank slot and put a different one in it →
-stop. Starting the logger a second time wipes the first run (probe 3 calls `fresh('bankEvents')`), and
-`/bos test 2` likewise keeps only its latest run per bucket, so run probe 2 **after** the actions.
-
-Measured 2026-10-19 (one bag slot owned; a 6-slot bag swapped out for an 8-slot Red Linen Bag):
-
-| Line | Answer |
-|---|---|
-| `bank slot [7] Bank 8` | the bag is container index **7**, and `GetBagName` calls it **`Bank`** — the same name as the grid and every unpurchased slot. The container API never reports the bag item's name |
-| `grid containers 2 total slots 56 per page 88 page 1`, `grid 6 48`, `grid 7 8` | the client's own panel builds the view from **two containers**, 6 and 7, on one page |
-| `purchased tab data 2` → `tab 6 Tab 1 … 48`, `tab 7 Tab 2 … 8` | the bag slot is a second `BankTabData` entry: `ID 7, "Tab 2", icon 134400, depositFlags 0` |
-| `purchased tab ids 6,7`, `tabs … purchased 2` | it is in the API's own purchased-tab list, and it counts as a purchased tab |
-| `grid + bags 6..14 total slots 56 — still one page`, `total container slots 124` | 48 + 8 = 56 bank slots, 124 across every index (was 116 with no bag) |
-| slot count across the swap | 6 → 0 → 8: **the container's slot count follows the bag item placed in it** |
-| `next purchasable tab cost 10000 canAfford false` | the next slot is 1 gold, rising per slot, and this character could not buy it |
-
-Events from the same session: `ITEM_LOCK_CHANGED 7 5` then `BAG_UPDATE 7` for a deposit **into the bag**
-(bag-relative slot 1..8), `ITEM_LOCK_CHANGED 7 3` then `BAG_UPDATE 7` for the withdraw, and
-`ITEM_LOCK_CHANGED 6 27` + `BAG_UPDATE 6` for the grid — so a bank bag's contents are read at its own
-container index. **`PLAYERBANKSLOTS_CHANGED` fires when the bag in a bank slot changes**, payload
-**`2` = bank bag slot 1..9, not a container index** (`ITEM_INVENTORY_BANK_BAG_OFFSET + 2 = 7`); moving
-the bag also fired `ITEM_LOCK_CHANGED 33` / `32` (one argument: an inventory slot) and `BAG_UPDATE 3`
-for the receiving character bag slot.
-
-Same run, one more fact: equipped bags read `[1] Small Red Pouch, [2] nil, [3] Scorched Leather Pouch`
-after the swap where the same session had read `[2] Scorched Leather Pouch, [3] nil` before it. The
-client re-slots equipped bags, so **character bag slot indices are positions, not identities**.
-
-`/bos find` prints to chat only — it is not captured in SavedVariables — so the bag-relative read above
-came from the event lines rather than from a `find` paste.
-
-**Run E — bag flags (issue #2's last step).** Two `/script` lines, both under the 255-character limit;
-CCat captures them into `out.txt`:
-
-```
-/script for i=0,NUM_TOTAL_EQUIPPED_BAG_SLOTS do local f={} for n,v in pairs(Enum.BagSlotFlags) do if C_Container.GetBagSlotFlag(i,v) then f[#f+1]=n end end print(i,C_Container.GetBagName(i),table.concat(f,',')) end
-```
-```
-/script for i=6,14 do local f={} for n,v in pairs(Enum.BagSlotFlags) do if C_Container.GetBagSlotFlag(i,v) then f[#f+1]=n end end print(i,C_Container.GetBagName(i),table.concat(f,',')) end
-```
-
-Measured 2026-10-19: **every container printed with no flags** — the equipped pouches, the reagent bag
-(`Apprentice's Herb Pouch`, index 5) and bank containers 6..14 alike.
-
-**Still to run**, both gated on gold: `BANK_TABS_CHANGED` / `BANK_BAG_SLOT_FLAGS_UPDATED` need a real
-purchase, and paging past one page needs grid + bags > 88 (48 plus three 20-slot bank bags).
-
-**Record:** the buckets as a dated comment on the issue, then the verdicts into `agents.md` and
-`docs/07` Q10 — done for the 2026-10-18 run.
+**Expected:** `NUM_BAG_SLOTS=4`, `NUM_REAGENTBAG_SLOTS=1`, `NUM_TOTAL_EQUIPPED_BAG_SLOTS=5`, `KEYRING_CONTAINER=-1` with 32 slots. The `total container slots` line must account for the 48-slot base grid — if it comes up short by 48, the grid is not a container index. The `bank bag` lines say whether the client has inventory slots for 8 or 9.
 
 ### Manual test: real inventory, nothing counted twice (AC-14, AC-16, FR-15)
 
@@ -229,7 +125,7 @@ purchase, and paging past one page needs grid + bags > 88 (48 plus three 20-slot
 
 **Precondition:** a key bound to *Toggle sorting bags* in Options → Key Bindings. Measured 2026-10-19 with `CTRL-B`: the client writes it (`bind CTRL-B BAGSOF_SORTING_TOGGLE` in `bindings-cache.wtf`), holds it in its own binding table, and it survives `/reload` twice and a game restart. The 2026-10-17 failure with `F7` does not reproduce — in that session the line never reached the bindings file, so the panel edit was never committed.
 
-1. Run `/bos test 7`: the client's key, the binding set, `registered index`, and `stored` (our copy).
+1. Run `/bos test keybind`: the client's key, the binding set, `registered index`, and `stored` (our copy).
 2. `/reload`, then run it again.
 3. Log out, log back in, run it again.
 4. `grep BAGSOF_SORTING ../account/bindings-cache.wtf`.
@@ -282,7 +178,7 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 **Precondition:** windows open; one item you have not picked up this session (loot a mob), one **quest** item, one **grey** item, and Blizzard's bag window open beside ours showing the same slots.
 
 1. Loot the new item and look at our window before touching it.
-2. Run `/bos test 11` **without hovering** — it walks our own named button pool and the client's own bag buttons and prints every child texture that is lit, which is what `/framestack` cannot do once the hover clears the state.
+2. Run `/bos test newitem` **without hovering** — it walks our own named button pool and the client's own bag buttons and prints every child texture that is lit, which is what `/framestack` cannot do once the hover clears the state.
 3. Compare the two halves of the output: same item, same texture names, same atlases?
 4. Compare the two for the quest item and the grey item too. `docs/reference/new-item-highlight-bright.png` and `-dim.png` are the client's own highlight for reference.
 5. Hover our button, then look at Blizzard's window for the same slot.
@@ -305,7 +201,7 @@ Note when reading the output: **a hide runs no refresh** (`windows.HideAll()` re
 
 **Precondition:** a normally full backpack (not a level-1 character), windows open.
 
-1. Run `/bos test 13`. It first measures the clock (1e6 Lua iterations) and then runs the pipeline many times across frames.
+1. Run `/bos test clock`. It first measures the clock (1e6 Lua iterations) and then runs the pipeline many times across frames.
    If the clock line reports `0`, `GetTime` is frame-quantized on this client — measured 2026-10-17 — which is why `/bos perf` prints `timings: unmeasurable in one frame` instead of per-phase numbers (issue #20). The `bench:` line is the timing that gets recorded.
 2. Run `/bos perf` five times for the pool and cache numbers.
 3. Paste the clock line, the `bench:` line and the five `/bos perf` lines into the M1 entry in `docs/06` with the date and patch.

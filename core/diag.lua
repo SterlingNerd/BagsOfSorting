@@ -57,9 +57,11 @@ end
 
 --- dump — the bank arithmetic issue #9 is blocked on. Stand at an open bank with bank bags equipped.
 probes[2] = function()
-  -- Run it twice — once with the bank open, once closed — and the two runs land in two buckets,
-  -- so the diff is readable off disk without a paste.
-  fresh(BankFrame and BankFrame:IsShown() and 'bankOpen' or 'bankClosed')
+  -- Run it twice standalone — once with the bank open, once closed — and the two runs land in two
+  -- buckets, so the diff is readable off disk without a paste. Inside a test step the bucket belongs
+  -- to the test, so the bank state is recorded inline instead of switching buckets.
+  local state = BankFrame and BankFrame:IsShown() and 'bankOpen' or 'bankClosed'
+  if inTest then record('dump while', state) else fresh(state) end
   record('constants', NUM_BAG_SLOTS, NUM_REAGENTBAG_SLOTS, NUM_TOTAL_EQUIPPED_BAG_SLOTS,
     ITEM_INVENTORY_BANK_BAG_OFFSET, NUM_CHARACTER_BANK_SLOTS)
   record('bank window shown', BankFrame and tostring(BankFrame:IsShown()) or 'no BankFrame global')
@@ -412,6 +414,24 @@ local tests = {
       { text = 'setup: which of our buttons are lit, and the client buttons too', run = probes[11] },
       { text = 'hover the glowing button, wait two seconds, look at the slot' },
       { text = 'capture: which buttons are lit now', run = probes[11] },
+    },
+  },
+  [27] = {
+    issue = 27,
+    what = 'the /bos test capture path itself (the mechanism, not the client)',
+    needs = 'at an open bank with one item you can move back out again',
+    steps = {
+      { text = 'setup: which tests are pending, then start event logging', run = function()
+          local ids = {}
+          for _, t in ipairs(diag.Tests()) do ids[#ids + 1] = tostring(t.id) end
+          record('pending tests', table.concat(ids, ', '))
+          probes[3]()
+        end },
+      { text = 'deposit one item into the base grid, then withdraw it' },
+      { text = 'capture: stop event logging, then the container dump', run = function()
+          probes[3]()
+          probes[2]()
+        end },
     },
   },
   [22] = {

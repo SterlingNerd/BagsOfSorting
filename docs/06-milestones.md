@@ -72,13 +72,15 @@ is wrong and everything downstream is re-planned here, cheaply.
 covers rules, the priority ladder, sort modes and flow boundaries. Measured in-game: **AC-14/16** — real
 inventory, nothing counted twice, grey items in Junk, armour in Armor, the rest in the catch-all —
 **AC-103** — a looted item the client had never seen lands in the catch-all and classifies correctly once
-its data arrives — and **AC-100/101** (2.20 ms per refresh on build 70450). The `expansion` question is
-answered and the field is out of the v1 set.
+its data arrives — **AC-100/101** (2.20 ms per refresh on build 70450) — **AC-97** (`/exit` then re-login:
+`item cache=113, tier3 requested=0 resolved=0 pending=0`) — and the **priority ladder** on the real item:
+Tools, Quest Items and Junk all classify as designed once schema version 2 has run, which puts 5411
+Winterhoof Cleansing Totem (Armor *and* a quest item) in Quest Items rather than Armor. The `expansion`
+question is answered and the field is out of the v1 set.
 
-Left, all of it in-game: the **priority ladder** on the real item (5411 Winterhoof Cleansing Totem is
-Armor *and* a quest item, so it must land in Quest Items), **AC-97** with the shipped Tools category,
-and **AC-42** (pool numbers come from `/bos perf`, not `/bos debug`). All three are run sheets in
-`tests/CHECKLIST.md`; the first two are tracked as **issue #26**.
+Left: **AC-42** — `/bos perf`, ten `/bos hide` + `/bos show` cycles, `/bos perf` again, `created`
+unchanged. One cycle is already on the record from the AC-97 run (`itemButton: created=25` before and
+after a show, `idle` returning from 7 to 25), so this is a confirmation run, not an open question.
 
 
 Deliverables

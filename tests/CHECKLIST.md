@@ -304,7 +304,7 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 2. `/exit`, log in again.
 3. Run `/bos perf`.
 
-**Expected:** login 1 shows a Tools section holding those items with icons; login 2's first refresh shows no `tier3=` and `item cache` at least 2.
+**Expected:** login 1 shows a Tools section holding those items with icons; login 2's first refresh shows no `tier3=` and `item cache` at least 2. Measured 2026-10-19: after `/exit` and a fresh login, `item cache=113, tier3 requested=0 resolved=0 pending=0`, and Tools, Quest Items and Junk all classify correctly.
 
 ### Manual test: no test code loads in-game (FR-106)
 

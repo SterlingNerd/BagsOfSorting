@@ -46,6 +46,7 @@ local ORDER = {
   'data/sort.lua',
   'data/pipeline.lua',
   'layout/flow.lua',
+  'config/keybinds.lua',
   'core/diag.lua',
   'tests/fixtures.lua',
   'tests/selftest.lua',
@@ -197,6 +198,43 @@ check('tier-3 requests issued', pipeline.Last().requestsIssued, 1)
 -- /bos find: which container index holds an item. 1001 sits in the backpack, 999999 nowhere.
 check('find locates an item across container indices', addon.modules['Diag'].Find(1001), 1)
 check('find reports nothing for an absent item', addon.modules['Diag'].Find(999999), 0)
+-- /bos test 3: the PLAYERBANKSLOTS_CHANGED payload read both ways, so the in-game paste carries
+-- the answer rather than a bare number.
+local diag = addon.modules['Diag']
+check('bank slot payload read as a container index', diag.ExplainBankSlot(1), 'Bag 1 [1] 2 slots')
+check('bank slot payload read as a slot in the base grid', select(2, diag.ExplainBankSlot(1)), 'empty')
+check('bank slot payload ignores a non-number', diag.ExplainBankSlot(nil), nil)
+
+-- The keybind mirror (issue #13): the client writes our action to bindings-cache.wtf and it
+-- survives a restart, but /reload re-registers Bindings.xml and can drop it. Whatever the client
+-- has at login is stored; if the client has nothing, ours goes back.
+local keybinds = addon.modules['Keybinds']
+local sv = addon.modules['DB'].sv
+local bound, applied
+_G.GetBindingKey = function() return bound end
+_G.SetBinding = function(_, action) applied = action; return true end
+
+keybinds.Restore()
+check('nothing bound and nothing stored forces nothing', applied, nil)
+
+bound = 'F6'
+keybinds.Restore()
+check('what the client has at login is stored', sv.global.keybinds.BAGSOF_SORTING_TOGGLE, 'F6')
+check('a binding the client already holds is not re-set', applied, nil)
+
+bound = nil
+applied = nil
+keybinds.Restore()
+check('a binding the client lost is restored from our copy', applied, 'BAGSOF_SORTING_TOGGLE')
+
+bound = 'F7'
+addon.modules['Events'].Emit('UPDATE_BINDINGS')
+check('a rebind in the panel is captured', sv.global.keybinds.BAGSOF_SORTING_TOGGLE, 'F7')
+
+bound = nil
+addon.modules['Events'].Emit('PLAYER_LOGOUT')
+check('an unbind is stored as an unbind, not re-applied from an old value',
+  sv.global.keybinds.BAGSOF_SORTING_TOGGLE, nil)
 
 -- ITEM_DATA_LOAD_RESULT also fires for requests Blizzard or another addon made. Caching that data
 -- is free and correct; counting it as one of ours is what made `pending` go negative.

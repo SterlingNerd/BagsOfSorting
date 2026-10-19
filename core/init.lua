@@ -19,6 +19,7 @@ local options = addon:GetModule('AddonOptions')
 local itemFrames = addon:GetModule('ItemFrames')
 local pool = addon:GetModule('Pool')
 local diag = addon:GetModule('Diag')
+local keybinds = addon:GetModule('Keybinds')
 
 init.started = false
 
@@ -78,6 +79,9 @@ function init.Start()
   if init.started then return end
   init.started = true
 
+  -- Insurance for the one measured case where the client drops our binding: it re-applies our
+  -- copy only when the client holds none (issue #13).
+  keybinds.Restore()
   harvest.Discover()
   -- Pre-warm the button pool from the real inventory so a combat loot event does not have to
   -- create a secure button (agents.md hard rule 3).
@@ -130,7 +134,7 @@ end
 local HELP = {
   '/bos            client capability dump + harvested containers',
   '/bos perf       last refresh timings, pool and item-cache stats',
-  '/bos test <n>   in-game probe: 2 bank, 7 keybind, 11 new-item, 13 clock+cost',
+  '/bos test <n>   in-game probe: 2 bank containers, 3 bank events, 7 keybind, 11 new-item, 13 clock+cost',
   '/bos find <id>  which container index holds that item',
   '/bos refresh    re-run the pipeline',
   '/bos show|hide  show or hide the sorting windows',

@@ -14,7 +14,7 @@ results into the milestone entry in `docs/06` with the date and patch (standing 
 
 **Coverage note:** a level-1 character with no bags exercises the keyring and the backpack only —
 `/bos` then lists `[-1] Keyring` and `[0] Backpack` and nothing else, which is correct, not a bug.
-Tests 3, 10 and 17 need at least one equipped bag; test 2 needs bank access. Re-run those once the
+Tests 3, 10 and 17 need at least one equipped bag; tests 2 and 3 need bank access. Re-run those once the
 character has a bag and can reach a bank.
 
 ---
@@ -36,7 +36,7 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 **Precondition:** standing at an open bank. Bank bags help but are not required — if you cannot afford one yet, say so in the paste, because "eight slots visible, none filled" is itself an answer.
 
 1. Run `/bos` and copy the whole output into **issue #2**.
-2. Run `/bos test 2` at the bank and paste the output into **issue #9**.
+2. Run `/bos test 2` at the bank and paste the output into **issue #9** — the full bank run sheet is below.
 3. Write the numbers you can see next to the paste: base grid rows × columns (measured 2026-10-17: **6 × 8 = 48**) and how many bank bag slots the UI shows (**8**, against `NUM_CHARACTER_BANK_SLOTS = 9`).
 4. Update the `unverified` rows in `agents.md` with what the client actually said.
 
@@ -51,6 +51,68 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 3. Move it back into the base grid and run `/bos test 2`, then compare the index from step 1 with the per-index list.
 
 **Expected:** step 1 prints an index and a slot for the hearthstone while it sits in the grid — **that index is the base grid**, and `data/harvest.lua` can read it like any other bag. Measured 2026-10-17: `[6] slot 19`, and the same item moved into an equipped backpack bag reported `[1] slot 1`. Step 2 must report a backpack index (0..5) instead, which proves the search itself works. If step 1 finds nothing while the item is visibly in the grid, the grid is not a container index and the harvest loop needs a different reader — the most important possible finding, and the one issue #9 exists to settle.
+
+### Manual test: bank container model and refresh events (issue #9)
+
+**Precondition:** at a bank. Bank bags are not required — with none purchased the probes still
+answer the grid questions, and "no bank bag owned yet" is itself part of the answer.
+
+**Capture:** every probe writes its output to SavedVariables as well as to chat, so a long run is
+never truncated by the chat window. `/reload` or log out, then read
+`../account/SavedVariables/BagsOfSorting.lua` → `BagsOfSortingDB.diag.bankOpen`, `.bankClosed`,
+`.bankEvents`, `.keybind`. Paste from that file into **issue #9**, one bucket per block.
+
+**Run A — bank open: `/bos test 2`.** What each line decides:
+
+| Line | Question it answers |
+|---|---|
+| `grid containers N` + the `grid` lines | is the 48-slot base grid **one container** or several? `N = 1` with 48 slots closes it |
+| `[6] …` and `[7]`..`[14]` in the index list | names and slot counts. Unpurchased bank bag slots must read 0 or ERR; a real bag name at 7..14 with none purchased means those indices are something else |
+| `bank bag 1..9` | which of the nine slots has an inventory slot — the 9-vs-8 question |
+| `total container slots` | must equal keyring 32 + backpack + equipped bags + the grid. Short by the grid means the grid is not a container index |
+| `tabs max/hasMax/purchased/canPurchase/lockedReason`, `viewable bank types` | whether there is a tab strip to honour at all (issue #10's `depositFlags` depend on this) |
+Measured 2026-10-18 (level 1, two bags equipped, no bank bag purchased): `grid containers 1 total slots 48
+per page 88 page 1`, `[6] Bank 48`, `[7]..[14] Bank 0`, `bank bag 1..9 → 63..71`, total **116** =
+keyring 32 + backpack 20 + 6 + 6 + reagent 4 + grid 48. All four questions that run answers are closed.
+
+
+**Run B — bank closed: `/bos test 2` again** (`bank window shown false` is what tells the two
+pastes apart). Measured 2026-10-18: index 6 reads **0 slots closed, 48 open**, `FetchPurchasedBankTabData`
+returns 0 entries closed and 1 open, `CanPurchaseBankTab` flips to false, `FetchViewableBankTypes`
+empties, and the total drops 116 → 68. So the bank half of the container list is re-discovered on
+`BANKFRAME_OPENED` and dropped on `BANKFRAME_CLOSED` (AC-13), and no `C_Bank` predicate is readable
+while the bank is closed.
+
+**Run C — refresh events: `/bos test 3`**, then **one action at a time**, waiting for the print after
+each: withdraw one item → deposit one item → move a bank bag between bank bag slots (skip it if none
+is owned) → close the bank → open the bank. Run `/bos test 3` again to stop logging. Turn `/bos debug`
+off first: our own refresh lines interleave with the event lines.
+
+Measured 2026-10-18, two runs — the second: deposit into grid slot 1, deposit into slot 48, withdraw,
+close the bank, re-open.
+
+- `BANKFRAME_OPENED` and `BANKFRAME_CLOSED` fire with **no payload**, and opening fires **no
+  `BAG_UPDATE`**. Combined with index 6 reading 0 slots while closed, the bank container can only
+  enter the discovered list through an explicit `BANKFRAME_OPENED` handler — waiting for a container
+  event never works.
+- A deposit or withdraw produces `ITEM_LOCK_CHANGED(containerID, slot)` then `BAG_UPDATE(containerID)`
+  on **both** sides: `6 1` + `BAG_UPDATE 6` for the grid, `0 1` + `BAG_UPDATE 0` for the backpack,
+  with `BAG_UPDATE -1` alongside. The existing bucketed `BAG_UPDATE` listener covers bank refresh;
+  no bank timer.
+- `ITEM_LOCK_CHANGED` slots are grid-relative inside container 6 (`6 1`, `6 48`), not a global bank
+  slot number.
+- **`PLAYERBANKSLOTS_CHANGED` never fired** across either run, through deposits and withdrawals. Bank
+  refresh is `BAG_UPDATE(6)` plus `ITEM_LOCK_CHANGED(6, slot)`; the payload question is moot.
+
+**Still to run** — moved to **issue #25** when issue #9 closed:
+
+1. Once a bank bag is affordable, run A again: a purchased bag's slot count, whether 7..14 then
+   report real counts, and whether paging grows past one page.
+2. `BANK_TABS_CHANGED` and `BANK_BAG_SLOT_FLAGS_UPDATED` are still unobserved — run `/bos test 3`
+   across a purchase and see whether either fires.
+
+**Record:** the buckets as a dated comment on the issue, then the verdicts into `agents.md` and
+`docs/07` Q10 — done for the 2026-10-18 run.
 
 ### Manual test: real inventory, nothing counted twice (AC-14, AC-16, FR-15)
 
@@ -109,16 +171,18 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 **Expected:** a **Bags of Sorting** category exists in the panel with one entry, currently unbound; `F7` shows the windows, `F7` again hides them.
 
-### Manual test: the keybind survives a reload and a logout (FR-64)
+### Manual test: the keybind survives a reload and a logout (FR-64, issue #13)
 
-**Precondition:** `F7` bound to *Toggle sorting bags* in Options → Key Bindings. Measured 2026-10-17: the binding worked but did **not** survive `/reload`, and `BAGSOF_SORTING_TOGGLE` is absent from the account bindings file.
+**Precondition:** a key bound to *Toggle sorting bags* in Options → Key Bindings. Measured 2026-10-19 with `CTRL-B`: the client writes it (`bind CTRL-B BAGSOF_SORTING_TOGGLE` in `bindings-cache.wtf`), holds it in its own binding table, and it survives `/reload` twice and a game restart. The 2026-10-17 failure with `F7` does not reproduce — in that session the line never reached the bindings file, so the panel edit was never committed.
 
-1. Run `/bos test 7` and note what it prints for `BAGSOF_SORTING_TOGGLE`.
+1. Run `/bos test 7`: the client's key, the binding set, `registered index`, and `stored` (our copy).
 2. `/reload`, then run it again.
 3. Log out, log back in, run it again.
 4. `grep BAGSOF_SORTING ../account/bindings-cache.wtf`.
 
-**Expected:** `F7` at all three steps, and step 4 finds `bind F7 BAGSOF_SORTING_TOGGLE`. The same file already contains `bind NUMLOCK LOREFOREVER_TOGGLE`, which proves this client persists addon bindings declared in `Bindings.xml` — so a missing line is our bug, not the client's.
+**Expected:** the key present at every step, `registered index` non-nil, and `stored` matching the client. Measured 2026-10-19: `BAGSOF_SORTING_TOGGLE = CTRL-B`, `registered index 287`, `stored CTRL-B`, `binding set 1` = `Enum.BindingSet.Account`, so the key is account-wide rather than per character. Step 4 finds the line; a missing line means the panel never committed the edit.
+
+Probe 7 died after its first line until 2026-10-19 because it called `GetBinding('BAGSOF_SORTING_TOGGLE')`, and `GetBinding` takes a binding index on this client. It calls `GetBindingKey` now.
 
 ### Manual test: bags are reachable in combat, contents may lag (Q23)
 

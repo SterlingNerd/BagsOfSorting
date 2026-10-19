@@ -75,8 +75,10 @@ Deliverables
   deltas are unmeasurable on this client — `GetTime` is frame-quantized; `/bos test 13` measures across frames)
 - `Bindings.xml` + `config/keybinds.lua` and the Options → AddOns category from `config/settingspanel.lua`
   (`FR-64`, `FR-88`, pulled forward from M6: a prototype with no keybind entry and no options entry
-  is one the player cannot find or configure). **Issue #13**: a binding set in Options does not survive
-  `/reload`, while another addon's binding does persist in the account's `bindings-cache.wtf`
+  is one the player cannot find or configure). **Issue #13** closed: the binding does persist —
+  `bind CTRL-B BAGSOF_SORTING_TOGGLE` in the account's `bindings-cache.wtf`, surviving `/reload` twice
+  and a game restart, in `Enum.BindingSet.Account`. The 2026-10-17 report does not reproduce: in that
+  session the edit never reached the file. `config/keybinds.lua` stays as insurance
 
 Exit criteria
 - **AC-14, AC-16** real inventory appears, nothing duplicated, unmatched items in the catch-all.
@@ -162,8 +164,8 @@ Exit criteria
 Risks
 - River packing with long section titles is exactly where Baggins gets ugly (`title:GetStringWidth()/39`
   magic). Plan for a real measurement-based sizing function, and test with a 30-char section name.
-- Bank container enumeration on Forever (bank tabs + bank bags indices) is the highest-uncertainty
-  area; if it slips, bank windows move to M5 and M2 stays backpack-only.
+- Bank container enumeration is **settled** (issue #9, measured 2026-10-18): index 6 is the 48-slot grid,
+  7..14 are the bank bag slots. Bank windows stay in M5 by plan, not by uncertainty.
 
 ---
 
@@ -268,8 +270,8 @@ Deliverables
   by `docs/07` Q5)
 - dynamic categories (`kind = "dynamic"`, **FR-25**) if `docs/07` Q8 keeps it Must
 - **no `data/snapshot.lua`** (`FR-109`): the harvest loop is the only inventory reader, and bank
-  containers are read while the bank is open. Issue #9 decides whether a bank *window* maps onto one
-  48-slot grid or onto tab containers
+  containers are read while the bank is open. Issue #9 answered: a bank window maps onto **one 48-slot
+  grid at index 6**, plus one container per purchased bank bag at 7..14
 
 Exit criteria
 - **AC-13** bank windows only appear while the bank is open; bank bags and tabs are complete.
@@ -283,9 +285,12 @@ Exit criteria
 - **AC-110** closed-bank search behaves honestly before and after visiting the bank.
 
 Risks
-- Bank container enumeration on Forever (tab count from `C_Bank.FetchNumPurchasedBankTabs`, bank bag
-  indices, `Enum.BagIndex.AccountBankTab_N` being inert) is still the highest-uncertainty area; the
-  M0 capability dump must have answered it before this milestone starts.
+- The container model is measured (issue #9): index 6 = the 48-slot grid, 7..14 = bank bags,
+  `BAG_UPDATE(6)` is the refresh path, and index 6 answers 0 slots while the bank is closed. Two
+  consequences are hard requirements: `harvest.Invalidate()` + `Discover()` on `BANKFRAME_OPENED`
+  (opening fires no container event, so nothing else ever reveals the bank container) and dropping it
+  on `BANKFRAME_CLOSED` (AC-13). The only unmeasured shape is a **purchased** bank bag — **issue #25**,
+  blocked on gold, with the working assumption recorded in `agents.md`.
 - A persisted snapshot is the first place this design writes derived state to disk. If it grows
   unbounded or leaks item data a user did not opt into, it is cut back to session-only rather than
   tuned.

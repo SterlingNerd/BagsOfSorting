@@ -6,7 +6,10 @@
 -- issues #9/#10/#11). Every probe is pcall'd: an index that errors and an index that returns
 -- 0 are both answers, neither is a crash.
 --
--- shortcut: backpack side only. Bank containers move with issue #9 to M5 (docs/06 M2 risk).
+-- shortcut: backpack side only. Issue #9 (closed 2026-10-18) settled the bank side: index 6 is the
+-- 48-slot grid, 7..14 are the bank bag slots, and index 6 answers 0 slots while the bank is closed —
+-- so bank containers enter the discovered list on BANKFRAME_OPENED and leave on BANKFRAME_CLOSED.
+-- That wiring is M5 work; the purchased-bag shape is issue #25.
 
 local _, addon = ...
 

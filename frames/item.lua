@@ -84,10 +84,17 @@ function itemFrames.Paint(entry, item, parent)
   SetItemButtonTexture(entry.button, entry.item.icon or 0)
   SetItemButtonQuality(entry.button, item.quality, item.link, false, item.isBound)
   SetItemButtonCount(entry.button, item.stackCount > 1 and item.stackCount or nil)
-  -- shortcut: Blizzard's UpdateContainerButtonInfo also runs UpdateNewItem, UpdateQuestItem,
-  -- UpdateJunkItem, UpdateItemContextMatching, UpdateCooldown and SetReadable on its own buttons.
-  -- M1 only needs the icon, quality border and count to prove the pipeline; the overlays arrive
-  -- with the milestone that owns each one (FR-47 new items, FR-45 quest, FR-65 junk).
+  -- The new-item glow (FR-47, issue #35), drawn by the client's own method: UpdateNewItem reads
+  -- C_NewItems.IsNewItem(bagID, slot), sets NewItemTexture's atlas from the quality and plays
+  -- newitemglowAnim — alpha 1 → 0.2 → 1, 0.5 s each way, looping, which is the pulsating highlight
+  -- in docs/reference/new-item-highlight-*.png. When the slot is not new it hides the texture and
+  -- stops the anims. Asking every paint is what makes the state ours: a pooled button never carries
+  -- the glow of the item it held last refresh, and a slot the player hovered stays dark because
+  -- ContainerFrameItemButton_OnEnter already removed it from the client's list.
+  entry.button:UpdateNewItem(item.quality)
+  -- shortcut: Blizzard's UpdateContainerButtonInfo also runs UpdateQuestItem, UpdateJunkItem,
+  -- UpdateItemContextMatching, UpdateCooldown and SetReadable on its own buttons. Those overlays
+  -- arrive with the milestone that owns each one (FR-45 quest, FR-65 junk).
 
   entry.parent:Show()
   entry.button:Show()
@@ -118,6 +125,9 @@ function itemFrames.PaintEmpty(entry, slot, count, parent)
   entry.button:SetHasItem(false)
   entry.button.minDisplayCount = 0
   SetItemButtonCount(entry.button, count)
+  -- An empty slot is never new — and this is also what drops the glow a pooled button carried from
+  -- the item it held before (issue #35).
+  entry.button:UpdateNewItem(nil)
 
   entry.parent:Show()
   entry.button:Show()

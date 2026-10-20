@@ -250,6 +250,10 @@ check('captured steps ran', captured, 2)
 check('one bucket per test', #addon.modules['DB'].sv.diag['900'], 3)
 check('the bucket opens with the first step header',
   addon.modules['DB'].sv.diag['900'][1]:match('^--- 900a'), '--- 900a')
+-- The build stamp is what makes a capture comparable across clients (issue #24), so the header
+-- carries the interface version **and** the build number.
+check('the step header carries the build and its build number',
+  addon.modules['DB'].sv.diag['900'][1]:match('build [%d%.]+ %(%d+%)'), 'build 1.16.0 (1)')
 -- The run sheet is what a human follows in game, so its shape is a check: one numbered line per
 -- step, manual steps included, and the closing /reload and sync as steps of their own. A compound
 -- step is how a manual action gets skipped.

@@ -415,7 +415,9 @@ that has never had the addon, with the first-run experience tested by someone el
 2. `lua5.1 tests/run.lua` green in CI — classifier fixtures grow with each new field.
 3. `/bos test <n>` probes run for what they cover: 2 (bank arithmetic), 7 (keybind persistence),
    11 (new-item textures), 13 (clock + pipeline cost). Probes live in `core/diag.lua` because
-   `/script` is one line capped near 255 characters.
+   `/script` is one line capped near 255 characters. Pending tests are issue-numbered entries in the
+   same file, deleted when their capture is ingested; the run sheet numbers every step and each step is
+   **one action** — a compound step is how a manual action gets skipped (issue #27).
 4. In-game checklist (`tests/CHECKLIST.md`) run on Forever and pasted into the milestone entry with
    the date and patch. A milestone is not done until its AC lines have a dated entry. The runnable
    snippets for the API questions live in the **spike issues** (#1–#11), not in a docs file

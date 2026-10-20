@@ -434,23 +434,6 @@ local tests = {
       { text = 'capture: stop event logging', run = probes[3] },
     },
   },
-  [27] = {
-    issue = 27,
-    what = 'the /bos test capture path itself: one bucket per test, step headers, inline dump state',
-    needs = '/reload first so no logger is left running; stand at an open bank with an item to deposit',
-    steps = {
-      { text = 'setup: which tests are pending, then start event logging', run = function()
-          for _, t in ipairs(diag.Tests()) do record('pending', t.id, t.what) end
-          probes[3]()
-        end },
-      { text = 'deposit one item from a bag onto the base grid' },
-      { text = 'withdraw that item from the base grid into a bag' },
-      { text = 'capture, bank still open: stop event logging, then the container dump', run = function()
-          probes[3]()
-          probes[2]()
-        end },
-    },
-  },
 }
 
 local function letterOf(n) return string.char(96 + n) end
@@ -510,8 +493,9 @@ function diag.Test(id, letter)
       n = n + 1
       if n == want then
         if n == 1 then fresh(tostring(id)) else bucket = tostring(id) end
-        record(string.format('--- %d%s %s | build %s | %s - %s ---', id, letterOf(n), step.text,
-          GetBuildInfo(), tostring(UnitName('player')), tostring(GetRealmName())))
+        local iface, build = GetBuildInfo()
+        record(string.format('--- %d%s %s | build %s (%s) | %s - %s ---', id, letterOf(n), step.text,
+          iface, tostring(build), tostring(UnitName('player')), tostring(GetRealmName())))
         inTest = true
         local ok, err = pcall(step.run)
         inTest = false

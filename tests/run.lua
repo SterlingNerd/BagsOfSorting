@@ -94,9 +94,9 @@ local contents = {
 }
 
 -- index -> total slots, at the sizes the live client reports (agents.md storage shape): a 20-slot
--- backpack, a 6-slot bag, the 32-slot keyring. Real bags have free space, and issue #36 is about
--- what the addon does with it, so the fixture has some.
-local slotCounts = { [-1] = 32, [0] = 20, [1] = 6 }
+-- backpack, a 6-slot bag, a 4-slot reagent pouch, the 32-slot keyring. Real bags have free space,
+-- and issue #36 is about what the addon does with it, so the fixture has some.
+local slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [5] = 4 }
 
 -- 1005 is the item the client has never seen: container info knows its name and quality,
 -- GetItemInfo knows nothing (FR-103).
@@ -153,7 +153,7 @@ local pipeline = addon.modules['Pipeline']
 
 harvest.Invalidate()
 local containers = harvest.Discover()
-check('containers discovered (keyring, backpack, one bag)', #containers, 3)
+check('containers discovered (keyring, backpack, one bag, the reagent pouch)', #containers, 4)
 
 local items = harvest.Items()
 check('harvested slot count', #items, 10)
@@ -223,6 +223,8 @@ check('windows are sized independently', quests.height ~= backpack.height, true)
 -- the number of slots the player's bags still have open, and nothing at all when they have none.
 check('the backpack family has 17 free slots', harvest.FreeSlots('backpack'), 17)
 check('the keyring is counted apart from the bags', harvest.FreeSlots('keyring'), 31)
+check('the reagent pouch is its own family, 4 free slots', harvest.FreeSlots('reagent'), 4)
+check('and its free space is not in the number the window shows', backpack.emptySlots, 17)
 check('the indicator points at a real empty slot, and not the keyring slot before it',
   harvest.FirstFreeSlot().bagID .. ':' .. harvest.FirstFreeSlot().slot, '0:7')
 check('the default backpack window carries the count', backpack.emptySlots, 17)
@@ -402,11 +404,12 @@ testDuplicateBinding()
 -- than next to the free-space assertions above.
 local function testFullBags()
   local saved = slotCounts
-  slotCounts = { [-1] = 1, [0] = 6, [1] = 3 }
+  slotCounts = { [-1] = 1, [0] = 6, [1] = 3, [5] = 4 }
   harvest.Invalidate()
   pipeline.Refresh('full-bags')
   local full = windowIn(pipeline.Model(), 'Backpack')
   check('a full inventory has no free slots', harvest.FreeSlots('backpack'), 0)
+  check('even with the reagent pouch still open', harvest.FreeSlots('reagent'), 4)
   check('and no empty slot to point at', harvest.FirstFreeSlot(), nil)
   check('the window carries no count', full.emptySlots, nil)
   check('the window carries no slot', full.emptySlot, nil)

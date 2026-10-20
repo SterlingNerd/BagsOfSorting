@@ -57,6 +57,7 @@ globals = {
     "GetTime",
     "GetBuildInfo",
     "GetScreenHeight",
+    "GetScreenWidth",
     "GetCoinTextureString",
     "BlizzSortBags",
     "UnitName",

@@ -28,8 +28,9 @@ local pendingRelease = {}
 --- The client's own bag window, and the corner of it our stack starts from. Measured 2026-10-20
 --- (issue #28): the bag **bar** is the wrong anchor. Camelot's bar is configurable — set to vertical
 --- it puts `BagsBar:GetTop()` at 317, so the stack started 317 px up the screen, flush to the right
---- edge with no margin. Bottom-right to the client's bag window bottom-right inherits the margin the
---- client already gives its bags, and follows the window rather than a bar the player rearranged.
+--- edge with no margin. Bottom-right to the client's bag window bottom-right follows the window
+--- rather than a bar the player rearranged, but the client's own margin from the screen edge is not
+--- enough on its own — see MARGIN below.
 --- `ContainerFrameCombinedBags` is a frame, not `ContainerFrameSettingsManager`: hard rule 8 forbids
 --- the manager, not reading a global frame's coordinates.
 local function anchorFrame()
@@ -52,13 +53,18 @@ function windows.Layout(models)
   anchors.Place(models, GetScreenHeight(), allowance or 0)
 end
 
+--- A gap from the screen edge. Matching the client's corner alone leaves us as flush as its bags
+--- are: Blizzard's own floor for that gap is `GetInitialContainerFrameOffsetX()` = right action bar
+--- width + 10, and with no right action bars that is 10 px.
+local MARGIN = 10
+
 local function defaultAnchor(frame, model)
   local anchor, corner = anchorFrame()
   if anchor then
-    frame:SetPoint('BOTTOMRIGHT', anchor, corner, model.x or 0, model.y or 0)
+    frame:SetPoint('BOTTOMRIGHT', anchor, corner, (model.x or 0) - MARGIN, model.y or 0)
   else
     -- shortcut: no bag window and no backpack button (UI addon removed both), fixed screen spot.
-    frame:SetPoint('BOTTOMRIGHT', UIParent, 'BOTTOMRIGHT', (model.x or 0) - 20, 20 + (model.y or 0))
+    frame:SetPoint('BOTTOMRIGHT', UIParent, 'BOTTOMRIGHT', (model.x or 0) - MARGIN, 20 + (model.y or 0))
   end
 end
 

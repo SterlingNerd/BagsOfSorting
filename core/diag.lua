@@ -362,8 +362,10 @@ probes[16] = function()
   local bag = _G.ContainerFrameCombinedBags
   local anchor = (bag and bag:IsShown() and bag) or _G.MainMenuBarBackpackButton
   record('windows in the model', #models, 'shown', windowFrames.Count(),
-    'anchor', anchor and tostring(anchor:GetName()) or 'none', 'anchor bottom',
-    anchor and tostring(anchor:GetBottom()) or '-')
+    'anchor', anchor and tostring(anchor:GetName()) or 'none',
+    'anchor bottom', anchor and tostring(anchor:GetBottom()) or '-',
+    'anchor right', anchor and tostring(anchor:GetRight()) or '-',
+    'screen', GetScreenWidth(), GetScreenHeight())
 
   for _, window in ipairs(models) do
     local items = 0
@@ -383,6 +385,7 @@ probes[16] = function()
       local point, relativeTo, relativePoint, x, y = frame:GetPoint()
       record('    frame', tostring(frame:IsShown()), 'size', tostring(frame:GetWidth()),
         tostring(frame:GetHeight()), 'bottom', tostring(frame:GetBottom()),
+        'right', tostring(frame:GetRight()),
         'point', tostring(point), tostring(relativeTo and relativeTo:GetName() or 'nil'),
         tostring(relativePoint), tostring(x), tostring(y),
         'saved', frame.config and frame.config.position and 'yes' or 'no')

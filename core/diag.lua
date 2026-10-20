@@ -190,7 +190,7 @@ probes[3] = function()
     if event == 'PLAYERBANKSLOTS_CHANGED' then diag.ExplainBankSlot((...)) end
   end)
   for _, name in ipairs(BANK_EVENTS) do bankLogger:RegisterEvent(name) end
-  record('bank event logging on — one action at a time, then /bos test 3 again to stop')
+  record('bank event logging on — one action at a time, then run the log helper again to stop')
 end
 
 --- keybind — does the client keep the key the player bound? Run before a reload, after it, and after a
@@ -429,6 +429,22 @@ local tests = {
         end },
       { text = 'attack a target and take damage; open and close a BetterBags window during combat' },
       { text = 'capture: stop event logging', run = probes[3] },
+    },
+  },
+  [27] = {
+    issue = 27,
+    what = 'the /bos test capture path itself: one bucket per test, step headers, inline dump state',
+    needs = 'bank window open, one item in a bag to deposit',
+    steps = {
+      { text = 'setup: which tests are pending, then start event logging', run = function()
+          for _, t in ipairs(diag.Tests()) do record('pending', t.id, t.what) end
+          probes[3]()
+        end },
+      { text = 'at the bank: deposit one item into the base grid, then withdraw it' },
+      { text = 'capture: stop event logging, then the container dump', run = function()
+          probes[3]()
+          probes[2]()
+        end },
     },
   },
 }

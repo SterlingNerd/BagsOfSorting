@@ -125,6 +125,20 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 **Expected:** Tools does not come back at steps 2, 3 or 4; step 5 brings it back, with the item you picked up in the correct section of the correct window; closing the topmost window leaves Backpack and Quests exactly where they were. Step 6 is the placement rule and not a bug: a window that leaves the model gives up its slot in the column, so Tools drops into it (issue #28 decision 2).
 
+### Manual test: the free-slot indicator (FR-44 compact, issue #36)
+
+**Precondition:** our windows open (`/bos show`) and the bags have free space. Filling every slot needs a lot of items — vendor stacks of 20 are the fastest way, and a second character to hold them helps.
+
+1. Run `/bos test freeslots`.
+2. Look at the end of the **Backpack** window's last row: one slot with a number in it.
+3. Add the `free=` column it printed for indices 0..5 and compare it with that number.
+4. Buy stacks until every bag slot is filled.
+5. Run `/bos test freeslots` again.
+6. Look at the same spot in the window.
+7. Sell one item.
+
+**Expected:** step 3 matches exactly (issue #36 measured 26 = 6+6+5+6+3 on 2026-10-20, and 25 after one more item). At step 6 the slot is **gone** and the window is one cell shorter: `free=0` on every backpack-family container, `emptySlots=nil`, `cell=nil`, `indicator: none drawn`. Step 7 brings it back reading 1 — Blizzard's own count setter hides a count of 1 unless the button lowers `minDisplayCount`, so a bare `1` is the thing to look for. The slot must read as the game's own empty bag slot: same background, same number style as a stack count.
+
 ### Manual test: keybind appears in the client's own panel (FR-64)
 
 **Precondition:** Setup done. No default key is bound on purpose — `B` stays Blizzard's.

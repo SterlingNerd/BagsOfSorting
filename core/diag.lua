@@ -509,18 +509,6 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
-  [36] = {
-    issue = 36,
-    what = 'the free-slot indicator on the default backpack window (FR-44, compact count)',
-    needs = 'our windows open (/bos show) and at least one empty slot in the bags',
-    steps = {
-      { text = 'setup: the client total, our counts per container, and the slot each window drew', run = probes[17] },
-      { text = 'buy one item from a vendor so the bags hold one more item' },
-      { text = 'capture: the same read after the purchase', run = probes[17] },
-      { text = 'sell that item again' },
-      { text = 'capture: the same read after the sale', run = probes[17] },
-    },
-  },
   [15] = {
     issue = 15,
     what = 'what draws the new-item glow on our buttons (FR-47)',

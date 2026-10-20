@@ -127,17 +127,17 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 ### Manual test: the free-slot indicator (FR-44 compact, issue #36)
 
-**Precondition:** our windows open (`/bos show`) and the bags have free space. Filling every slot needs a lot of items — vendor stacks of 20 are the fastest way, and a second character to hold them helps.
+**Precondition:** our windows open (`/bos show`) and the bags have free space. Filling the backpack and the four bag slots needs a lot of items — vendor stacks of 20 are the fastest way, and a second character to hold them helps. The reagent pouch may stay open: it is not part of this number.
 
 1. Run `/bos test freeslots`.
 2. Look at the end of the **Backpack** window's last row: one slot with a number in it.
-3. Add the `free=` column it printed for indices 0..5 and compare it with that number.
-4. Buy stacks until every bag slot is filled.
+3. Add the `free=` column it printed for indices 0..4 and compare it with that number; the reagent pouch `[5]` prints apart and is not in it.
+4. Buy stacks until every backpack and bag slot is filled.
 5. Run `/bos test freeslots` again.
 6. Look at the same spot in the window.
 7. Sell one item.
 
-**Expected:** step 3 matches exactly (issue #36 measured 26 = 6+6+5+6+3 on 2026-10-20, and 25 after one more item). At step 6 the slot is **gone** and the window is one cell shorter: `free=0` on every backpack-family container, `emptySlots=nil`, `cell=nil`, `indicator: none drawn`. Step 7 brings it back reading 1 — Blizzard's own count setter hides a count of 1 unless the button lowers `minDisplayCount`, so a bare `1` is the thing to look for. The slot must read as the game's own empty bag slot: same background, same number style as a stack count.
+**Expected:** step 3 matches exactly — the number is the `free=` sum of indices 0..4 (issue #36 measured 22 = 5+6+5+6 on 2026-10-20, with the pouch's 3 printed apart and excluded). At step 6 the slot is **gone** and the window is one cell shorter: `emptySlots=nil`, `cell=nil`, `indicator: none drawn`, even while the pouch still has free slots — **measured on the client 2026-10-20**. Step 7 brings it back reading 1 — Blizzard's own count setter hides a count of 1 unless the button lowers `minDisplayCount`, so a bare `1` is the thing to look for. The slot must read as the game's own empty bag slot: same background, same number style as a stack count — the half of this story a capture cannot record.
 
 ### Manual test: keybind appears in the client's own panel (FR-64)
 

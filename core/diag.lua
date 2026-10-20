@@ -412,7 +412,8 @@ local tests = {
     needs = 'loot one new item first, then hover nothing before step a',
     steps = {
       { text = 'setup: which of our buttons are lit, and the client buttons too', run = probes[11] },
-      { text = 'hover the glowing button, wait two seconds, look at the slot' },
+      { text = 'hover the glowing button' },
+      { text = 'look at the slot two seconds later' },
       { text = 'capture: which buttons are lit now', run = probes[11] },
     },
   },
@@ -427,21 +428,24 @@ local tests = {
             'ForeverPlus', tostring(IsAddOnLoaded('ForeverPlus')))
           probes[3]()
         end },
-      { text = 'attack a target and take damage; open and close a BetterBags window during combat' },
+      { text = 'attack a target until you take damage' },
+      { text = 'open a BetterBags window during combat' },
+      { text = 'close that window' },
       { text = 'capture: stop event logging', run = probes[3] },
     },
   },
   [27] = {
     issue = 27,
     what = 'the /bos test capture path itself: one bucket per test, step headers, inline dump state',
-    needs = 'bank window open, one item in a bag to deposit',
+    needs = '/reload first so no logger is left running; stand at an open bank with an item to deposit',
     steps = {
       { text = 'setup: which tests are pending, then start event logging', run = function()
           for _, t in ipairs(diag.Tests()) do record('pending', t.id, t.what) end
           probes[3]()
         end },
-      { text = 'at the bank: deposit one item into the base grid, then withdraw it' },
-      { text = 'capture: stop event logging, then the container dump', run = function()
+      { text = 'deposit one item from a bag onto the base grid' },
+      { text = 'withdraw that item from the base grid into a bag' },
+      { text = 'capture, bank still open: stop event logging, then the container dump', run = function()
           probes[3]()
           probes[2]()
         end },
@@ -472,8 +476,9 @@ end
 --- borrowing an entry from the pending list.
 function diag.Add(id, spec) tests[id] = spec end
 
---- Print the run sheet (no letter) or run one captured step. Captured steps are lettered a, b, c…
---- in order, and the first one opens the bucket for this test; later ones append to it.
+--- Print the numbered run sheet (no letter) or run one captured step. Every step is one action.
+--- Captured steps are lettered a, b, c… in order, and the first one opens the bucket for this test;
+--- later ones append to it.
 ---@param id number
 ---@param letter string?
 ---@return string? the step text that ran, the test name when the sheet was printed, nil for a bad letter
@@ -484,16 +489,18 @@ function diag.Test(id, letter)
   if not letter then
     print(string.format('Test %d (issue #%d): %s', id, t.issue, t.what))
     print('pre-conditions: ' .. t.needs)
-    local n = 0
+    local n, line = 0, 0
     for _, step in ipairs(t.steps) do
+      line = line + 1
       if step.run then
         n = n + 1
-        print(string.format('- /bos test %d%s  %s', id, letterOf(n), step.text))
+        print(string.format('%d. /bos test %d%s  %s', line, id, letterOf(n), step.text))
       else
-        print('- ' .. step.text)
+        print(string.format('%d. %s', line, step.text))
       end
     end
-    print('/reload, then ../sync.sh')
+    print(string.format('%d. /reload', line + 1))
+    print(string.format('%d. ../sync.sh', line + 2))
     return t.what
   end
 

@@ -137,7 +137,7 @@ local HELP = {
   '/bos               client capability dump + harvested containers',
   '/bos perf          last refresh timings, pool and item-cache stats',
   '/bos test          pending manual tests, then the helper names',
-  '/bos test <id>     the run sheet for one test (the id is the issue it answers)',
+  '/bos test <id>     the numbered run sheet for one test (one action per step)',
   '/bos test <id><l>  run one captured step of that test, e.g. /bos test 15b',
   '/bos test <name>   a helper on its own: dump · log · flags · keybind · newitem · clock · expansion',
   '/bos find <id>     which container index holds that item',

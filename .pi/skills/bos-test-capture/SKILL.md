@@ -21,7 +21,7 @@ never said, shouted or broadcast to another player.
 prepare the test (issue + entry)
 ../sync.sh
 /reload
-/bos test <id>        follow the printed sheet, top to bottom
+/bos test <id>        follow the printed sheet, top to bottom — one numbered step each
 /reload
 ../sync.sh
 ingest                issue comment → docs → delete the entry → commit
@@ -35,7 +35,7 @@ be the addon the sheet came from.
 | Command | What it does |
 |---|---|
 | `/bos test` | the pending list: id, one-line purpose, preconditions, then the helper names |
-| `/bos test 42` | the run sheet for one test: description, pre-conditions, bulleted actions |
+| `/bos test 42` | the numbered run sheet for one test: description, pre-conditions, **one action per step** |
 | `/bos test 42b` | run one **captured** step of that test |
 | `/bos test dump` | containers -3..23: names, slot counts, bank grid, tab data, totals |
 | `/bos test log` | start/stop event logging (toggle) |
@@ -56,7 +56,9 @@ Entry lives in the `tests` table at the bottom of `core/diag.lua`:
   needs = 'no pre-conditions',
   steps = {
     { text = 'setup: scratch window + seeded config', run = setup },
-    { text = 'click "add bag", name it, accept the dialog' },
+    { text = 'click "add bag"' },
+    { text = 'type the name into the dialog' },
+    { text = 'accept the dialog' },
     { text = 'capture: window list + config shape', run = capture },
   },
 },
@@ -68,6 +70,9 @@ Rules:
 - **One entry per issue at a time.** A story may need several rounds: ingest, delete the entry, add
   the next one for the same story. The list stays short on purpose.
 - `text` is the line the sheet prints. A step with **no `run` is a manual action** and gets no letter.
+- **One action per step.** The sheet numbers every step, so each line is one thing the runner does.
+  "deposit one item, then withdraw it" is two steps. Compound steps lose their second half: the
+  runner's eye lands on the command printed after them. Issue #27 lost its withdraw this way, twice.
 - **Every manual action sits between two captured steps.** Without brackets on both sides you are
   guessing which event or which dump belongs to which action — that is the single hardest thing to
   read back out of a capture.
@@ -75,7 +80,7 @@ Rules:
   they renumber.
 - Step `a` is setup: it verifies the preconditions, prints what it found, and seeds **our own** state
   only. Anything touching the player's inventory — buying a bank slot, equipping a bag, looting,
-  depositing — is a protected call and stays a manual bullet.
+  depositing — is a protected call and stays a manual step.
 - Keep the capture honest: a step that reads nothing is still a step, and "no bank bag owned yet" is
   a result worth recording.
 - Verify an API exists before writing a step that calls it (`wow-forever-api` skill: `git grep` against
@@ -129,6 +134,9 @@ Storage rule, which is what makes deleting an entry safe:
   anything — the test owns the bucket.
 - Two buckets can describe different worlds: a `dump` captured before a purchase and one after sit in
   the same bucket, and the older one is gone. One bucket per test, one state per test.
+- `log` is a **toggle**. A logger left running from an earlier step or session turns the next setup
+  step's log call into a **stop**, and the actions that follow log nothing. `/reload` before starting
+  a test.
 - Event logs are noisy: `BAG_UPDATE 0` and `BAG_UPDATE -1` (backpack and keyring) fire constantly.
   Read them as background, not as findings.
 - `ITEM_LOCK_CHANGED` with one argument is an **inventory** slot, not a container and slot pair.

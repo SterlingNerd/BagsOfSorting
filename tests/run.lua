@@ -250,7 +250,18 @@ check('captured steps ran', captured, 2)
 check('one bucket per test', #addon.modules['DB'].sv.diag['900'], 3)
 check('the bucket opens with the first step header',
   addon.modules['DB'].sv.diag['900'][1]:match('^--- 900a'), '--- 900a')
-check('the run sheet answers with the test name', diag.Test(900), 'fixture')
+-- The run sheet is what a human follows in game, so its shape is a check: one numbered line per
+-- step, manual steps included, and the closing /reload and sync as steps of their own. A compound
+-- step is how a manual action gets skipped.
+local sheet, realPrint = {}, print
+_G.print = function(...) sheet[#sheet + 1] = table.concat({ ... }, ' ') end
+local sheetName = diag.Test(900)
+_G.print = realPrint
+check('the run sheet answers with the test name', sheetName, 'fixture')
+check('title, pre-conditions, one numbered line per step, /reload and sync', #sheet, 7)
+check('a manual step gets a number and no command', sheet[3], '1. a manual action')
+check('a captured step carries its command', sheet[4], '2. /bos test 900a  first capture')
+check('the sheet ends with the sync step', sheet[7], '5. ../sync.sh')
 diag.Command('900b')
 check('the slash dispatcher reaches the same step', captured, 3)
 

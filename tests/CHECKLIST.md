@@ -19,7 +19,10 @@ reaches the same API from the addon instead, which is why the run sheets here do
 ## Setup (once per branch)
 
 1. `ln -sfn /home/josh/Projects/wow/BagsOfSorting-prototype /home/josh/Projects/wow/addons/BagsOfSorting`
-2. Delete any existing `WTF/Account/<account>/<realm>/<character>/BagsOfSortingDB.lua`.
+2. With the client **closed**, delete `WTF/Account/<account>/SavedVariables/BagsOfSorting.lua` on the
+   game machine. It is account-level and named after the **addon folder**, whatever the TOC declares
+   (issue #14) — not `<realm>/<character>/BagsOfSortingDB.lua`. An open client rewrites SavedVariables
+   at logout and silently discards the edit.
 3. Start Forever, log in, expect the addon to appear in `/addonlist`.
 
 **Coverage note:** a level-1 character with no bags exercises the keyring and the backpack only —
@@ -60,32 +63,32 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 2. Run `/bos` and read the container lines: `[index] name slots=N filled=M kind=…`.
 3. Compare each `filled` against the same container's count in the stock bag window.
 4. Check no container index appears twice in the list.
-5. Add up the item counts across the window's sections.
-6. Scan for any item drawn in two sections.
+5. Add up the item counts across every window's sections.
+6. Scan for any item drawn in two sections **or two windows**.
 
 **Expected:** every container you own appears exactly once; each `filled` matches the stock window; section totals equal the sum of `filled`; no item appears twice; the grey item is in **Junk**, the armour in **Armor**, everything else in **Everything else**. Measured 2026-10-19: containers once each, no duplicates, grey items in Junk, armour in Armor, the rest in Everything else.
 
-### Manual test: the priority ladder (issue #26)
+### Manual test: the priority ladder (issue #26, across windows per issue #28)
 
-**Precondition:** the mining pick (2901) and, above all, **5411 Winterhoof Cleansing Totem** in a bag — it is `type = Armor` *and* a quest item, so two categories claim it.
+**Precondition:** fresh SavedVariables (Setup step 2). The mining pick (2901) and, above all, **5411 Winterhoof Cleansing Totem** in a bag — it is `type = Armor` *and* a quest item, so two categories claim it.
 
-1. `/reload` so schema version 2 runs and adds Quest Items and Tools.
-2. `/bos show`.
-3. Find 5411 in the window.
-4. Find the mining pick.
-5. Run `/bos find 5411` and `/bos find 2901` to confirm they are where the window says they are.
+1. Run `/bos show`.
+2. Find 5411.
+3. Find the mining pick.
+4. Run `/bos find 5411` and `/bos find 2901` to confirm they are where the window says they are.
 
-**Expected:** section order Junk, Quest Items, Tools, Armor, Everything else. 5411 sits in **Quest Items**, not Armor (priority 5 beats 20). The mining pick sits in **Tools**, not Everything else, even though it is a Weapon — a curated list beats a type rule (8 beats 20). A grey item still lands in **Junk** (10 beats 20). If 5411 is still in Armor the migration did not run: check `version` in the SavedVariables file is 2.
+**Expected:** three windows — **Backpack** (Junk, Armor, Everything else), **Quests** (Quest Items), **Tools** (Tools). 5411 sits in the **Quests** window, not in Backpack's Armor section (priority 5 beats 20). The mining pick sits in the **Tools** window, not Everything else, even though it is a Weapon — a curated list beats a type rule (8 beats 20). A grey item still lands in **Junk** (10 beats 20). A window adds nothing to the ladder: precedence is `category.priority` alone, and a category lands in the one window that binds it.
 
-### Manual test: window sits above the bags bar, not on it (FR-41)
+### Manual test: the window stack sits above the bags bar, not on it (FR-41, issue #28)
 
 **Precondition:** default config — you have never dragged a window. Bags bar visible bottom-left.
 
 1. Run `/bos show`.
-2. Look at the gap between the window's bottom edge and the top edge of the bags bar.
-3. Click the backpack button.
+2. Look at the gap between the **Backpack** window's bottom edge and the top edge of the bags bar.
+3. Look at the gap between each pair of stacked windows.
+4. Click the backpack button.
 
-**Expected:** the window's bottom edge is above the bags bar's top edge with a visible gap; no bag button and no micro-bar button is covered; the backpack button still opens Blizzard's bags.
+**Expected:** Backpack's bottom edge is above the bags bar's top edge with a visible gap; Quests and Tools stack above it, each separated by the same gap, no window overlapping another; no bag button and no micro-bar button is covered; the backpack button still opens Blizzard's bags. `/bos test windows` prints the model `x`/`y` and each frame's real point when the eye cannot tell overlap from proximity.
 
 ### Manual test: the window drags by its body, and the position persists (FR-41, section mouse fix)
 
@@ -99,15 +102,16 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 ### Manual test: the X closes a window and it stays closed (FR-41)
 
-**Precondition:** window shown.
+**Precondition:** all three windows shown, nothing dragged.
 
-1. Click the window's own X.
+1. Click the **Tools** window's own X — it is the topmost one.
 2. Pick up an item from the ground, or run `/bos refresh`.
 3. `/reload`.
 4. Log out and log back in.
 5. Run `/bos show`.
+6. Close the **Quests** window instead and look at where Tools lands.
 
-**Expected:** the window does not come back at steps 2, 3 or 4; step 5 brings it back, with the item you picked up in the correct section.
+**Expected:** Tools does not come back at steps 2, 3 or 4; step 5 brings it back, with the item you picked up in the correct section of the correct window; closing the topmost window leaves Backpack and Quests exactly where they were. Step 6 is the placement rule and not a bug: a window that leaves the model gives up its slot in the column, so Tools drops into it (issue #28 decision 2).
 
 ### Manual test: keybind appears in the client's own panel (FR-64)
 
@@ -221,7 +225,7 @@ Note when reading the output: **a hide runs no refresh** (`windows.HideAll()` re
 
 ### Manual test: second login issues zero tier-3 requests (AC-97)
 
-**Precondition:** the shipped **Tools** category (Mining Pick 2901, Hearthstone 6948). It arrives with schema version 2 (`core/db.lua` `MIGRATIONS[2]`, issue #26), which adds it to a SavedVariables file that already exists without touching the window position, the item cache or the existing sections — no hand editing. Carry both items in a bag so the section has something to match. Two IDs are enough: the criterion is that **cached** IDs cost zero requests, not that volume works.
+**Precondition:** the shipped **Tools** category (Mining Pick 2901, Hearthstone 6948). It is in `DEFAULT_PROFILE` (`core/db.lua`), so a fresh SavedVariables file carries it — no hand editing, no migration. Carry both items in a bag so the section has something to match. Two IDs are enough: the criterion is that **cached** IDs cost zero requests, not that volume works. After a SavedVariables wipe (Setup step 2) re-run this from the wipe: expect tier-3 requests on the first login and zero on the second.
 
 1. Login 1: run `/bos perf`, note `tier3=` and `item cache=`.
 2. `/exit`, log in again.

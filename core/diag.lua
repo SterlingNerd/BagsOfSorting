@@ -5,7 +5,8 @@
 --            An entry is added when a story needs measuring and deleted as part of ingesting the
 --            capture. The workflow is `.pi/skills/bos-test-capture/SKILL.md`.
 --   helpers  reusable captures a test step calls (dump, log, flags, keybind, newitem, clock,
---            expansion). Reachable from chat for ad-hoc investigation; they are not pending tests.
+--            expansion, windows). Reachable from chat for ad-hoc investigation; they are not pending
+--            tests.
 --
 -- Everything a test captures goes to SavedVariables (`BagsOfSortingDB.diag.<issue>`) as well as to
 -- chat. Off-client assertions live in `tests/run.lua`; these are the ones that need the live client.
@@ -348,6 +349,47 @@ probes[14] = function()
 end
 
 
+--- windows — where our own windows sit and what each one holds (issue #28). Reads the layout model
+--- *and* the frames it produced, so a placement bug and a paint bug are separable in the capture.
+--- Read-only: nothing here moves a frame.
+probes[16] = function()
+  if not inTest then fresh('windows') end
+  local pipeline = addon:GetModule('Pipeline')
+  local windowFrames = addon:GetModule('WindowFrames')
+  local models = pipeline.Model()
+  if not models then record('no refresh has run yet') return end
+
+  local bar = _G.BagsBar and _G.BagsBar:IsShown() and _G.BagsBar or _G.MainMenuBarBackpackButton
+  record('windows in the model', #models, 'shown', windowFrames.Count(),
+    'anchor', bar and tostring(bar:GetName()) or 'none', 'anchor top',
+    bar and tostring(bar:GetTop()) or '-')
+
+  for _, window in ipairs(models) do
+    local items = 0
+    record(string.format('  [%s] %s sections=%d %dx%d x=%s y=%s', window.id, window.name,
+      #window.sections, tostring(window.width), tostring(window.height),
+      tostring(window.x), tostring(window.y)))
+    for _, section in ipairs(window.sections) do
+      items = items + #section.items
+      local ids = {}
+      for _, item in ipairs(section.items) do ids[#ids + 1] = tostring(item.itemID) end
+      record('    section', section.name, #section.items, table.concat(ids, ' '))
+    end
+    local frame = _G['BagsOfSortingWindow' .. window.id]
+    if not frame then
+      record('    frame: none')
+    else
+      local point, relativeTo, relativePoint, x, y = frame:GetPoint()
+      record('    frame', tostring(frame:IsShown()), 'size', tostring(frame:GetWidth()),
+        tostring(frame:GetHeight()), 'bottom', tostring(frame:GetBottom()),
+        'point', tostring(point), tostring(relativeTo and relativeTo:GetName() or 'nil'),
+        tostring(relativePoint), tostring(x), tostring(y),
+        'saved', frame.config and frame.config.position and 'yes' or 'no')
+    end
+  end
+  record('pool', addon:GetModule('Pool').Stats())
+end
+
 --- Which container index holds this item? Answers "is the base grid a container?" with an item you
 --- can see and place on purpose, rather than with slot arithmetic. Read-only: `GetContainerItemInfo`
 --- reads, it builds nothing (agents.md hard rule 8).
@@ -395,7 +437,7 @@ end
 -- The names you type. A test step calls the same functions.
 local HELPERS = {
   dump = probes[2], log = probes[3], keybind = probes[7], newitem = probes[11],
-  clock = probes[13], expansion = probes[14], flags = flagsScan,
+  clock = probes[13], expansion = probes[14], flags = flagsScan, windows = probes[16],
 }
 
 -- ---------------------------------------------------------------------------
@@ -432,6 +474,30 @@ local tests = {
       { text = 'open a BetterBags window during combat' },
       { text = 'close that window' },
       { text = 'capture: stop event logging', run = probes[3] },
+    },
+  },
+  [28] = {
+    issue = 28,
+    what = 'three hard-coded windows: placement, contents, and the pool (FR-41, AC-15, AC-42)',
+    needs = 'SavedVariables deleted with the client closed (issue #28 §SavedVariables); 2901 and 6948 '
+      .. 'in a bag; one quest item; bank access for step 5',
+    steps = {
+      { text = 'setup: windows, placement, contents and the pool', run = probes[16] },
+      { text = 'look at the three windows: none overlap, Backpack is the one nearest the bags bar' },
+      { text = 'find 5411 in Quests, and 2901 and 6948 in Tools' },
+      { text = 'capture: windows', run = probes[16] },
+      { text = 'deposit 2901 and 6948 in the bank so Tools has nothing to hold' },
+      { text = 'capture: windows with an empty Tools window', run = probes[16] },
+      { text = 'withdraw them back' },
+      { text = 'close the Tools window — the topmost one — with its own X, then run /bos refresh' },
+      { text = 'capture: windows with Tools closed', run = probes[16] },
+      { text = 'run /bos show' },
+      { text = 'drag the Tools window somewhere else' },
+      { text = 'run /reload' },
+      { text = 'capture: windows after the drag and reload', run = probes[16] },
+      { text = 'run /bos hide' },
+      { text = 'press the sorting-bags keybind ten times' },
+      { text = 'capture: windows and the pool after the cycles', run = probes[16] },
     },
   },
 }

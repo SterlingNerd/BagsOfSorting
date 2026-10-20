@@ -111,8 +111,9 @@ Storage rule, which is what makes deleting an entry safe:
 
 1. `../sync.sh`, then read `../account/SavedVariables/BagsOfSorting.lua` → `BagsOfSortingDB.diag[<id>]`.
 2. Paste the bucket verbatim as a dated comment on the issue.
-3. Write the verdicts into `agents.md` (measured-fact table) and the relevant `docs/` row. Present and
-   future tense: docs describe what the project does, git records what changed.
+3. Write the verdicts into `agents.md` (measured-fact table) and the relevant spec `docs/` row — not
+   `docs/06`, which is a milestone record and changes at a milestone boundary, not when one story inside
+   it closes. Present and future tense: docs describe what the project does, git records what changed.
 4. Close the question or narrow it to what is genuinely still open, and say what blocks the rest.
 5. **Delete the test entry from `core/diag.lua`.** This is part of ingesting, not a later tidy-up.
 6. `lua5.1 tests/run.lua` and `luacheck .`, then commit.

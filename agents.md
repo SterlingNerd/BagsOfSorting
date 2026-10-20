@@ -264,6 +264,9 @@ move our windows. ThreatMeter deliberately does not call it.
   source. Do not hand-write other locales at spec/prototype phase.
 - **No new dependencies** without a `docs/07` entry. v1 target dependency set is **zero vendored
   libraries** (`docs/03` §Dependencies, `docs/07` Q2).
+- **Milestone docs are planning documents.** `docs/06` changes when a milestone changes, not when a story
+  inside one closes. A deliverable stays written as the plan wrote it; the verdict from its run goes to
+  `agents.md` and the issue. Only a milestone's own `Status:` line moves, and only at a milestone boundary.
 
 ## Repo boundary
 

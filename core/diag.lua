@@ -404,6 +404,52 @@ probes[16] = function()
   record('pool', addon:GetModule('Pool').Stats())
 end
 
+--- freeslots — the numbers behind the free-slot indicator (issue #36). Our own count, the client's
+--- own total, and the slot each window actually drew, so a wrong number and a wrong drawing are
+--- separable in the capture. Read-only.
+probes[17] = function()
+  if not inTest then fresh('freeslots') end
+  local harvest = addon:GetModule('Harvest')
+  local pipeline = addon:GetModule('Pipeline')
+
+  -- The client's own number, the one Blizzard puts on its backpack button. Source-verified
+  -- (ContainerDocumentation.lua) and never yet measured on this client, so a `no answer` here is
+  -- itself the result.
+  local ok, total = pcall(C_Container.CalculateTotalNumberOfFreeBagSlots)
+  record('C_Container.CalculateTotalNumberOfFreeBagSlots()', ok and tostring(total) or 'no answer')
+
+  for _, container in ipairs(harvest.Containers()) do
+    local filled = 0
+    for slot = 1, container.slots do
+      local infoOK, info = pcall(C_Container.GetContainerItemInfo, container.index, slot)
+      if infoOK and info and info.itemID then filled = filled + 1 end
+    end
+    record(string.format('  [%d] %s slots=%d filled=%d free=%d kind=%s',
+      container.index, container.name, container.slots, filled, container.slots - filled, container.kind))
+  end
+
+  local first = harvest.FirstFreeSlot()
+  record('our counts', 'backpack', harvest.FreeSlots('backpack'),
+    'keyring', harvest.FreeSlots('keyring'),
+    'first free slot', first and (first.bagID .. ':' .. first.slot) or 'none')
+
+  local models = pipeline.Model()
+  if not models then record('no refresh has run yet') return end
+  for _, window in ipairs(models) do
+    record(string.format('  [%s] %s emptySlots=%s cell=%s', window.id, window.name,
+      tostring(window.emptySlots), tostring(window.emptyOffsetY)))
+    local button = _G['BagsOfSortingWindow' .. window.id] and _G['BagsOfSortingWindow' .. window.id].EmptySlot
+    if not button then
+      record('    indicator: none drawn')
+    else
+      local count = button.Count
+      record('    indicator', 'shown', tostring(button:IsShown()),
+        'bag', tostring(button:GetParent():GetID()), 'slot', tostring(button:GetID()),
+        'count shown', tostring(count and count:IsShown()), 'text', count and count:GetText() or '-')
+    end
+  end
+end
+
 --- Which container index holds this item? Answers "is the base grid a container?" with an item you
 --- can see and place on purpose, rather than with slot arithmetic. Read-only: `GetContainerItemInfo`
 --- reads, it builds nothing (agents.md hard rule 8).
@@ -452,6 +498,7 @@ end
 local HELPERS = {
   dump = probes[2], log = probes[3], keybind = probes[7], newitem = probes[11],
   clock = probes[13], expansion = probes[14], flags = flagsScan, windows = probes[16],
+  freeslots = probes[17],
 }
 
 -- ---------------------------------------------------------------------------
@@ -462,6 +509,18 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
+  [36] = {
+    issue = 36,
+    what = 'the free-slot indicator on the default backpack window (FR-44, compact count)',
+    needs = 'our windows open (/bos show) and at least one empty slot in the bags',
+    steps = {
+      { text = 'setup: the client total, our counts per container, and the slot each window drew', run = probes[17] },
+      { text = 'buy one item from a vendor so the bags hold one more item' },
+      { text = 'capture: the same read after the purchase', run = probes[17] },
+      { text = 'sell that item again' },
+      { text = 'capture: the same read after the sale', run = probes[17] },
+    },
+  },
   [15] = {
     issue = 15,
     what = 'what draws the new-item glow on our buttons (FR-47)',

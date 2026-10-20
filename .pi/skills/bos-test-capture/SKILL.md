@@ -40,7 +40,7 @@ be the addon the sheet came from.
 | `/bos test dump` | containers -3..23: names, slot counts, bank grid, tab data, totals |
 | `/bos test log` | start/stop event logging (toggle) |
 | `/bos test flags` | `Enum.BagSlotFlags` on every equipped bag and bank container |
-| `/bos test keybind` · `newitem` · `clock` · `expansion` · `windows` | the other reusable captures |
+| `/bos test keybind` · `newitem` · `clock` · `expansion` · `windows` · `freeslots` | the other reusable captures |
 | `/bos find <itemID>` | which container index holds that item (writes to its own `find` bucket) |
 
 Helpers are for test steps to reuse. Only `log` is a thing you run on its own often.

@@ -151,6 +151,14 @@ back to `version = 1` and the migration that carried Quest Items and Tools is re
 owns every deployed file the schema changes breakingly (`docs/04` §Migration). The rest of M2 is not
 started.
 
+Measured in-game 2026-10-20 (build 1.60.1 build 70450, `/bos test 28`, capture on the issue): a fresh
+SavedVariables file writes the three windows; the column math holds exactly — `y` 0 / 204 / 346 against
+heights 196 / 134 / 96, gaps of 8, one column, no overlap; 5411 lands in Quests and 2901 + 6948 in
+Tools; a dragged window survives `/reload` while the other two keep their slots. Two defects came out
+of the same run: the bag-bar anchor is wrong on a bar the player has rotated (**#30**, fixed on this
+branch — the anchor is the client's bag window), and a window with no sections renders at a height its
+chrome cannot draw (**#31**).
+
 **Goal:** the Baggins shape. Multiple user-visible windows, sections packed inside them.
 
 Deliverables

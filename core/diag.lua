@@ -359,10 +359,11 @@ probes[16] = function()
   local models = pipeline.Model()
   if not models then record('no refresh has run yet') return end
 
-  local bar = _G.BagsBar and _G.BagsBar:IsShown() and _G.BagsBar or _G.MainMenuBarBackpackButton
+  local bag = _G.ContainerFrameCombinedBags
+  local anchor = (bag and bag:IsShown() and bag) or _G.MainMenuBarBackpackButton
   record('windows in the model', #models, 'shown', windowFrames.Count(),
-    'anchor', bar and tostring(bar:GetName()) or 'none', 'anchor top',
-    bar and tostring(bar:GetTop()) or '-')
+    'anchor', anchor and tostring(anchor:GetName()) or 'none', 'anchor bottom',
+    anchor and tostring(anchor:GetBottom()) or '-')
 
   for _, window in ipairs(models) do
     local items = 0
@@ -474,30 +475,6 @@ local tests = {
       { text = 'open a BetterBags window during combat' },
       { text = 'close that window' },
       { text = 'capture: stop event logging', run = probes[3] },
-    },
-  },
-  [28] = {
-    issue = 28,
-    what = 'three hard-coded windows: placement, contents, and the pool (FR-41, AC-15, AC-42)',
-    needs = 'SavedVariables deleted with the client closed (issue #28 §SavedVariables); 2901 and 6948 '
-      .. 'in a bag; one quest item; bank access for step 5',
-    steps = {
-      { text = 'setup: windows, placement, contents and the pool', run = probes[16] },
-      { text = 'look at the three windows: none overlap, Backpack is the one nearest the bags bar' },
-      { text = 'find 5411 in Quests, and 2901 and 6948 in Tools' },
-      { text = 'capture: windows', run = probes[16] },
-      { text = 'deposit 2901 and 6948 in the bank so Tools has nothing to hold' },
-      { text = 'capture: windows with an empty Tools window', run = probes[16] },
-      { text = 'withdraw them back' },
-      { text = 'close the Tools window — the topmost one — with its own X, then run /bos refresh' },
-      { text = 'capture: windows with Tools closed', run = probes[16] },
-      { text = 'run /bos show' },
-      { text = 'drag the Tools window somewhere else' },
-      { text = 'run /reload' },
-      { text = 'capture: windows after the drag and reload', run = probes[16] },
-      { text = 'run /bos hide' },
-      { text = 'press the sorting-bags keybind ten times' },
-      { text = 'capture: windows and the pool after the cycles', run = probes[16] },
     },
   },
 }

@@ -28,6 +28,10 @@ local constants = addon:GetModule('Constants')
 ---@field slots number
 ---@field kind string   -- 'backpack' | 'keyring'
 
+---@class BoSFreeSlot
+---@field bagID number
+---@field slot number
+
 ---@class BoSItem
 ---@field bagID number
 ---@field slot number
@@ -54,6 +58,11 @@ local constants = addon:GetModule('Constants')
 
 ---@type BoSContainer[]
 local discovered
+
+---@type table<string, number>?
+local freeSlots
+---@type BoSFreeSlot?
+local firstFree
 
 local function probe(index, kind)
   if index == nil then return nil end
@@ -92,12 +101,14 @@ function harvest.Containers()
   return discovered or harvest.Discover()
 end
 
---- Read every occupied slot once. GetContainerItemInfo is the cheap tier: it carries
+--- Read every slot once. GetContainerItemInfo is the cheap tier: it carries
 --- itemName, quality and iconFileID for items the client already has in inventory, with no
---- round trip (docs/03 §Item data is not always there).
+--- round trip (docs/03 §Item data is not always there). Visiting every slot is also where the
+--- free-slot count comes from (issue #36), so the count and the items cannot disagree.
 ---@return BoSItem[]
 function harvest.Items()
   local items = {}
+  local free, freeFirst = {}, nil
   for _, container in ipairs(harvest.Containers()) do
     for slot = 1, container.slots do
       local ok, info = pcall(C_Container.GetContainerItemInfo, container.index, slot)
@@ -120,10 +131,33 @@ function harvest.Items()
           containerKind = container.kind,
           dataReady = false,
         }
+      else
+        -- A slot the client reports no item for is a free slot: ContainerItemInfo.itemID is
+        -- documented non-nullable, so an occupied slot always answers one.
+        free[container.kind] = (free[container.kind] or 0) + 1
+        -- The first one is the slot the free-slot indicator points at (issue #36): a real empty
+        -- slot, so the client's own click and drop handlers work on it. Backpack family only —
+        -- the keyring sorts first and is not the player's bags.
+        if not freeFirst and container.kind == 'backpack' then
+          freeFirst = { bagID = container.index, slot = slot }
+        end
       end
     end
   end
+  freeSlots, firstFree = free, freeFirst
   return items
+end
+
+--- Free slots in one container family, counted in the same pass that read the items (issue #36).
+---@param kind string  -- 'backpack' | 'keyring'
+---@return number
+function harvest.FreeSlots(kind)
+  return (freeSlots or {})[kind] or 0
+end
+
+---@return BoSFreeSlot?
+function harvest.FirstFreeSlot()
+  return firstFree
 end
 
 --- AC-14: harvested totals a human can compare against the stock bags.

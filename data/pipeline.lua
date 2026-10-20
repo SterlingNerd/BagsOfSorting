@@ -69,6 +69,7 @@ function pipeline.Assign(placements)
   local models = {}
   local shown = {}
   local placed = {}
+  local counted = false
 
   for _, config in ipairs(db.Windows()) do
     -- Bank windows are M5: the bank container index space is issue #9's answer, not ours.
@@ -106,6 +107,20 @@ function pipeline.Assign(placements)
               items = items,
             }
           end
+        end
+      end
+
+      -- Issue #36: the free-slot count belongs to one window — the first backpack window in screen
+      -- order, which is the default Backpack window. The same number on all three would read as
+      -- three separate sets of bags.
+      -- shortcut: which window carries it is a rule, not a setting. The setting is docs/04's
+      -- `showEmptySlots`, and it arrives with the pane that edits it (docs/05).
+      if not counted then
+        counted = true
+        local free = harvest.FreeSlots('backpack')
+        if free > 0 then
+          window.emptySlots = free
+          window.emptySlot = harvest.FirstFreeSlot()
         end
       end
 

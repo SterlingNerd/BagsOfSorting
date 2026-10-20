@@ -34,6 +34,9 @@ local SECTION_GAP = 6
 ---@field scale number
 ---@field config any
 ---@field sections BoSSectionModel[]
+---@field emptySlots number?   -- free slots in the player's bags, on the window that shows them
+---@field emptySlot BoSFreeSlot?  -- the real empty slot the indicator points at
+---@field emptyOffsetY number?    -- the cell flow reserved for it
 ---@field width number
 ---@field height number
 
@@ -57,6 +60,13 @@ function flow.Layout(window)
       contentHeight = contentHeight + section.height + SECTION_GAP
       widest = math.max(widest, section.width)
     end
+  end
+
+  -- Issue #36: the free-slot indicator is one more cell at the end of the column.
+  window.emptyOffsetY = nil
+  if (window.emptySlots or 0) > 0 then
+    window.emptyOffsetY = contentHeight
+    contentHeight = contentHeight + CELL
   end
 
   window.width = math.max(widest, maxColumns * CELL) + constants.WINDOW_PADDING * 2

@@ -13,11 +13,14 @@ local windows = addon:NewModule('WindowFrames')
 local sectionFrames = addon:GetModule('SectionFrames')
 local anchors = addon:GetModule('Anchors')
 local moneyFrames = addon:GetModule('MoneyFrames')
+local itemFrames = addon:GetModule('ItemFrames')
+local constants = addon:GetModule('Constants')
 local log = addon:GetModule('Log')
 
 ---@class BoSWindowFrame
 ---@field frame Frame
 ---@field sections BoSSectionFrame[]
+---@field empty BoSItemEntry?  -- the free-slot indicator, on the window the model gave the count to
 ---@field config any  -- the profile window this frame mirrors, for position persistence
 
 ---@type table<string, BoSWindowFrame>
@@ -119,7 +122,14 @@ local function create(config)
 end
 
 ---@param wf BoSWindowFrame
+--- Release the frames this window holds (buttons only: the shells stay pooled in byId).
+---@param wf BoSWindowFrame
 local function releaseSections(wf)
+  if wf.empty then
+    itemFrames.Release(wf.empty)
+    wf.empty = nil
+    wf.frame.EmptySlot = nil
+  end
   for i = #wf.sections, 1, -1 do
     sectionFrames.Release(wf.sections[i])
     wf.sections[i] = nil
@@ -137,6 +147,32 @@ local function hide(wf)
     releaseSections(wf)
   end
   wf.frame:Hide()
+end
+
+--- The free-slot indicator (issue #36): one slot at the end of the window's column, holding the
+--- number of slots the player's bags still have open. Only the window the model gave the count to
+--- draws one, and a window that lost the count gives its button back to the pool.
+---@param wf BoSWindowFrame
+---@param model BoSWindowModel
+local function renderEmptySlot(wf, model)
+  if not model.emptyOffsetY then
+    if wf.empty then
+      itemFrames.Release(wf.empty)
+      wf.empty = nil
+      wf.frame.EmptySlot = nil
+    end
+    return
+  end
+
+  wf.empty = wf.empty or itemFrames.Acquire()
+  itemFrames.PaintEmpty(wf.empty, model.emptySlot, model.emptySlots, wf.frame)
+  wf.empty.parent:SetFrameLevel(wf.frame:GetFrameLevel() + 1)
+  wf.empty.parent:ClearAllPoints()
+  wf.empty.parent:SetPoint('TOPLEFT', wf.frame, 'TOPLEFT',
+    constants.WINDOW_PADDING, -(constants.WINDOW_TITLE_HEIGHT + model.emptyOffsetY))
+  -- The button on the shell is what `/bos test freeslots` reads, the same way the money bar is
+  -- frame.MoneyFrame: the capture needs the drawn state, not the model's claim about it.
+  wf.frame.EmptySlot = wf.empty.button
 end
 
 --- Draw one window from the layout model. Frames are reused across refreshes; only the
@@ -162,6 +198,8 @@ function windows.Render(model)
   for i, sectionModel in ipairs(model.sections) do
     sectionFrames.Render(wf.sections[i], sectionModel, frame, sectionModel.offsetY)
   end
+
+  renderEmptySlot(wf, model)
 
   restorePosition(frame, model)
   frame:Show()

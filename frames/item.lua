@@ -93,6 +93,36 @@ function itemFrames.Paint(entry, item, parent)
   entry.button:Show()
 end
 
+--- The free-slot indicator (issue #36): the same pooled button, drawn as an empty slot with the
+--- number of free slots in it. `SetItemButtonTexture(button, nil)` is what produces the client's
+--- own empty-slot look — `ContainerFrameItemButtonTemplate` carries `emptyBackgroundAtlas =
+--- "bags-item-slot64"` and `ItemButtonMixin:GetItemButtonBackgroundTexture` falls back to it when
+--- there is no icon. `minDisplayCount` goes below Blizzard's threshold of 1 so a single free slot
+--- still reads "1".
+---@param entry BoSItemEntry
+---@param slot BoSFreeSlot
+---@param count number
+---@param parent Frame
+function itemFrames.PaintEmpty(entry, slot, count, parent)
+  entry.item = nil
+
+  entry.parent:SetParent(parent)
+  entry.parent:SetID(slot.bagID)
+  entry.button:SetID(slot.slot)
+  -- A real empty slot, not a placeholder: the client's own click and drop handlers work on it, so
+  -- dropping an item here puts it in the bag the way an empty backpack slot does.
+  entry.button:SetItemLocation(ItemLocation:CreateFromBagAndSlot(slot.bagID, slot.slot))
+
+  SetItemButtonTexture(entry.button, nil)
+  SetItemButtonQuality(entry.button, nil)
+  entry.button:SetHasItem(false)
+  entry.button.minDisplayCount = 0
+  SetItemButtonCount(entry.button, count)
+
+  entry.parent:Show()
+  entry.button:Show()
+end
+
 --- Pre-warm the pool so a combat loot event does not have to create a secure button
 --- (agents.md hard rule 3). Called once at login from the harvested item count.
 ---@param count number

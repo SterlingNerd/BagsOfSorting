@@ -79,16 +79,27 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 **Expected:** three windows — **Backpack** (Junk, Armor, Everything else), **Quests** (Quest Items), **Tools** (Tools). 5411 sits in the **Quests** window, not in Backpack's Armor section (priority 5 beats 20). The mining pick sits in the **Tools** window, not Everything else, even though it is a Weapon — a curated list beats a type rule (8 beats 20). A grey item still lands in **Junk** (10 beats 20). A window adds nothing to the ladder: precedence is `category.priority` alone, and a category lands in the one window that binds it.
 
-### Manual test: the window stack sits above the bags bar, not on it (FR-41, issue #28)
+### Manual test: the stack starts at the client's bag window (FR-41, issue #28)
 
-**Precondition:** default config — you have never dragged a window. Bags bar visible bottom-left.
+**Precondition:** default config — you have never dragged a window. Blizzard's bag window open.
 
 1. Run `/bos show`.
-2. Look at the gap between the **Backpack** window's bottom edge and the top edge of the bags bar.
+2. Compare the **Backpack** window's bottom-right corner with the client backpack window's bottom-right corner.
 3. Look at the gap between each pair of stacked windows.
 4. Click the backpack button.
 
-**Expected:** Backpack's bottom edge is above the bags bar's top edge with a visible gap; Quests and Tools stack above it, each separated by the same gap, no window overlapping another; no bag button and no micro-bar button is covered; the backpack button still opens Blizzard's bags. `/bos test windows` prints the model `x`/`y` and each frame's real point when the eye cannot tell overlap from proximity.
+**Expected:** the two bottom-right corners coincide, so our windows carry the same margin from the screen edge the client gives its bags; Quests and Tools stack above it with the same gap between each pair and no window overlapping another; no bag button and no micro-bar button is covered; the backpack button still opens Blizzard's bags. `/bos test windows` prints the anchor frame and its bottom, the model `x`/`y`, and each frame's real point when the eye cannot tell overlap from proximity. Measured 2026-10-20 against the **bag bar**: the stack started 317 px up the screen with no margin on a vertical bar — that anchor is issue #30.
+
+### Manual test: a window with nothing in it still renders (issue #28 decision 2)
+
+**Precondition:** three windows shown; Mining Pick (2901) and Hearthstone (6948) are the only items the Tools category matches, and the bank is reachable.
+
+1. Deposit 2901 and 6948 in the bank.
+2. Run `/bos refresh`.
+3. Look at the Tools window: its title, its side borders, and its top edge.
+4. Withdraw them back.
+
+**Expected:** the Tools window is still on screen, still 206 wide, with its title and its full border drawn **inside** its own rectangle — no border art above the top edge, no side border clipped. `/bos test windows` reports `sections=0` for it and the column still gives it a slot. Open defect: at 72 px tall the template's chrome draws outside the window (`docs/reference/empty-window-chrome-clipped.png`, **issue #31**).
 
 ### Manual test: the window drags by its body, and the position persists (FR-41, section mouse fix)
 

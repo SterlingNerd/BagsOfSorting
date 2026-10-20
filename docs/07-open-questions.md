@@ -494,9 +494,14 @@ read in `frames/window.lua`:
 - **"maximum height" is measured, not a constant**: the free space above the anchor frame,
   `GetScreenHeight() − anchorFrame():GetTop()`, read at layout time. Not a fraction of screen height,
   not a row count.
-- **the anchor is the bag bar** — `BagsBar`, falling back to `MainMenuBarBackpackButton` — because the
-  client's bag *window* is the thing another addon hides or moves (`FR-51`) and the bar is always
-  there. It also sidesteps `ContainerFrameSettingsManager`, which hard rule 8 forbids calling.
+- **the anchor is the client's bag window** — `ContainerFrameCombinedBags`, our bottom-right to its
+  bottom-right, falling back to `MainMenuBarBackpackButton` when another addon has hidden it
+  (`FR-51`). The bag **bar** was the first answer and the in-game run falsified it: Camelot's bar is
+  configurable, vertical on the test account, where `BagsBar:GetTop()` measures **317** — the stack
+  started 317 px up the screen, flush to the right edge with no margin
+  (`docs/reference/window-placement-flush-right-vertical-bar.png`). Reading the client's bag *frame*
+  is not the forbidden thing: hard rule 8 forbids the `ContainerFrameSettingsManager` **manager**,
+  and `ContainerFrameCombinedBags` is a global frame.
 
 Where we diverge from Blizzard on purpose: it answers a column that will not fit by shrinking
 container scale in 0.01 steps down to 0.75 and restarting the whole pass, and it stops wrapping left
@@ -504,7 +509,9 @@ at `BankFrame:GetRight() - 25` while the bank is open. We do neither — an over
 to the screen edge by `SetClampedToScreen`, and the bank limit arrives with bank windows at M5.
 
 `#18` therefore keeps its numbers **3** (another addon hides or moves the client's bag window,
-`FR-51`) and **4** (whether `position` stays in the schema) open; 1 and 2 are answered here.
+`FR-51`) and **4** (whether `position` stays in the schema) open; 1 and 2 are answered here. Number 3
+is now load-bearing: the anchor *is* the client's bag window, so an addon that moves or hides it moves
+or hides our stack with it.
 
 ---
 

@@ -2,8 +2,8 @@
 -- (ContainerFrameTemplate inherits PortraitFrameFlatTemplate on this client), so our windows
 -- look like the game's bags and a skinning addon treats them the same way (FR-49).
 --
--- Default position comes from the client's bag bar (FR-41): a fresh install lands where the
--- player's bags already are. A dragged window stores its own point and keeps it.
+-- Default position comes from the client's own bag window (FR-41): the stack starts at its
+-- bottom-right corner. A dragged window stores its own point and keeps it.
 
 local _, addon = ...
 
@@ -25,33 +25,40 @@ local byId = {}
 --- Sections whose release a combat lockdown made us defer.
 local pendingRelease = {}
 
---- The frame our stack hangs from. Camelot's bags bar sits bottom-left and lays its buttons out
---- leftward from the backpack button (MainMenuBarBagButtons.xml: direction = Enum.BagsDirection.Left).
---- We anchor **above the bar**, not on it: BOTTOMLEFT-on-BOTTOMLEFT put the window over the player's
---- bags and the micro bar.
+--- The client's own bag window, and the corner of it our stack starts from. Measured 2026-10-20
+--- (issue #28): the bag **bar** is the wrong anchor. Camelot's bar is configurable — set to vertical
+--- it puts `BagsBar:GetTop()` at 317, so the stack started 317 px up the screen, flush to the right
+--- edge with no margin. Bottom-right to the client's bag window bottom-right inherits the margin the
+--- client already gives its bags, and follows the window rather than a bar the player rearranged.
+--- `ContainerFrameCombinedBags` is a frame, not `ContainerFrameSettingsManager`: hard rule 8 forbids
+--- the manager, not reading a global frame's coordinates.
 local function anchorFrame()
-  return (_G.BagsBar and _G.BagsBar:IsShown() and _G.BagsBar)
-    or _G.MainMenuBarBackpackButton
+  local bag = _G.ContainerFrameCombinedBags
+  if bag and bag:IsShown() then return bag, 'BOTTOMRIGHT', bag:GetBottom() end
+  -- shortcut: no client bag window to copy (another addon hides it — FR-51). Sit above the backpack
+  -- button instead, which is at least where the player's bags are.
+  local button = _G.MainMenuBarBackpackButton
+  if button then return button, 'TOPRIGHT', button:GetTop() end
 end
 
---- Place the whole model in one pass (FR-41, issue #28). The allowance is measured off the frame we
---- actually anchor to — Blizzard's CONTAINER_OFFSET_Y = 85 is an offset for its own bottom-right start,
---- not a number that transfers.
+--- Place the whole model in one pass (FR-41, issue #28). The allowance is measured off the corner we
+--- actually start from — Blizzard's CONTAINER_OFFSET_Y = 85 is an offset for its own bottom-right
+--- start, not a number that transfers.
 ---@param models BoSWindowModel[]
 function windows.Layout(models)
-  local anchor = anchorFrame()
+  local _, _, allowance = anchorFrame()
   -- shortcut: heights are compared unscaled while each window applies its own scale. Whether a fit
   -- scale and a per-window scale coexist is #18's product decision.
-  anchors.Place(models, GetScreenHeight(), anchor and anchor:GetTop() or 0)
+  anchors.Place(models, GetScreenHeight(), allowance or 0)
 end
 
 local function defaultAnchor(frame, model)
-  local anchor = anchorFrame()
+  local anchor, corner = anchorFrame()
   if anchor then
-    frame:SetPoint('BOTTOMLEFT', anchor, 'TOPLEFT', model.x or 0, model.y or 0)
+    frame:SetPoint('BOTTOMRIGHT', anchor, corner, model.x or 0, model.y or 0)
   else
-    -- shortcut: no bag bar found (UI addon removed it), fall back to a fixed screen spot.
-    frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', 20 + (model.x or 0), 20 + (model.y or 0))
+    -- shortcut: no bag window and no backpack button (UI addon removed both), fixed screen spot.
+    frame:SetPoint('BOTTOMRIGHT', UIParent, 'BOTTOMRIGHT', (model.x or 0) - 20, 20 + (model.y or 0))
   end
 end
 

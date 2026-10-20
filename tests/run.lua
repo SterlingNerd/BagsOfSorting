@@ -207,9 +207,10 @@ check('catch-all needs one row', catchall and catchall.rows, 1)
 
 -- Each window is sized by flow from its own content, not from a shared template.
 local CELL = 38
+local MONEY = 17 -- constants.MONEY_BAR_SPACE: the band the money bar claims (issue #32)
 check('window is never narrower than its column budget', backpack.width, 5 * CELL + 16)
-check('Quests is sized to its one 2-item section', quests.height, 26 + (18 + CELL) + 6 + 8)
-check('Backpack is sized to its three sections', backpack.height, 26 + 3 * (18 + CELL) + 3 * 6 + 8)
+check('Quests is sized to its one 2-item section', quests.height, 26 + (18 + CELL) + 6 + 8 + MONEY)
+check('Backpack is sized to its three sections', backpack.height, 26 + 3 * (18 + CELL) + 3 * 6 + 8 + MONEY)
 check('windows are sized independently', quests.height ~= backpack.height, true)
 
 -- Priority ladder, measured against the real item that motivated it: Winterhoof Cleansing Totem is

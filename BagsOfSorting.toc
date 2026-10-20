@@ -50,6 +50,7 @@ layout\anchors.lua
 
 frames\item.lua
 frames\section.lua
+frames\money.lua
 frames\window.lua
 
 config\keybinds.lua

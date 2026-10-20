@@ -59,6 +59,7 @@ globals = {
     "GetScreenHeight",
     "GetScreenWidth",
     "GetCoinTextureString",
+    "GetMoney",
     "BlizzSortBags",
     "UnitName",
     "GetRealmName",

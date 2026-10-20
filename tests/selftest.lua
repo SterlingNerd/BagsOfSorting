@@ -225,8 +225,12 @@ local function testFlow(state)
   check(state, 'an empty section is not sized', empty.sections[1].cols, nil)
   check(state, 'an empty window is still its column grid wide', empty.width,
     3 * CELL + constants.WINDOW_PADDING * 2)
-  check(state, 'an empty window is still one row tall', empty.height,
-    constants.WINDOW_TITLE_HEIGHT + CELL + constants.WINDOW_PADDING)
+  -- FR-48 (issue #32): the money bar sits 8 px in from the window's bottom edge and is 13 px
+  -- tall, so the window has to be taller than its own padding or the bar covers the last row.
+  local body = constants.WINDOW_TITLE_HEIGHT + CELL
+  check(state, 'an empty window is one row tall plus the money band', empty.height > body, true)
+  check(state, 'the window bottom clears a 13 px money bar inset 8 px (FR-48)',
+    empty.height - body > 8 + 13, true)
 end
 
 --- `/bos perf` says plainly that a single-frame refresh cannot be timed here, and still keeps the

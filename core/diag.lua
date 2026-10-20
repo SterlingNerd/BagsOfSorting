@@ -389,6 +389,16 @@ probes[16] = function()
         'point', tostring(point), tostring(relativeTo and relativeTo:GetName() or 'nil'),
         tostring(relativePoint), tostring(x), tostring(y),
         'saved', frame.config and frame.config.position and 'yes' or 'no')
+      local bar = frame.MoneyFrame
+      if not bar then
+        record('    money: none')
+      else
+        -- The bar's own coin texts against the client's number: the bar is Blizzard's, so a mismatch
+        -- is a bar that never refreshed, not arithmetic we got wrong (issue #32).
+        record('    money', 'shown', tostring(bar:IsShown()), 'h', tostring(bar:GetHeight()),
+          'coins', bar.GoldButton.Text:GetText(), bar.SilverButton.Text:GetText(),
+          bar.CopperButton.Text:GetText(), 'GetMoney()', GetMoney())
+      end
     end
   end
   record('pool', addon:GetModule('Pool').Stats())
@@ -452,6 +462,18 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
+  [32] = {
+    issue = 32,
+    what = 'the window money bar is the client\'s own (FR-48)',
+    needs = 'a window open, one stack you can sell, a vendor within reach',
+    steps = {
+      { text = 'setup: every window\'s money bar and what it reads', run = probes[16] },
+      { text = 'sell one stack to the vendor' },
+      { text = 'capture: the money bar after the sale', run = probes[16] },
+      { text = 'buy the same stack back' },
+      { text = 'capture: the money bar after the buy', run = probes[16] },
+    },
+  },
   [15] = {
     issue = 15,
     what = 'what draws the new-item glow on our buttons (FR-47)',

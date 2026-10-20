@@ -60,7 +60,8 @@ function flow.Layout(window)
   end
 
   window.width = math.max(widest, maxColumns * CELL) + constants.WINDOW_PADDING * 2
-  window.height = constants.WINDOW_TITLE_HEIGHT + math.max(contentHeight, CELL) + constants.WINDOW_PADDING
+  window.height = constants.WINDOW_TITLE_HEIGHT + math.max(contentHeight, CELL)
+    + constants.WINDOW_PADDING + constants.MONEY_BAR_SPACE
   return window
 end
 

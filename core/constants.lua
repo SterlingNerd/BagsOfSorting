@@ -33,6 +33,12 @@ constants.SECTION_TITLE_HEIGHT = 18
 constants.WINDOW_PADDING = 8
 constants.WINDOW_TITLE_HEIGHT = 26
 
+-- The money bar is SmallMoneyFrameTemplate: 13 px tall, inset 8 px from the window's bottom edge,
+-- with a 17 px coin-box border and Blizzard's own 4 px clearance above it (ContainerFrame.xml,
+-- ContainerFrame.lua:UpdateCurrencyFrames). Its top edge therefore lands 21 px off the bottom edge
+-- and the window's own padding covers 8 of that, so 17 px more is what the last row needs.
+constants.MONEY_BAR_SPACE = 17
+
 -- docs/03: chunk phases 2-4 across frames above this many items.
 constants.ASYNC_ITEM_THRESHOLD = 60
 constants.ASYNC_ITEMS_PER_FRAME = 40

@@ -12,6 +12,7 @@ local windows = addon:NewModule('WindowFrames')
 
 local sectionFrames = addon:GetModule('SectionFrames')
 local anchors = addon:GetModule('Anchors')
+local moneyFrames = addon:GetModule('MoneyFrames')
 local log = addon:GetModule('Log')
 
 ---@class BoSWindowFrame
@@ -108,6 +109,9 @@ local function create(config)
     log.Debug('saved position for window', self.config.id)
   end)
 
+  -- The client's own money bar, as a child of the shell: it hides with the window and scales with
+  -- it (FR-48).
+  frame.MoneyFrame = moneyFrames.Attach(frame)
   local wf = { frame = frame, sections = {}, config = config }
   frame.config = config
   byId[config.id] = wf

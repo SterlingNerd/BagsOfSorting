@@ -32,11 +32,14 @@ BagsOfSortingDB = {
       id       = "w1",                -- stable opaque id, survives rename/reorder
       name     = "Crafting",
       kind     = "backpack",          -- "backpack" | "bank"
-      priority = 1,                   -- tiebreak within same kind
-      openWithAll = true,
+      priority = 1,                   -- reserved: nothing sorts on it. Array order IS the layout
+                                      -- order; classification precedence lives in `categories`
+                                      -- alone (issue #28 decision 4)
+      openWithAll = true,             -- reserved: no code reads it yet
       hidden   = false,                -- closed with the window's own X; absent means open
       columns  = 5,
-      compact  = false,               -- shrink to content, hide when empty
+      compact  = false,               -- reserved: shrink to content / hide when empty is FR-18,
+                                      -- unread today
       scale    = 1.0,
       icon     = "INV_Misc_Bag_10",   -- bare Interface\ICONS\ name, from the client's icon picker
       overlay  = nil,                 -- optional our-own-art overlay drawn on top of `icon`
@@ -240,6 +243,14 @@ BOS1.<base64( json-ish serialize({windows, categories}) )>
 `core/db.Migrate()` runs when `version < CURRENT`. Migrations are numbered, additive, and each one
 is a pure function over the profile table. No migration ever runs inside `OnEnable` business
 logic (Baggins' `hideduplicates` boolean→string coercion in `OnEnable` is the anti-pattern).
+
+**Migrations during the prototype: there are none.** Migrations exist for users we do not have yet.
+While one user owns every deployed file, `CURRENT_VERSION` stays at **1**, the schema changes
+**breakingly**, and the game-side file is deleted or replaced out-of-band (`tests/CHECKLIST.md`
+setup — the file is `WTF/Account/<account>/SavedVariables/BagsOfSorting.lua`, and the client must be
+closed or it rewrites the edit at logout). `db.Migrate()` and the version loop stay: they are the
+machinery M3 needs, they just hold no migrations now. Migrations return at **M3**, where
+import/export and per-character profiles first make a stale file reachable.
 
 **Importing from other addons is deferred** (`docs/07` Q5, `FR-94` = Won't for v1): ship two
 sensible default profiles instead. The table below stays in the spec as the answer to "if we ever

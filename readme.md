@@ -4,9 +4,10 @@ A bag addon for **World of Warcraft: Forever** (Camelot) that keeps the *Baggins
 separate bag windows, each split into labeled sections, plus user-defined custom bags — and
 fixes the thing Baggins is bad at: configuring it.
 
-Status: **prototype (M0 + M1).** The pipeline runs — harvest → enrich → classify → assign → sort →
-render — with one Backpack window and three categories, on the Forever client. The configuration UI
-that is this project's reason to exist is still spec. Start with
+Status: **prototype (M0 + M1 done, M2 in progress).** The pipeline runs — harvest → enrich →
+classify → assign → sort → render — on the Forever client, and renders three windows (Backpack,
+Quests, Tools) stacked above the client's bags bar. The configuration UI that is this project's
+reason to exist is still spec. Start with
 [`docs/00-vision-and-scope.md`](docs/00-vision-and-scope.md), review
 [`docs/02-requirements.md`](docs/02-requirements.md) and
 [`docs/05-config-ui.md`](docs/05-config-ui.md) (the two docs that decide whether this is worth

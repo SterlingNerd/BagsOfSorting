@@ -144,6 +144,13 @@ Risks
 
 ## M2 — Windows, sections, flow layout (1.5–2 wk)
 
+**Status: in progress (2026-10-20).** Opened by **issue #28**: `layout/anchors.lua` delivered — the
+`FR-41` placement rule, ported from Blizzard's own bag layout — and three hard-coded backpack windows
+(`Backpack`, `Quests`, `Tools`) delivered as profile data, with no configuration UI. The schema goes
+back to `version = 1` and the migration that carried Quest Items and Tools is removed: while one user
+owns every deployed file the schema changes breakingly (`docs/04` §Migration). The rest of M2 is not
+started.
+
 **Goal:** the Baggins shape. Multiple user-visible windows, sections packed inside them.
 
 Deliverables

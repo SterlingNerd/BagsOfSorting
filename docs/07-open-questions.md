@@ -488,9 +488,23 @@ field (reserved, unused while windows are placed), `FR-10b`/`FR-10c` (copy and l
 deterministic placement rule rather than two windows fighting for one rectangle), and Q13 — EditMode
 is the way a player overrides placement, which is what `AC-54` tests at M2.
 
-Still open inside the decision, and it belongs to `layout/anchors.lua` at M2: what "maximum height"
-means in pixels and rows, whether the anchor is the client's window frame or the bag bar, and what
-happens when the client's bag window is hidden by another addon (`FR-51`).
+Answered for the M2 slice (**issue #28**, 2026-10-20), in `layout/anchors.lua` plus the one client
+read in `frames/window.lua`:
+
+- **"maximum height" is measured, not a constant**: the free space above the anchor frame,
+  `GetScreenHeight() − anchorFrame():GetTop()`, read at layout time. Not a fraction of screen height,
+  not a row count.
+- **the anchor is the bag bar** — `BagsBar`, falling back to `MainMenuBarBackpackButton` — because the
+  client's bag *window* is the thing another addon hides or moves (`FR-51`) and the bar is always
+  there. It also sidesteps `ContainerFrameSettingsManager`, which hard rule 8 forbids calling.
+
+Where we diverge from Blizzard on purpose: it answers a column that will not fit by shrinking
+container scale in 0.01 steps down to 0.75 and restarting the whole pass, and it stops wrapping left
+at `BankFrame:GetRight() - 25` while the bank is open. We do neither — an over-tall window is clamped
+to the screen edge by `SetClampedToScreen`, and the bank limit arrives with bank windows at M5.
+
+`#18` therefore keeps its numbers **3** (another addon hides or moves the client's bag window,
+`FR-51`) and **4** (whether `position` stays in the schema) open; 1 and 2 are answered here.
 
 ---
 

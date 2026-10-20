@@ -51,6 +51,7 @@ local ORDER = {
   'data/sort.lua',
   'data/pipeline.lua',
   'layout/flow.lua',
+  'layout/anchors.lua',
   'config/keybinds.lua',
   'core/diag.lua',
   'tests/fixtures.lua',
@@ -155,57 +156,91 @@ check('harvested slot count', #items, 10)
 pipeline.Refresh('smoke')
 local model = pipeline.Model()
 
-check('one window in the model', #model, 1)
-local window = model[1]
-check('window name', window and window.name, 'Backpack')
-check('every shipped section has something in it', window and #window.sections, 5)
+-- Issue #28: three hard-coded backpack windows. Array order in profile.windows IS screen order
+-- (bottom-most first); a category is referenced by whichever window owns it (FR-12).
+local function windowIn(models, name)
+  for _, window in ipairs(models) do
+    if window.name == name then return window end
+  end
+end
 
-local function sectionByName(name)
-  for _, section in ipairs(window.sections or {}) do
+local function sectionIn(window, name)
+  for _, section in ipairs(window and window.sections or {}) do
     if section.name == name then return section end
   end
 end
 
-local function countSection(name)
-  local section = sectionByName(name)
+local function countSection(window, name)
+  local section = sectionIn(window, name)
   return section and #section.items or 0
 end
 
-check('Junk holds the grey item', countSection('Junk'), 1)
-check('Armor holds the cloth armour', countSection('Armor'), 1)
-check('Quest Items holds both quest items', countSection('Quest Items'), 2)
-check('Tools holds the mining pick and the hearthstone', countSection('Tools'), 2)
-check('catch-all holds the rest', countSection('Everything else'), 4)
+local function binds(window)
+  local out = {}
+  for _, section in ipairs(window.sections) do out[#out + 1] = table.concat(section.categories, '+') end
+  return table.concat(out, ',')
+end
 
-local catchall = sectionByName('Everything else')
+check('three windows in the model', #model, 3)
+check('profile order is model order',
+  model[1].name .. ',' .. model[2].name .. ',' .. model[3].name, 'Backpack,Quests,Tools')
+local backpack = windowIn(model, 'Backpack')
+local quests = windowIn(model, 'Quests')
+local tools = windowIn(model, 'Tools')
+
+check('Backpack keeps its three sections', #backpack.sections, 3)
+check('Quests is one section', #quests.sections, 1)
+check('Tools is one section', #tools.sections, 1)
+check('Backpack binds neither moved category', binds(backpack), 'Junk,Armor,__catchall')
+check('Quests binds Quest Items', binds(quests), 'Quest Items')
+check('Tools binds Tools', binds(tools), 'Tools')
+
+check('Junk holds the grey item', countSection(backpack, 'Junk'), 1)
+check('Armor holds the cloth armour', countSection(backpack, 'Armor'), 1)
+check('catch-all holds the rest', countSection(backpack, 'Everything else'), 4)
+check('Quest Items holds both quest items', countSection(quests, 'Quest Items'), 2)
+check('Tools holds the mining pick and the hearthstone', countSection(tools, 'Tools'), 2)
+
+local catchall = sectionIn(backpack, 'Everything else')
 check('catch-all packs 4 items into 4 columns', catchall and catchall.cols, 4)
 check('catch-all needs one row', catchall and catchall.rows, 1)
-check('window is never narrower than its column budget', window and window.width, 5 * 38 + 16)
+
+-- Each window is sized by flow from its own content, not from a shared template.
+local CELL = 38
+check('window is never narrower than its column budget', backpack.width, 5 * CELL + 16)
+check('Quests is sized to its one 2-item section', quests.height, 26 + (18 + CELL) + 6 + 8)
+check('Backpack is sized to its three sections', backpack.height, 26 + 3 * (18 + CELL) + 3 * 6 + 8)
+check('windows are sized independently', quests.height ~= backpack.height, true)
 
 -- Priority ladder, measured against the real item that motivated it: Winterhoof Cleansing Totem is
--- type Armor *and* a quest item. Junk (10) also matches nothing here, Armor (20) does.
-local function sectionOf(itemID)
-  for _, section in ipairs(window.sections) do
-    for _, item in ipairs(section.items) do
-      if item.itemID == itemID then return section.name end
+-- type Armor *and* a quest item. Junk (10) also matches nothing here, Armor (20) does. The ladder is
+-- unchanged by windows (#28 decision 4), so 5411 lands in the Quests window, not in w1's Armor.
+local function placeOf(itemID)
+  for _, window in ipairs(model) do
+    for _, section in ipairs(window.sections) do
+      for _, item in ipairs(section.items) do
+        if item.itemID == itemID then return window.name .. '/' .. section.name end
+      end
     end
   end
 end
-check('a quest item that is also Armor wins on priority (5411)', sectionOf(5411), 'Quest Items')
-check('the manual list beats the type rule (2901 is a Weapon)', sectionOf(2901), 'Tools')
-check('grey armour is still junk (1001 is quality 0 Armor)', sectionOf(1001), 'Junk')
-check('an ordinary weapon is not a tool', sectionOf(1002), 'Everything else')
+check('a quest item that is also Armor wins on priority (5411)', placeOf(5411), 'Quests/Quest Items')
+check('the manual list beats the type rule (2901 is a Weapon)', placeOf(2901), 'Tools/Tools')
+check('grey armour is still junk (1001 is quality 0 Armor)', placeOf(1001), 'Backpack/Junk')
+check('an ordinary weapon is not a tool', placeOf(1002), 'Backpack/Everything else')
 
--- FR-15: with duplication off, every harvested item is drawn exactly once.
+-- FR-15: with duplication off, every harvested item is drawn exactly once **across every window**.
 local drawn, seen = 0, {}
-for _, section in ipairs(window.sections) do
-  for _, item in ipairs(section.items) do
-    drawn = drawn + 1
-    local key = item.bagID .. ':' .. item.slot
-    if seen[key] then
-      failures[#failures + 1] = 'duplicate placement for slot ' .. key
+for _, window in ipairs(model) do
+  for _, section in ipairs(window.sections) do
+    for _, item in ipairs(section.items) do
+      drawn = drawn + 1
+      local key = item.bagID .. ':' .. item.slot
+      if seen[key] then
+        failures[#failures + 1] = 'duplicate placement for slot ' .. key
+      end
+      seen[key] = true
     end
-    seen[key] = true
   end
 end
 checks = checks + 1
@@ -317,45 +352,104 @@ local function testWindowVisibility()
   check('closed windows leave the model', #pipeline.Model(), 0)
   db.SetWindowsOpen(true)
   pipeline.Refresh('reopen')
-  check('reopened windows are back in the model', #pipeline.Model(), 1)
+  check('reopened windows are back in the model', #pipeline.Model(), 3)
   check('reopen clears the flag rather than setting it', db.Windows()[1].hidden, nil)
 end
 
 testWindowVisibility()
 
--- Migration 1→2 is the code that touches a player's existing file: it must add the new categories
--- and land their sections before the catch-all without renumbering or reordering what they had.
-local function testMigration()
+-- One category bound by two windows is still placed once: the first window in array order wins
+-- (FR-15 + #28 decision 4), and the window left with nothing still renders (#28 decision 2).
+local function testDuplicateBinding()
   local db = addon.modules['DB']
-  db.sv.version = 1
-  db.sv.profiles.Default = {
-    windows = { { id = 'w1', name = 'Backpack', kind = 'backpack', sections = {
-      { id = 's1', name = 'Junk', categories = { 'Junk' } },
-      { id = 's2', name = 'Armor', categories = { 'Armor' } },
-      { id = 's3', name = 'Everything else', categories = { '__catchall' } },
-    } } },
-    categories = {
-      ['Junk'] = { priority = 10, kind = 'rules', enabled = true,
-        rules = { op = 'all', children = { { field = 'quality', cmp = '=', value = 0 } } } },
-      ['Armor'] = { priority = 20, kind = 'rules', enabled = true,
-        rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Armor' } } } },
-      ['__catchall'] = { priority = 999, kind = 'rules', enabled = true,
-        rules = { op = 'all', children = { { field = 'none', cmp = '=', value = true } } } },
-    },
-  }
-  db.Migrate()
-  check('migration bumps the schema version', db.sv.version, 2)
-  check('the new categories arrive',
-    db.Profile().categories['Quest Items'] ~= nil and db.Profile().categories['Tools'] ~= nil, true)
-  local order = {}
-  for _, section in ipairs(db.Profile().windows[1].sections) do order[#order + 1] = section.name end
-  check('new sections land before the catch-all, existing ones keep their place',
-    table.concat(order, ','), 'Junk,Armor,Quest Items,Tools,Everything else')
-  db.Migrate()
-  check('migrating twice changes nothing', #db.Profile().windows[1].sections, 5)
+  table.insert(db.Windows()[1].sections, { id = 's9', name = 'Tools copy', categories = { 'Tools' } })
+  pipeline.Refresh('duplicate-binding')
+  local models = pipeline.Model()
+  check('the first window in array order gets the items',
+    countSection(windowIn(models, 'Backpack'), 'Tools copy'), 2)
+  check('the later window keeps its slot with no sections', #models, 3)
+  check('and holds nothing', #models[3].sections, 0)
+  table.remove(db.Windows()[1].sections)
+  pipeline.Refresh('unduplicate')
 end
 
-testMigration()
+testDuplicateBinding()
+
+-- Bank windows are M5: the gate in pipeline.Assign is what keeps them out of the frames layer.
+local function testBankWindow()
+  local db = addon.modules['DB']
+  table.insert(db.Windows(), {
+    id = 'w9', name = 'Bank', kind = 'bank', columns = 5,
+    sections = { { id = 's9', name = 'Everything else', categories = { '__catchall' } } },
+  })
+  pipeline.Refresh('bank-window')
+  local models = pipeline.Model()
+  check('a bank window stays out of the model', #models, 3)
+  local bank = false
+  for _, window in ipairs(models) do
+    if window.kind == 'bank' then bank = true end
+  end
+  check('no bank window reaches the frames layer', bank, false)
+  table.remove(db.Windows())
+  pipeline.Refresh('unbank')
+end
+
+testBankWindow()
+
+-- layout/anchors.lua: Blizzard's bag layout ported (issue #28). Pure math over the model, so the
+-- whole rule is testable off the client.
+local anchors = addon.modules['Anchors']
+local GAP, COLUMN_GAP = 8, 11
+
+---@return BoSWindowModel[]
+local function stack(heights, screenHeight, allowance)
+  local models = {}
+  for i, height in ipairs(heights) do models[i] = { id = 'w' .. i, width = 206, height = height } end
+  anchors.Place(models, screenHeight, allowance)
+  return models
+end
+
+local function overlaps(a, b)
+  return a.x < b.x + b.width and b.x < a.x + a.width and a.y < b.y + b.height and b.y < a.y + a.height
+end
+
+local stacked = stack({ 100, 100, 100 }, 1200, 45)
+check('the first column starts at the anchor', stacked[1].x, 0)
+check('the first window sits on the anchor', stacked[1].y, 0)
+check('the second window is GAP above the first', stacked[2].y, 100 + GAP)
+check('the third stacks the same way', stacked[3].y, 2 * (100 + GAP))
+check('a 1200-high client holds all three in one column', stacked[3].x, 0)
+
+local overlapping = 0
+for i = 1, #stacked do
+  for j = i + 1, #stacked do
+    if overlaps(stacked[i], stacked[j]) then overlapping = overlapping + 1 end
+  end
+end
+check('no two windows share a rectangle', overlapping, 0)
+
+-- The cap is screenHeight - allowance, honoured exactly: full is not over.
+local exact = stack({ 50, 50 }, 200, 92)
+check('a column exactly full at the boundary does not wrap', exact[2].x, 0)
+local over = stack({ 50, 50 }, 200, 93)
+check('one pixel over wraps to a new column', over[2].x, -(206 + COLUMN_GAP))
+check('the wrapped column resets its height', over[2].y, 0)
+
+local wrapped = stack({ 400, 400, 400 }, 1200, 45)
+check('a column that cannot hold the next window wraps left', wrapped[3].x, -(206 + COLUMN_GAP))
+check('the wrapped window starts at the bottom of its column', wrapped[3].y, 0)
+check('the wrapped column is clear of the first',
+  overlaps(wrapped[1], wrapped[3]) or overlaps(wrapped[2], wrapped[3]), false)
+
+-- Blizzard starts no new column for a single too-tall frame (`framesInColumn == 1`); it shrinks
+-- scale instead. We do not shrink, so the equivalent is: keep the slot, let the clamp handle it.
+local giant = stack({ 2000 }, 1200, 45)
+check('a single window taller than the cap never gets a phantom column',
+  giant[1].x .. '/' .. giant[1].y, '0/0')
+
+-- Decision 2: an empty window still occupies a slot. 72 is what flow gives a window with no sections.
+local empty = stack({ 26 + 38 + 8, 100 }, 1200, 45)
+check('an empty window still consumes its slot in the column', empty[2].y, (26 + 38 + 8) + GAP)
 
 
 for _, failure in ipairs(failures) do

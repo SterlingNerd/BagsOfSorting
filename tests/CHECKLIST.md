@@ -18,7 +18,7 @@ reaches the same API from the addon instead, which is why the run sheets here do
 
 ## Setup (once per branch)
 
-1. `ln -sfn /home/josh/Projects/wow/BagsOfSorting-prototype /home/josh/Projects/wow/addons/BagsOfSorting`
+1. `ln -sfn /home/josh/Projects/wow/BagsOfSorting /home/josh/Projects/wow/addons/BagsOfSorting`
 2. With the client **closed**, delete `WTF/Account/<account>/SavedVariables/BagsOfSorting.lua` on the
    game machine. It is account-level and named after the **addon folder**, whatever the TOC declares
    (issue #14) — not `<realm>/<character>/BagsOfSortingDB.lua`. An open client rewrites SavedVariables

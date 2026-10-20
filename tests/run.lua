@@ -396,6 +396,19 @@ end
 
 testBankWindow()
 
+-- /bos unplace: a saved drag point is the only thing that overrides the layout rule, and the
+-- placement tests need the default placement (FR-41).
+local function testClearPositions()
+  local db = addon.modules['DB']
+  db.Windows()[3].position = { point = 'TOP', relativePoint = 'TOP', x = 295.2, y = -191.7 }
+  check('a saved position is counted as cleared', db.ClearPositions(), 1)
+  check('the window keeps everything else about itself',
+    db.Windows()[3].id .. '/' .. tostring(db.Windows()[3].position), 'w3/nil')
+  check('nothing saved means nothing cleared', db.ClearPositions(), 0)
+end
+
+testClearPositions()
+
 -- layout/anchors.lua: Blizzard's bag layout ported (issue #28). Pure math over the model, so the
 -- whole rule is testable off the client.
 local anchors = addon.modules['Anchors']

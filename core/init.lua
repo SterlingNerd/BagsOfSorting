@@ -144,6 +144,7 @@ local HELP = {
   '/bos find <id>     which container index holds that item',
   '/bos refresh       re-run the pipeline',
   '/bos show|hide     show or hide the sorting windows',
+  '/bos unplace       drop dragged windows back on the layout rule',
   '/bos debug         toggle debug logging',
 }
 
@@ -167,6 +168,11 @@ function init.Slash(input)
   elseif cmd == 'hide' then
     db.SetWindowsOpen(false)
     windows.HideAll()
+  elseif cmd == 'unplace' then
+    -- A saved drag point is the only thing that overrides the layout rule, and the placement tests
+    -- need the default placement (FR-41).
+    print(string.format('%d window(s) released to the layout rule', db.ClearPositions()))
+    pipeline.Refresh('unplace')
   elseif cmd == 'debug' then
     local settings = db.Settings()
     settings.debug = not settings.debug

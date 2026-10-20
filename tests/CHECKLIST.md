@@ -81,7 +81,7 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 ### Manual test: the stack starts at the client's bag window (FR-41, issue #28)
 
-**Precondition:** default config — you have never dragged a window. Blizzard's bag window open.
+**Precondition:** Blizzard's bag window open. Run `/bos unplace` first if you have ever dragged a window — a saved point overrides the layout rule, and this test is about the layout rule.
 
 1. Run `/bos show`.
 2. Compare the **Backpack** window's bottom-right corner with the client backpack window's bottom-right corner.
@@ -108,8 +108,9 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 1. Drag the window by its title bar, 200 px up and right, release.
 2. Drag it by an empty area of the body — between sections, not on an item button.
 3. Run `/reload`.
+4. Run `/bos unplace`.
 
-**Expected:** both drags move the whole window (step 2 is the regression: before the fix the body swallowed the press); after reload the window is where you left it; item buttons still respond to clicks.
+**Expected:** both drags move the whole window (step 2 is the regression: before the fix the body swallowed the press); after reload the window is where you left it; item buttons still respond to clicks; step 4 drops it back into the stack with the other windows.
 
 ### Manual test: the X closes a window and it stays closed (FR-41)
 

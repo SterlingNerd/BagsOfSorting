@@ -208,6 +208,21 @@ function db.SetWindowsOpen(open)
   end
 end
 
+--- A dragged window keeps its saved point, and that point is the only thing that overrides the
+--- layout rule (FR-41). The placement tests need the default placement, so this hands the windows
+--- back to it. It clears nothing else: `hidden`, sections and scale stay as they are.
+---@return number cleared
+function db.ClearPositions()
+  local cleared = 0
+  for _, window in ipairs(db.Windows()) do
+    if window.position then
+      window.position = nil
+      cleared = cleared + 1
+    end
+  end
+  return cleared
+end
+
 --- The layout model changed: ask the pipeline to re-run (FR-26's entry point).
 function db.NotifyModelChanged()
   addon:GetModule('Events').Emit('BOS_MODEL_CHANGED')

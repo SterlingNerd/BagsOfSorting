@@ -26,7 +26,7 @@ local constants = addon:GetModule('Constants')
 ---@field index number
 ---@field name string
 ---@field slots number
----@field kind string   -- 'backpack' | 'keyring'
+---@field kind string   -- 'backpack' | 'reagent' | 'keyring'
 
 ---@class BoSFreeSlot
 ---@field bagID number
@@ -88,7 +88,12 @@ function harvest.Discover()
   for i = 1, constants.NUM_BAG_SLOTS do
     add(constants.BACKPACK + i, 'backpack')
   end
-  add(constants.REAGENTBAG_INDEX, 'backpack')
+  -- Its own family, not a backpack bag: the free-slot count covers the backpack and the four bag
+  -- slots, which is the same set the client's own number covers (issue #36). The pouch's items are
+  -- still harvested and still drawn.
+  -- shortcut: its free slots are counted apart and shown nowhere; how an empty reagent pouch reads
+  -- in a window is FR-44's per-family design (docs/02), open on issue #36.
+  add(constants.REAGENTBAG_INDEX, 'reagent')
   add(constants.KEYRING, 'keyring')
 
   table.sort(list, function(a, b) return a.index < b.index end)

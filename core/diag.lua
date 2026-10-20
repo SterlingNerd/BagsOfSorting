@@ -430,6 +430,7 @@ probes[17] = function()
 
   local first = harvest.FirstFreeSlot()
   record('our counts', 'backpack', harvest.FreeSlots('backpack'),
+    'reagent', harvest.FreeSlots('reagent'),
     'keyring', harvest.FreeSlots('keyring'),
     'first free slot', first and (first.bagID .. ':' .. first.slot) or 'none')
 

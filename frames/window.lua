@@ -11,6 +11,7 @@ local _, addon = ...
 local windows = addon:NewModule('WindowFrames')
 
 local sectionFrames = addon:GetModule('SectionFrames')
+local anchors = addon:GetModule('Anchors')
 local log = addon:GetModule('Log')
 
 ---@class BoSWindowFrame
@@ -24,28 +25,45 @@ local byId = {}
 --- Sections whose release a combat lockdown made us defer.
 local pendingRelease = {}
 
---- Windows stack upward from the bag bar in layout order until the player drags one.
-local function defaultAnchor(frame, index)
-  -- Camelot's bags bar sits bottom-left and lays its buttons out leftward from the backpack
-  -- button (BagsBar.xml: direction = Enum.BagsDirection.Left). Anchor above the bar, not on it:
-  -- BOTTOMLEFT-on-BOTTOMLEFT put the window over the player's bags and the micro bar.
-  local anchor = (_G.BagsBar and _G.BagsBar:IsShown() and _G.BagsBar)
+--- The frame our stack hangs from. Camelot's bags bar sits bottom-left and lays its buttons out
+--- leftward from the backpack button (MainMenuBarBagButtons.xml: direction = Enum.BagsDirection.Left).
+--- We anchor **above the bar**, not on it: BOTTOMLEFT-on-BOTTOMLEFT put the window over the player's
+--- bags and the micro bar.
+local function anchorFrame()
+  return (_G.BagsBar and _G.BagsBar:IsShown() and _G.BagsBar)
     or _G.MainMenuBarBackpackButton
+end
+
+--- Place the whole model in one pass (FR-41, issue #28). The allowance is measured off the frame we
+--- actually anchor to — Blizzard's CONTAINER_OFFSET_Y = 85 is an offset for its own bottom-right start,
+--- not a number that transfers.
+---@param models BoSWindowModel[]
+function windows.Layout(models)
+  local anchor = anchorFrame()
+  -- shortcut: heights are compared unscaled while each window applies its own scale. Whether a fit
+  -- scale and a per-window scale coexist is #18's product decision.
+  anchors.Place(models, GetScreenHeight(), anchor and anchor:GetTop() or 0)
+end
+
+local function defaultAnchor(frame, model)
+  local anchor = anchorFrame()
   if anchor then
-    frame:SetPoint('BOTTOMLEFT', anchor, 'TOPLEFT', 0, 8 + (index - 1) * 40)
+    frame:SetPoint('BOTTOMLEFT', anchor, 'TOPLEFT', model.x or 0, model.y or 0)
   else
     -- shortcut: no bag bar found (UI addon removed it), fall back to a fixed screen spot.
-    frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', 20, 20 + (index - 1) * 40)
+    frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', 20 + (model.x or 0), 20 + (model.y or 0))
   end
 end
 
-local function restorePosition(frame, config, index)
+--- A window the player dragged keeps its saved point, and still consumes its slot in the column —
+--- excluding dragged windows would make the layout depend on which windows happen to be dragged.
+local function restorePosition(frame, model)
   frame:ClearAllPoints()
-  local saved = config.position
+  local saved = model.config.position
   if saved and saved.point then
     frame:SetPoint(saved.point, UIParent, saved.relativePoint or saved.point, saved.x, saved.y)
   else
-    defaultAnchor(frame, index)
+    defaultAnchor(frame, model)
   end
 end
 
@@ -107,8 +125,7 @@ end
 --- Draw one window from the layout model. Frames are reused across refreshes; only the
 --- buttons and section blocks move (AC-42).
 ---@param model BoSWindowModel
----@param index number
-function windows.Render(model, index)
+function windows.Render(model)
   local wf = byId[model.id] or create(model.config)
   wf.config = model.config
 
@@ -129,7 +146,7 @@ function windows.Render(model, index)
     sectionFrames.Render(wf.sections[i], sectionModel, frame, sectionModel.offsetY)
   end
 
-  restorePosition(frame, model.config, index)
+  restorePosition(frame, model)
   frame:Show()
   return wf
 end

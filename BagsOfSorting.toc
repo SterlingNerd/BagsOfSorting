@@ -46,6 +46,7 @@ data\sort.lua
 data\pipeline.lua
 
 layout\flow.lua
+layout\anchors.lua
 
 frames\item.lua
 frames\section.lua

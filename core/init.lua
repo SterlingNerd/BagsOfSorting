@@ -38,8 +38,9 @@ local function render(models, shown, ctx)
     log.Debug('combat lockdown: render deferred to regen')
     return
   end
-  for index, model in ipairs(models) do
-    windows.Render(model, index)
+  windows.Layout(models)
+  for _, model in ipairs(models) do
+    windows.Render(model)
   end
   windows.Prune(shown)
   context.MarkPhase(ctx, 'render')
@@ -139,7 +140,7 @@ local HELP = {
   '/bos test          pending manual tests, then the helper names',
   '/bos test <id>     the numbered run sheet for one test (one action per step)',
   '/bos test <id><l>  run one captured step of that test, e.g. /bos test 15b',
-  '/bos test <name>   a helper on its own: dump · log · flags · keybind · newitem · clock · expansion',
+  '/bos test <name>   a helper on its own: dump · log · flags · keybind · newitem · clock · expansion · windows',
   '/bos find <id>     which container index holds that item',
   '/bos refresh       re-run the pipeline',
   '/bos show|hide     show or hide the sorting windows',

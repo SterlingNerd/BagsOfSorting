@@ -451,6 +451,40 @@ probes[17] = function()
   end
 end
 
+--- newitems — what the client's own new-item list actually holds (issue #35). The acceptance
+--- criterion is "nothing is new at login", and only the client can say what it flags. Read-only:
+--- IsNewItem reads a list, it builds nothing (agents.md hard rule 8).
+probes[18] = function()
+  if not inTest then fresh('newitems') end
+  if not (C_NewItems and C_NewItems.IsNewItem) then
+    record('C_NewItems.IsNewItem: absent')
+    return
+  end
+  local harvest = addon:GetModule('Harvest')
+  local seen, flagged = 0, 0
+  for _, container in ipairs(harvest.Containers()) do
+    for slot = 1, container.slots do
+      local okInfo, info = pcall(C_Container.GetContainerItemInfo, container.index, slot)
+      if okInfo and info and info.itemID then
+        seen = seen + 1
+        local okNew, isNew = pcall(C_NewItems.IsNewItem, container.index, slot)
+        if okNew and isNew then
+          flagged = flagged + 1
+          record(string.format('  flagged new [%d] slot %d  item %s', container.index, slot, tostring(info.itemID)))
+        end
+      end
+    end
+  end
+  record('slots holding an item', seen, 'flagged new by the client', flagged)
+end
+
+--- The new-item state read two ways: what the client flags, and what our own buttons draw.
+local function newitemState()
+  probes[18]()
+  probes[11]()
+end
+
+
 --- Which container index holds this item? Answers "is the base grid a container?" with an item you
 --- can see and place on purpose, rather than with slot arithmetic. Read-only: `GetContainerItemInfo`
 --- reads, it builds nothing (agents.md hard rule 8).
@@ -499,7 +533,7 @@ end
 local HELPERS = {
   dump = probes[2], log = probes[3], keybind = probes[7], newitem = probes[11],
   clock = probes[13], expansion = probes[14], flags = flagsScan, windows = probes[16],
-  freeslots = probes[17],
+  freeslots = probes[17], newitems = probes[18],
 }
 
 -- ---------------------------------------------------------------------------
@@ -510,17 +544,6 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
-  [15] = {
-    issue = 15,
-    what = 'what draws the new-item glow on our buttons (FR-47)',
-    needs = 'loot one new item first, then hover nothing before step a',
-    steps = {
-      { text = 'setup: which of our buttons are lit, and the client buttons too', run = probes[11] },
-      { text = 'hover the glowing button' },
-      { text = 'look at the slot two seconds later' },
-      { text = 'capture: which buttons are lit now', run = probes[11] },
-    },
-  },
   [22] = {
     issue = 22,
     what = "BetterBags' combat behaviour (input to the Q23 decision)",
@@ -536,6 +559,18 @@ local tests = {
       { text = 'open a BetterBags window during combat' },
       { text = 'close that window' },
       { text = 'capture: stop event logging', run = probes[3] },
+    },
+  },
+  [35] = {
+    issue = 35,
+    what = 'what the client flags new, and what our buttons draw (FR-47)',
+    needs = 'step a runs right after /reload, before looting or buying anything this session',
+    steps = {
+      { text = 'setup: what the client flags new at login, and which of our textures are lit', run = newitemState },
+      { text = 'loot or buy one new item' },
+      { text = 'capture: what is flagged new now, and what our buttons draw', run = newitemState },
+      { text = 'hover the new slot in our window, then move the mouse away' },
+      { text = 'capture: after the hover', run = newitemState },
     },
   },
 }
@@ -646,7 +681,7 @@ function diag.Command(rest)
   for _, t in ipairs(pending) do
     print(string.format('  %d  %s  —  %s', t.id, t.what, t.needs))
   end
-  print('helpers: dump · log · flags · keybind · newitem · clock · expansion')
+  print('helpers: dump · log · flags · keybind · newitem · newitems · clock · expansion · windows · freeslots')
 end
 
 return diag

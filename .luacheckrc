@@ -37,6 +37,7 @@ globals = {
     "C_GameRules",
     "C_AddOns",
     "C_Warbank",
+    "C_NewItems",
     "Settings",
     "ItemLocation",
     "ItemButtonUtil",

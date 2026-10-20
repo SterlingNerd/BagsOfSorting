@@ -203,7 +203,20 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 
 **Expected:** every step behaves exactly as it does in Blizzard's own bag window: the stock item menu opens on right-click (not blocked, not empty), shift-click links the item in chat, alt-click does the client's modified-click action, the sale completes and money updates, Blizzard's own `StackSplitFrame` appears, and the tooltip is Blizzard's. No "Action blocked" anywhere.
 
-### Manual test: the overlays our paint path omits (FR-45, FR-47, FR-49, FR-65)
+### Manual test: the new-item highlight (FR-47, issue #35)
+
+**Precondition:** our windows open with Blizzard's bag window open beside them showing the same slots; nothing looted or bought since the last `/reload`.
+
+1. `/reload`, and look at our window before touching anything.
+2. Loot or buy one new item, and look at our window before hovering it.
+3. Compare that slot with the same slot in Blizzard's window.
+4. Hover our button, move the mouse away, and look again two seconds later.
+5. Move the item to another slot, and look at the slot it left and the slot it entered.
+6. Run `/bos test 35` for the numbers behind steps 1-4.
+
+**Expected:** step 1 — no slot in our window glows. Step 2 — the new slot carries a glow that cycles bright → dim, about one cycle a second, in the same atlas and colour Blizzard shows for that item's quality (`docs/reference/new-item-highlight-bright.png`, `-dim.png`), and no other slot glows. Step 4 — the glow is gone and stays gone. Step 5 — neither slot glows.
+
+### Manual test: the overlays our paint path omits (FR-45, FR-49, FR-65)
 
 **Precondition:** windows open; one item you have not picked up this session (loot a mob), one **quest** item, one **grey** item, and Blizzard's bag window open beside ours showing the same slots.
 

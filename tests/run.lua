@@ -93,13 +93,18 @@ local contents = {
   [1] = { 26042, 1006, 6948 },
 }
 
+-- index -> total slots, at the sizes the live client reports (agents.md storage shape): a 20-slot
+-- backpack, a 6-slot bag, the 32-slot keyring. Real bags have free space, and issue #36 is about
+-- what the addon does with it, so the fixture has some.
+local slotCounts = { [-1] = 32, [0] = 20, [1] = 6 }
+
 -- 1005 is the item the client has never seen: container info knows its name and quality,
 -- GetItemInfo knows nothing (FR-103).
 local NEVER_SEEN = 1005
 
 _G.C_Container = {
   GetContainerNumSlots = function(index)
-    return contents[index] and #contents[index] or 0
+    return slotCounts[index] or (contents[index] and #contents[index] or 0)
   end,
   GetBagName = function(index)
     return contents[index] and ('Bag ' .. index) or ''
@@ -210,8 +215,24 @@ local CELL = 38
 local MONEY = 17 -- constants.MONEY_BAR_SPACE: the band the money bar claims (issue #32)
 check('window is never narrower than its column budget', backpack.width, 5 * CELL + 16)
 check('Quests is sized to its one 2-item section', quests.height, 26 + (18 + CELL) + 6 + 8 + MONEY)
-check('Backpack is sized to its three sections', backpack.height, 26 + 3 * (18 + CELL) + 3 * 6 + 8 + MONEY)
+check('Backpack is sized to its three sections and its free-slot cell',
+  backpack.height, 26 + 3 * (18 + CELL) + 3 * 6 + CELL + 8 + MONEY)
 check('windows are sized independently', quests.height ~= backpack.height, true)
+
+-- Issue #36: the free-slot indicator. One slot at the end of the default backpack window carrying
+-- the number of slots the player's bags still have open, and nothing at all when they have none.
+check('the backpack family has 17 free slots', harvest.FreeSlots('backpack'), 17)
+check('the keyring is counted apart from the bags', harvest.FreeSlots('keyring'), 31)
+check('the indicator points at a real empty slot, and not the keyring slot before it',
+  harvest.FirstFreeSlot().bagID .. ':' .. harvest.FirstFreeSlot().slot, '0:7')
+check('the default backpack window carries the count', backpack.emptySlots, 17)
+check('the slot it points at travels with the count',
+  backpack.emptySlot.bagID .. ':' .. backpack.emptySlot.slot, '0:7')
+check('the other backpack windows do not repeat the same number', quests.emptySlots, nil)
+check('the indicator gets its own cell after the last section',
+  backpack.emptyOffsetY, 3 * (18 + CELL + 6))
+check('Quests is not sized for a cell it does not draw',
+  quests.height, 26 + (18 + CELL) + 6 + 8 + MONEY)
 
 -- Priority ladder, measured against the real item that motivated it: Winterhoof Cleansing Totem is
 -- type Armor *and* a quest item. Junk (10) also matches nothing here, Armor (20) does. The ladder is
@@ -375,6 +396,30 @@ local function testDuplicateBinding()
 end
 
 testDuplicateBinding()
+
+-- Issue #36, the negative half: a character with no free space gets no count, no slot and no cell.
+-- Its refreshes replace the last context, so it sits with the other state-changing cases rather
+-- than next to the free-space assertions above.
+local function testFullBags()
+  local saved = slotCounts
+  slotCounts = { [-1] = 1, [0] = 6, [1] = 3 }
+  harvest.Invalidate()
+  pipeline.Refresh('full-bags')
+  local full = windowIn(pipeline.Model(), 'Backpack')
+  check('a full inventory has no free slots', harvest.FreeSlots('backpack'), 0)
+  check('and no empty slot to point at', harvest.FirstFreeSlot(), nil)
+  check('the window carries no count', full.emptySlots, nil)
+  check('the window carries no slot', full.emptySlot, nil)
+  check('no cell, so the window is the size it was before the indicator existed',
+    full.height, 26 + 3 * (18 + CELL) + 3 * 6 + 8 + MONEY)
+  slotCounts = saved
+  harvest.Invalidate()
+  pipeline.Refresh('free-space')
+  check('free space puts the cell back',
+    windowIn(pipeline.Model(), 'Backpack').emptyOffsetY ~= nil, true)
+end
+
+testFullBags()
 
 -- Bank windows are M5: the gate in pipeline.Assign is what keeps them out of the frames layer.
 local function testBankWindow()

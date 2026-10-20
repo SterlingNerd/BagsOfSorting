@@ -190,7 +190,10 @@ Deliverables
   default, `always`, `session` (toggle un-merges until the bags close), `vendor`
 - **presentation options** (`FR-45`, `FR-45b`): quality/rarity border-and-tint controls and item-level
   controls, opened from the window's *Appearance* modal, defaults matching stock bags
-- money frame (`frames/money.lua`)
+- **money bar** (`frames/money.lua`) — **done 2026-10-20** (issue #32): every window carries the client's own
+  `ContainerMoneyFrameTemplate`, measured 13 px tall and shown on all three windows, its coin texts
+  tracking `GetMoney()` through a vendor sale and a buy-back with no refresh from us. Money only —
+  `FR-48`'s backpack currencies and currency list stay open
 - window icons: `IconDataProviderMixin` picker + `overlay` layer (`FR-85`)
 
 Exit criteria

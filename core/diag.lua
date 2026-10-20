@@ -462,18 +462,6 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
-  [32] = {
-    issue = 32,
-    what = 'the window money bar is the client\'s own (FR-48)',
-    needs = 'a window open, one stack you can sell, a vendor within reach',
-    steps = {
-      { text = 'setup: every window\'s money bar and what it reads', run = probes[16] },
-      { text = 'sell one stack to the vendor' },
-      { text = 'capture: the money bar after the sale', run = probes[16] },
-      { text = 'buy the same stack back' },
-      { text = 'capture: the money bar after the buy', run = probes[16] },
-    },
-  },
   [15] = {
     issue = 15,
     what = 'what draws the new-item glow on our buttons (FR-47)',

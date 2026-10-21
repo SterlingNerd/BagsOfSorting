@@ -37,6 +37,7 @@ local SECTION_GAP = 6
 ---@field emptySlots number?   -- free slots in the player's bags, on the window that shows them
 ---@field emptySlot BoSFreeSlot?  -- the real empty slot the indicator points at
 ---@field emptyOffsetY number?    -- the cell flow reserved for it
+---@field showMoney boolean?      -- this window carries the money bar (issue #42: one window does)
 ---@field width number
 ---@field height number
 
@@ -71,7 +72,7 @@ function flow.Layout(window)
 
   window.width = math.max(widest, maxColumns * CELL) + constants.WINDOW_PADDING * 2
   window.height = constants.WINDOW_TITLE_HEIGHT + math.max(contentHeight, CELL)
-    + constants.WINDOW_PADDING + constants.MONEY_BAR_SPACE
+    + constants.WINDOW_PADDING + (window.showMoney and constants.MONEY_BAR_SPACE or 0)
   return window
 end
 

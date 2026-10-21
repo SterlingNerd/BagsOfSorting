@@ -226,11 +226,16 @@ local function testFlow(state)
   check(state, 'an empty window is still its column grid wide', empty.width,
     3 * CELL + constants.WINDOW_PADDING * 2)
   -- FR-48 (issue #32): the money bar sits 8 px in from the window's bottom edge and is 13 px
-  -- tall, so the window has to be taller than its own padding or the bar covers the last row.
+  -- tall, so the window that carries it has to be taller than its own padding or the bar covers
+  -- the last row. Issue #42: only the window the model gave the bar to reserves that band.
+  local money = flow.Layout({ id = 'm', name = 'm', columns = 3, showMoney = true,
+    sections = { { items = {} } } })
   local body = constants.WINDOW_TITLE_HEIGHT + CELL
-  check(state, 'an empty window is one row tall plus the money band', empty.height > body, true)
+  check(state, 'the money window is one row tall plus the money band', money.height > body, true)
   check(state, 'the window bottom clears a 13 px money bar inset 8 px (FR-48)',
-    empty.height - body > 8 + 13, true)
+    money.height - body > 8 + 13, true)
+  check(state, 'a window without the money bar does not reserve the band',
+    empty.height, money.height - constants.MONEY_BAR_SPACE)
 end
 
 --- `/bos perf` says plainly that a single-frame refresh cannot be timed here, and still keeps the

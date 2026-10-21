@@ -2,6 +2,8 @@
 -- `ContainerMoneyFrameTemplate` a Blizzard bag window carries, so the coin textures, the coin-box
 -- border, the PLAYER_MONEY refresh and the click-to-pickup behaviour all stay Blizzard's.
 -- Money only — backpack currencies and the rest of the currency list are a later story.
+-- Which window gets a bar is decided in data/pipeline.lua (issue #42: the first backpack window in
+-- screen order, the same rule as the free-slot count) and called from frames/window.lua.
 
 local _, addon = ...
 

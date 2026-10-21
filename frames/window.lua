@@ -158,9 +158,6 @@ local function create(config)
     log.Debug('saved position for window', self.config.id)
   end)
 
-  -- The client's own money bar, as a child of the shell: it hides with the window and scales with
-  -- it (FR-48).
-  frame.MoneyFrame = moneyFrames.Attach(frame)
   local wf = { frame = frame, sections = {}, config = config }
   frame.config = config
   byId[config.id] = wf
@@ -220,6 +217,21 @@ local function renderEmptySlot(wf, model)
   wf.frame.EmptySlot = wf.empty.button
 end
 
+--- The money bar (issue #42): only the window the model gave it to draws one. The bar is a child of
+--- the shell, so it hides with the window and scales with it (FR-48); a window that lost the bar to
+--- another one keeps the frame and hides it rather than rebuilding it on every refresh.
+---@param wf BoSWindowFrame
+---@param model BoSWindowModel
+local function renderMoney(wf, model)
+  local frame = wf.frame
+  if model.showMoney then
+    frame.MoneyFrame = frame.MoneyFrame or moneyFrames.Attach(frame)
+    frame.MoneyFrame:Show()
+  elseif frame.MoneyFrame then
+    frame.MoneyFrame:Hide()
+  end
+end
+
 --- Draw one window from the layout model. Frames are reused across refreshes; only the
 --- buttons and section blocks move (AC-42).
 ---@param model BoSWindowModel
@@ -245,6 +257,7 @@ function windows.Render(model)
   end
 
   renderEmptySlot(wf, model)
+  renderMoney(wf, model)
 
   restorePosition(frame, model)
   frame:Show()

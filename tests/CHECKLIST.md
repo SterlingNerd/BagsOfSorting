@@ -154,6 +154,20 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 **Expected:** step 3 matches exactly — the number is the `free=` sum of indices 0..4 (issue #36 measured 22 = 5+6+5+6 on 2026-10-20, with the pouch's 3 printed apart and excluded). At step 6 the slot is **gone** and the window is one cell shorter: `emptySlots=nil`, `cell=nil`, `indicator: none drawn`, even while the pouch still has free slots — **measured on the client 2026-10-20**. Step 7 brings it back reading 1 — Blizzard's own count setter hides a count of 1 unless the button lowers `minDisplayCount`, so a bare `1` is the thing to look for. The slot must read as the game's own empty bag slot: same background, same number style as a stack count — the half of this story a capture cannot record.
 
+### Manual test: the money bar is on the default backpack window only (FR-48, issue #42)
+
+**Precondition:** a fresh login with the default profile and money in the purse, our windows open (`/bos show`), Blizzard's bag window closed.
+
+1. Run `/bos test windows`.
+2. Read the `money:` line under each window in the capture.
+3. Look at the bottom edge of every open window.
+4. Sell one stack at a vendor.
+5. Close the **Backpack** window with its X, then run `/bos test windows` again.
+6. Reopen everything with `/bos show`.
+7. Open the bank.
+
+**Expected:** exactly one window carries the bar. At step 2 it is **Backpack** — `money: shown true`, `h 13`, coins matching `GetMoney()` — and Quests, Consumables, Tradeskills and Tools each print `money: none`. At step 3 the coin row is visible on Backpack's bottom edge and on no other window, and those windows are 17 px shorter than they were before issue #42 (`constants.MONEY_BAR_SPACE` is reserved only by the window that draws the bar). At step 4 the coins on that one bar update with no refresh from us. At step 5 the bar has **travelled**: Quests is the only window that prints `money: shown true` (a closed window is out of the model, so it prints nothing at all) and Backpack's own frame is hidden with its bar hidden inside it. One carrier, never two. At step 6 it is back on Backpack. At step 7 nothing appears in the bank: bank windows are M5 and never reach the frames layer, which `tests/run.lua` asserts, and Blizzard's own bank window is untouched. No `Action blocked` and no taint anywhere — the bar is `ContainerMoneyFrameTemplate`, Blizzard's own.
+
 ### Manual test: keybind appears in the client's own panel (FR-64)
 
 **Precondition:** Setup done. No default key is bound on purpose — `B` stays Blizzard's.

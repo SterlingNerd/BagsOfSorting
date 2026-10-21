@@ -220,7 +220,8 @@ local CELL = 38
 local MONEY = 17 -- constants.MONEY_BAR_SPACE: the band the money bar claims (issue #32)
 local TITLE = 40 -- constants.WINDOW_TITLE_HEIGHT: the band that clears the window portrait (issue #34)
 check('window is never narrower than its column budget', backpack.width, 5 * CELL + 16)
-check('Quests is sized to its one 2-item section', quests.height, TITLE + (18 + CELL) + 6 + 8 + MONEY)
+check('Quests is sized to its one 2-item section and no money band',
+  quests.height, TITLE + (18 + CELL) + 6 + 8)
 check('Backpack is sized to its three sections and its free-slot cell',
   backpack.height, TITLE + 3 * (18 + CELL) + 3 * 6 + CELL + 8 + MONEY)
 check('windows are sized independently', quests.height ~= backpack.height, true)
@@ -240,7 +241,7 @@ check('the other backpack windows do not repeat the same number', quests.emptySl
 check('the indicator gets its own cell after the last section',
   backpack.emptyOffsetY, 3 * (18 + CELL + 6))
 check('Quests is not sized for a cell it does not draw',
-  quests.height, TITLE + (18 + CELL) + 6 + 8 + MONEY)
+  quests.height, TITLE + (18 + CELL) + 6 + 8)
 
 -- Priority ladder, measured against the real item that motivated it: Winterhoof Cleansing Totem is
 -- type Armor *and* a quest item. Junk (10) also matches nothing here, Armor (20) does. The ladder is
@@ -294,12 +295,22 @@ check('a potion is a consumable, not an alchemy reagent (118)', placeOf(118), 'C
 check('food and drink (159)', placeOf(159), 'Consumables/Consumables')
 check('bandages (1251)', placeOf(1251), 'Consumables/Consumables')
 
-check('Consumables is sized to its one 3-item section',
-  consumables.height, TITLE + (18 + CELL) + 6 + 8 + MONEY)
-check('Tradeskills is sized to its six non-empty sections',
-  tradeskills.height, TITLE + 6 * (18 + CELL) + 6 * 6 + 8 + MONEY)
+check('Consumables is sized to its one 3-item section and no money band',
+  consumables.height, TITLE + (18 + CELL) + 6 + 8)
+check('Tradeskills is sized to its six non-empty sections and no money band',
+  tradeskills.height, TITLE + 6 * (18 + CELL) + 6 * 6 + 8)
 check('neither new window repeats the free-slot count',
   tostring(consumables.emptySlots) .. '/' .. tostring(tradeskills.emptySlots), 'nil/nil')
+
+-- Issue #42: the money bar belongs to the default backpack window alone. The other windows are
+-- views over the same bags, so a coin row on each would read as five separate purses.
+check('the default backpack window carries the money bar', backpack.showMoney, true)
+check('no other backpack window carries it',
+  tostring(quests.showMoney) .. '/' .. tostring(consumables.showMoney)
+  .. '/' .. tostring(tradeskills.showMoney) .. '/' .. tostring(tools.showMoney),
+  'nil/nil/nil/nil')
+check('the backpack window is the only one sized for the money band',
+  backpack.height - (3 * (18 + CELL) + 3 * 6 + CELL + 8 + TITLE), MONEY)
 
 -- FR-15: with duplication off, every harvested item is drawn exactly once **across every window**.
 local drawn, seen = 0, {}
@@ -429,6 +440,25 @@ local function testWindowVisibility()
 end
 
 testWindowVisibility()
+
+-- Issue #42, the negative half: with the default backpack window closed, the bar travels to the
+-- next backpack window in screen order. Exactly one window carries it, never all four.
+local function testMoneyBarOwner()
+  local db = addon.modules['DB']
+  db.Windows()[1].hidden = true
+  pipeline.Refresh('closed-backpack')
+  local carriers = {}
+  for _, window in ipairs(pipeline.Model()) do
+    if window.showMoney then carriers[#carriers + 1] = window.name end
+  end
+  check('a closed default backpack window leaves exactly one carrier', table.concat(carriers, ','), 'Quests')
+  db.Windows()[1].hidden = nil
+  pipeline.Refresh('open-backpack')
+  check('the bar goes back to the default backpack window',
+    windowIn(pipeline.Model(), 'Backpack').showMoney, true)
+end
+
+testMoneyBarOwner()
 
 -- One category bound by two windows is still placed once: the first window in array order wins
 -- (FR-15 + #28 decision 4), and the window left with nothing still renders (#28 decision 2).

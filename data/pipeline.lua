@@ -110,13 +110,15 @@ function pipeline.Assign(placements)
         end
       end
 
-      -- Issue #36: the free-slot count belongs to one window — the first backpack window in screen
-      -- order, which is the default Backpack window. The same number on all three would read as
-      -- three separate sets of bags.
+      -- Issue #36 and #42: the bag-level chrome — the free-slot count and the money bar — belongs
+      -- to one window: the first backpack window in screen order, which is the default Backpack
+      -- window. The same number on all five would read as five sets of bags, and a coin row on
+      -- each as five purses. When that window is closed the chrome travels with it.
       -- shortcut: which window carries it is a rule, not a setting. The setting is docs/04's
       -- `showEmptySlots`, and it arrives with the pane that edits it (docs/05).
       if not counted then
         counted = true
+        window.showMoney = true
         local free = harvest.FreeSlots('backpack')
         if free > 0 then
           window.emptySlots = free

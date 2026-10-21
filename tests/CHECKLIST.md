@@ -216,6 +216,8 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 
 **Expected:** step 1 — no slot in our window glows. Step 2 — the new slot carries a glow that cycles bright → dim, about one cycle a second, in the same atlas and colour Blizzard shows for that item's quality (`docs/reference/new-item-highlight-bright.png`, `-dim.png`), and no other slot glows. Step 4 — the glow is gone and stays gone. Step 5 — neither slot glows.
 
+Measured 2026-10-20 (`/bos test 35`, build 70450): steps 1, 2 and 4 — 24 slots at login read 0 flagged new, acquiring one item flags one slot and our button draws `NewItemTexture bags-glow-white` at `alpha=0.46` mid-pulse, and after the hover nothing is flagged and the texture is gone. Steps 3 and 5 need Blizzard's bag window open; `/bos test newitem` reads its buttons through `ContainerFrameCombinedBags.Items`.
+
 ### Manual test: the overlays our paint path omits (FR-45, FR-49, FR-65)
 
 **Precondition:** windows open; one item you have not picked up this session (loot a mob), one **quest** item, one **grey** item, and Blizzard's bag window open beside ours showing the same slots.

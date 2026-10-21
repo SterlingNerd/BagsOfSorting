@@ -218,9 +218,12 @@ local LIT = {
 local function lit(button, label)
   for _, key in ipairs(LIT) do
     local texture = button[key]
-    if texture and texture:IsShown() and (texture:GetAlpha() or 0) > 0 then
-      record(label, key, texture:GetAtlas() or tostring(texture:GetTexture() or ''),
-        string.format('alpha=%.2f', texture:GetAlpha()))
+    -- A texture with nothing in it is shown at alpha 1 and draws nothing: the template's
+    -- IconQuestTexture is in that state until something calls UpdateQuestItem (FR-45, issue #16).
+    -- Reporting it as "lit" buried the one line this probe exists to find.
+    local content = texture and (texture:GetAtlas() or texture:GetTexture())
+    if content and texture:IsShown() and (texture:GetAlpha() or 0) > 0 then
+      record(label, key, tostring(content), string.format('alpha=%.2f', texture:GetAlpha()))
     end
   end
 end
@@ -238,16 +241,26 @@ probes[11] = function()
   end
   record('our visible buttons', ours)
 
-  local blizzard = ContainerFrameCombinedBags and ContainerFrameCombinedBags.items
-  if not blizzard then
-    record('client bag buttons: ContainerFrameCombinedBags.items not reachable, compare by eye')
+  -- Blizzard's own buttons, read off the frame's own `Items` table (BaseContainerFrameMixin:
+  -- EnumerateItems iterates self.Items). Not `.items`, which does not exist and is why the first
+  -- run of this probe printed nothing here; and not GetBagsShown(), which hard rule 8 forbids.
+  -- The buttons are unnamed CreateFramePool frames, so unlike ours they are not reachable by name.
+  local bag = ContainerFrameCombinedBags
+  local items = bag and bag.Items
+  if not items then
+    record('client bag buttons: ContainerFrameCombinedBags.Items not reachable')
     return
   end
-  for _, slots in pairs(blizzard) do
-    for _, button in pairs(slots or {}) do
-      if button and button:IsShown() then lit(button, 'client') end
+  local shown = 0
+  for _, button in ipairs(items) do
+    if button and button:IsShown() then
+      shown = shown + 1
+      lit(button, 'client')
     end
   end
+  -- A closed bag window has no visible buttons, which is the state a player who uses our windows is
+  -- usually in. Say so, so an empty half of the capture is a result and not a failure.
+  record('client bag buttons', 'window', bag:IsShown() and 'shown' or 'closed', 'visible', shown)
 end
 
 --- Many refreshes spread over frames, timed across the span. A refresh measured inside one frame
@@ -478,12 +491,6 @@ probes[18] = function()
   record('slots holding an item', seen, 'flagged new by the client', flagged)
 end
 
---- The new-item state read two ways: what the client flags, and what our own buttons draw.
-local function newitemState()
-  probes[18]()
-  probes[11]()
-end
-
 
 --- Which container index holds this item? Answers "is the base grid a container?" with an item you
 --- can see and place on purpose, rather than with slot arithmetic. Read-only: `GetContainerItemInfo`
@@ -559,18 +566,6 @@ local tests = {
       { text = 'open a BetterBags window during combat' },
       { text = 'close that window' },
       { text = 'capture: stop event logging', run = probes[3] },
-    },
-  },
-  [35] = {
-    issue = 35,
-    what = 'what the client flags new, and what our buttons draw (FR-47)',
-    needs = 'step a runs right after /reload, before looting or buying anything this session',
-    steps = {
-      { text = 'setup: what the client flags new at login, and which of our textures are lit', run = newitemState },
-      { text = 'loot or buy one new item' },
-      { text = 'capture: what is flagged new now, and what our buttons draw', run = newitemState },
-      { text = 'hover the new slot in our window, then move the mouse away' },
-      { text = 'capture: after the hover', run = newitemState },
     },
   },
 }

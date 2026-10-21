@@ -90,7 +90,9 @@ function itemFrames.Paint(entry, item, parent)
   -- in docs/reference/new-item-highlight-*.png. When the slot is not new it hides the texture and
   -- stops the anims. Asking every paint is what makes the state ours: a pooled button never carries
   -- the glow of the item it held last refresh, and a slot the player hovered stays dark because
-  -- ContainerFrameItemButton_OnEnter already removed it from the client's list.
+  -- ContainerFrameItemButton_OnEnter already removed it from the client's list. Re-derived on our
+  -- refresh only: a client-side expiry that fires no BAG_UPDATE leaves the glow until the next paint,
+  -- and BAG_NEW_ITEMS_UPDATED is the event to key a refresh on if that ever matters.
   entry.button:UpdateNewItem(item.quality)
   -- shortcut: Blizzard's UpdateContainerButtonInfo also runs UpdateQuestItem, UpdateJunkItem,
   -- UpdateItemContextMatching, UpdateCooldown and SetReadable on its own buttons. Those overlays

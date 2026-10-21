@@ -11,3 +11,14 @@ The only modules that touch frames. They read the layout model and never write c
 
 Not here yet: header handles, chips, menus, inspector, the **slots** half of FR-44 (every empty slot
 drawn, `frames/emptyslot.lua`), bag bar, move mode — all M2/M4.
+
+## Window stacking
+
+One base level, derived not hardcoded, so nothing of Blizzard's interleaves with a window (issue #34).
+`frames/window.lua` puts the shell and its panel background on `CONTENT_BASE` (300) and marks the shell
+`toplevel`, which is what `ContainerFrameCombinedBags` itself carries. Everything else reads the level
+of the frame it was drawn into: section 301, button wrapper 302, `ItemButton` 303, money bar 301. The
+template's own chrome sits above all of it — portrait 400, border 500, title and close 510 — so the
+order inside a window is Blizzard's: background, content, portrait, border, title. 300 is above
+`MainActionBar` (50), its EndCaps (100), `BagsBar` (52) and Blizzard's `ContainerFrameItemButtonTemplate`
+(10), which is the whole z-order complaint on that issue.

@@ -24,6 +24,9 @@ function moneyFrames.Attach(frame)
   -- as-is it swallows the drag that starts there (the same fix frames/section.lua makes). The coin
   -- buttons are children and keep their own input.
   bar:EnableMouse(false)
+  -- Same stack as the sections (issue #34): one level above the shell, so the coins clear the panel
+  -- background and Blizzard's own bag buttons instead of tying with either.
+  bar:SetFrameLevel(frame:GetFrameLevel() + 1)
   return bar
 end
 

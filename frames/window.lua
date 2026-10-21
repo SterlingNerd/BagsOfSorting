@@ -91,6 +91,15 @@ end
 --- name clears the portrait instead of sitting under it.
 local BAG_PORTRAIT = 'Interface/Icons/Inv_misc_bag_08'  -- what ContainerFrameCombinedBags draws
 
+--- Everything a window draws sits on this level (issue #34). The shell had no level of its own, so its
+--- whole subtree sat at the bottom of the band: Blizzard's action bar (`MainActionBar` frameLevel 50,
+--- its EndCaps 100) and bag bar (`BagsBar` 52) drew over our panel background and money bar, Blizzard's
+--- own bag buttons (`ContainerFrameItemButtonTemplate` frameLevel 10) tied with ours, and our border
+--- art (`NineSlice` 500) drew over theirs. 300 clears every one of those numbers and stays under the
+--- template's own chrome — portrait 400, border 500, title and close 510 — so the order inside a window
+--- is Blizzard's own: background, content, portrait, border, title.
+local CONTENT_BASE = 300
+
 ---@param frame Frame
 local function bagChrome(frame)
   -- The template's own OnLoad already drew the full-size ring from its `layoutType` KeyValue, so the
@@ -107,6 +116,12 @@ local function bagChrome(frame)
   mask:SetPoint('TOPLEFT', portrait, 'TOPLEFT', 0, 0)
   mask:SetPoint('BOTTOMRIGHT', portrait, 'BOTTOMRIGHT', 0, 0)
   frame:SetPortraitToAsset(BAG_PORTRAIT)
+  -- Shell and background share the base level; content sits above it (frames/section.lua) and the
+  -- template's chrome already sits above that. `toplevel` is what Blizzard's own bag window carries
+  -- (`ContainerFrame.xml:308`) and what BetterBags' backpack window carries on this client.
+  frame:SetFrameLevel(CONTENT_BASE)
+  frame:SetToplevel(true)
+  frame.Bg:SetFrameLevel(CONTENT_BASE)
   -- The flat panel's TopSection and BottomEdge carry no texture of their own; Blizzard's held-bag
   -- windows hand them PANEL_BACKGROUND_COLOR in `ContainerFrameMixin:UpdateBackground`. Whether the
   -- template's own XML colour is enough for us is what `/bos test 34` reads — issue #34's "too
@@ -197,7 +212,6 @@ local function renderEmptySlot(wf, model)
 
   wf.empty = wf.empty or itemFrames.Acquire()
   itemFrames.PaintEmpty(wf.empty, model.emptySlot, model.emptySlots, wf.frame)
-  wf.empty.parent:SetFrameLevel(wf.frame:GetFrameLevel() + 1)
   wf.empty.parent:ClearAllPoints()
   wf.empty.parent:SetPoint('TOPLEFT', wf.frame, 'TOPLEFT',
     constants.WINDOW_PADDING, -(constants.WINDOW_TITLE_HEIGHT + model.emptyOffsetY))

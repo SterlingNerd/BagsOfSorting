@@ -77,6 +77,11 @@ function itemFrames.Paint(entry, item, parent)
   entry.item = item
 
   entry.parent:SetParent(parent)
+  entry.parent:SetFrameLevel(parent:GetFrameLevel() + 1)
+  -- Both halves move (issue #34): the button carries `frameLevel="10"` from
+  -- ContainerFrameItemButtonTemplate, which sits below our window's base level, so left alone the icon
+  -- would draw behind the panel background.
+  entry.button:SetFrameLevel(entry.parent:GetFrameLevel() + 1)
   entry.parent:SetID(item.bagID)
   entry.button:SetID(item.slot)
   entry.button:SetItemLocation(ItemLocation:CreateFromBagAndSlot(item.bagID, item.slot))
@@ -116,6 +121,8 @@ function itemFrames.PaintEmpty(entry, slot, count, parent)
   entry.item = nil
 
   entry.parent:SetParent(parent)
+  entry.parent:SetFrameLevel(parent:GetFrameLevel() + 1)
+  entry.button:SetFrameLevel(entry.parent:GetFrameLevel() + 1)
   entry.parent:SetID(slot.bagID)
   entry.button:SetID(slot.slot)
   -- A real empty slot, not a placeholder: the client's own click and drop handlers work on it, so

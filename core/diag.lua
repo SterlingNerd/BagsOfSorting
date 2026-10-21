@@ -535,6 +535,33 @@ local function chrome(label, frame)
   record('  title', bounds(title), 'text', title and title.TitleText and title.TitleText:GetText() or '-')
 end
 
+--- The frames a window can overlap, and the two numbers that decide who draws over whom. Levels only
+--- compare inside one strata band, and a frame without a fixed strata follows its parent's, so both
+--- are recorded (issue #34). Names and levels read off origin/forever: MainActionBar 50, BagsBar 52,
+--- ContainerFrameItemButtonTemplate 10, ContainerFrameCombinedBags MEDIUM + toplevel.
+local STACK = {
+  'UIParent', 'MainActionBar', 'BagsBar', 'MicroButtonAndBagsBar',
+  'MainMenuBarBackpackButton', 'ContainerFrameCombinedBags',
+}
+
+---@param label string
+---@param frame Frame?
+local function stack(label, frame)
+  if not frame then record(label, 'absent') return end
+  record(label, 'strata', frame:GetFrameStrata(), 'level', frame:GetFrameLevel(),
+    'fixed strata', frame.HasFixedFrameStrata and tostring(frame:HasFixedFrameStrata()) or 'no api',
+    'shown', tostring(frame:IsShown()))
+end
+
+--- The first item button we actually drew, so the capture reads the levels of a real painted entry
+--- (button, wrapper, section) rather than the ones we intended.
+local function paintedButton()
+  for i = 1, 400 do
+    local button = _G['BagsOfSortingItemButton' .. i]
+    if button and button:IsShown() then return button end
+  end
+end
+
 probes[19] = function()
   if not inTest then fresh('portrait') end
   local constants = addon:GetModule('Constants')
@@ -551,6 +578,9 @@ probes[19] = function()
     record('client bag window: closed')
   end
 
+  record('stacking')
+  for _, name in ipairs(STACK) do stack('  ' .. name, _G[name]) end
+
   local models = addon:GetModule('Pipeline').Model()
   if not models then record('no refresh has run yet') return end
   for _, window in ipairs(models) do
@@ -562,6 +592,18 @@ probes[19] = function()
       record('  our content top', constants.WINDOW_TITLE_HEIGHT,
         'portrait bottom below frame top',
         tostring(frame:GetTop() - frame.PortraitContainer.portrait:GetBottom()))
+      -- Our own stack, top to bottom: chrome, content, background.
+      local button = paintedButton()
+      record('  our levels', 'shell', frame:GetFrameLevel(),
+        'bg', frame.Bg and frame.Bg:GetFrameLevel() or '-',
+        'money', frame.MoneyFrame and frame.MoneyFrame:GetFrameLevel() or '-',
+        'button', button and button:GetFrameLevel() or '-',
+        'wrapper', button and button:GetParent():GetFrameLevel() or '-',
+        'section', button and button:GetParent():GetParent():GetFrameLevel() or '-',
+        'portrait', frame.PortraitContainer:GetFrameLevel(),
+        'border', frame.NineSlice and frame.NineSlice:GetFrameLevel() or '-',
+        'title', frame.TitleContainer:GetFrameLevel(),
+        'close', frame.CloseButton:GetFrameLevel())
     end
   end
 end
@@ -655,8 +697,8 @@ local tests = {
             'client bag window shown', tostring(bag and bag:IsShown()))
         end },
       { text = 'open Blizzard\'s bag window so it sits next to ours' },
-      { text = 'capture: portrait, ring, background and levels on both', run = probes[19] },
-      { text = 'look: does our ring clear the first section title, and is our body as opaque as the client\'s?' },
+      { text = 'capture: portrait, ring, background, and the strata and levels of every frame a window overlaps', run = probes[19] },
+      { text = 'look: does anything of Blizzard\'s — action bar, bag bar, its own bag window — draw over our background, money bar or item buttons?' },
     },
   },
 }

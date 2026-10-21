@@ -109,13 +109,13 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 **Precondition:** five windows shown; Mining Pick (2901) and Hearthstone (6948) are the only items the Tools category matches, and the bank is reachable.
 
-1. Run `/bos test 43` and follow the sheet top to bottom.
+1. Run `/bos show`.
 2. Deposit 2901 in the bank.
 3. Deposit 6948 in the bank.
 4. Look at the Tools window and the window directly below it: the collapsed window's title band, its medallion and arm, its corners, its top and bottom edges.
 5. Withdraw 2901 back into a bag.
 
-**Expected:** the Tools window is still on screen, still 206 wide, and **95 px tall** — `constants.WINDOW_CHROME_HEIGHT`, the height the client's own bag chrome measures end to end. No blank slot cell, no grid, no body. Its medallion, its arm and all four corners are drawn: the capture prints `ring … shown true` and `bottom corner 95x24 … shown true` for it, against 32 px of corner on the 103-tall Backpack and 100 px on the 171-tall Tradeskills. **Its arm does reach past its own bottom edge into the window below** — 79 px of arm on a 95 px window, 16 px of the next window's arm above its own top edge, 8 px of gap — and that overlap is accepted until the art itself is edited. Step 5 puts the grid back at the same width. The height and the no-body rule are asserted off-client in `tests/run.lua` and `tests/selftest.lua`; the chrome geometry — ring, bottom corner, left edge, shown state, on our windows and on Blizzard's own bag window in the same run — is what `/bos test 43` captures for **issue #31**.
+**Expected:** the Tools window is still on screen, still 206 wide, and **95 px tall** — `constants.WINDOW_CHROME_HEIGHT`, the height the client's own bag chrome measures end to end. No blank slot cell, no grid, no body. Its medallion, its arm and all four corners are drawn: the capture prints `ring … shown true` and `bottom corner 95x24 … shown true` for it, against 32 px of corner on the 103-tall Backpack and 100 px on the 171-tall Tradeskills. **Its arm does reach past its own bottom edge into the window below** — 79 px of arm on a 95 px window, 16 px of the next window's arm above its own top edge, 8 px of gap — and that overlap is accepted until the art itself is edited. Step 5 puts the grid back at the same width. The height and the no-body rule are asserted off-client in `tests/run.lua` and `tests/selftest.lua`; the chrome geometry behind them was captured on the live client on 2026-10-20 and 2026-10-21 (`/bos test 43`, pasted on **issue #43**, and the `portrait` helper still prints it on any later run).
 
 ### Manual test: the window drags by its body, and the position persists (FR-41, section mouse fix)
 

@@ -743,30 +743,6 @@ local tests = {
       { text = 'capture: stop event logging', run = probes[3] },
     },
   },
-  [43] = {
-    issue = 43,
-    what = 'the collapsed window at the 95 px chrome floor: its corners drawn, and how far its arm reaches into the window below',
-    needs = 'our windows shown; Mining Pick (2901) and Hearthstone (6948) are the only Tools items and the bank is reachable',
-    steps = {
-      { text = 'setup: show our windows and report each one\'s size and section count', run = function()
-          local windows = addon:GetModule('WindowFrames')
-          windows.ShowPainted()
-          for _, window in ipairs(addon:GetModule('Pipeline').Model() or {}) do
-            local frame = _G['BagsOfSortingWindow' .. window.id]
-            record('window', window.id, window.name, 'sections', #window.sections, 'size',
-              frame and string.format('%dx%d', frame:GetWidth(), frame:GetHeight()) or '-')
-          end
-        end },
-      { text = 'deposit 2901 in the bank' },
-      { text = 'deposit 6948 in the bank' },
-      { text = 'capture: chrome geometry on every window, collapsed', run = probes[19] },
-      { text = 'screenshot the collapsed window and the window directly below it' },
-      { text = 'withdraw 2901 back into a bag' },
-      { text = 'capture: chrome geometry on every window, expanded', run = probes[19] },
-      { text = 'screenshot the same two windows now the collapsed one has its grid and its corners back' },
-    },
-  },
-
 }
 
 local function letterOf(n) return string.char(96 + n) end

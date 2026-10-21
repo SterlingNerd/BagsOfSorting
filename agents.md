@@ -89,6 +89,8 @@ If a task contradicts `docs/02-requirements.md` or `docs/05-config-ui.md`, stop 
 | Async item fetch | `C_Item.RequestLoadItemDataByID(itemID)` → `ITEM_DATA_LOAD_RESULT`; Blizzard's own `AsyncCallbackSystemMixin` (`ASYNC_ITEM`) is the reference and loads on camelot | `Blizzard_ObjectAPI/Mainline/AsyncCallbackSystem.lua` |
 | Icon picker | `IconDataProviderMixin` (`GetNumIcons`, `GetIconByIndex`, `GetIconForSaving`, `GetIndexOfIcon`) + `IconSelectorPopupFrameTemplate` | `Blizzard_FrameXMLBase/IconDataProvider.lua` |
 | `C_Item.CanItemFitInContainer` | **absent** on Forever — bag restrictions must be inferred from `GetBagSlotFlag` + item type | grep of `Blizzard_APIDocumentationGenerated` |
+| **Everything parented to `UIParent` shares one MEDIUM strata band, so only frame levels separate it** (measured 2026-10-20, `/bos test 34`) | `UIParent` itself reads `strata MEDIUM level 0 fixed false`, and so does every frame our windows can overlap: `MainActionBar` **50** (its EndCaps 100), `BagsBar` **52**, `MainMenuBarBackpackButton` **53**, `MicroButtonAndBagsBar` 1, `ContainerFrameCombinedBags` 1. `HasFixedFrameStrata()` is **false** on all of them — they follow UIParent rather than declaring a band — so there is no strata trick available, only levels. Our shells therefore sit on an explicit base (`frames/window.lua` `CONTENT_BASE = 300`): above every bar and above Blizzard's bag buttons (`ContainerFrameItemButtonTemplate` `frameLevel 10`), below the chrome the portrait template carries (portrait 400, border 500, title/close 510). Where our windows overlap Blizzard's own bag window **Blizzard's draws on top** — its chrome carries the same 400/500/510 numbers and its window is `toplevel` — and that is accepted, because the client's bags stay reachable (FR-51) | `/bos test 34` capture 2026-10-20, build 1.60.1 (70450); `MainActionBar.xml:29`, `Camelot/MainMenuBarBagButtons.xml:44`, `ContainerFrame.xml:308`; issue #34 |
+| **Region bounds: `GetRect` is the one this client has** | `GetRect()` returns `left, bottom, width, height` and works on frames, textures and fontstrings. **`GetAbsBounds` is absent** — the first run of the `portrait` probe died on it with `attempt to call a nil value`. `GetBounds` is likewise undocumented on `origin/forever` | `/bos test 34` 2026-10-20, `SimpleScriptRegionAPIDocumentation.lua` |
 
 Detection pattern (copy this, do not invent another):
 
@@ -112,6 +114,7 @@ addon.hasWarbank = addon.isRetail and not addon.isForever   -- Forever ships no 
 - item crafting quality overlays, pet-battle levels in tooltips
 - `ItemButtonUtil` context matchers are **present** (see the HAS list above) — earlier doubt about them came from a source read, not from the client
 - Blizzard auto-sort (`BlizzSortBags`) — absent, measured on the live client
+- `Region:GetAbsBounds()` / `GetBounds()` — absent, measured: a probe call reached `attempt to call a nil value`. Use `GetRect()`
 
 Anything not in those two lists is **unverified**: confirm in-game or with
 `wow-ui-source` `origin/forever` before writing a code path for it. Add confirmed facts to this

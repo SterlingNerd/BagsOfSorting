@@ -21,4 +21,8 @@ of the frame it was drawn into: section 301, button wrapper 302, `ItemButton` 30
 template's own chrome sits above all of it — portrait 400, border 500, title and close 510 — so the
 order inside a window is Blizzard's: background, content, portrait, border, title. 300 is above
 `MainActionBar` (50), its EndCaps (100), `BagsBar` (52) and Blizzard's `ContainerFrameItemButtonTemplate`
-(10), which is the whole z-order complaint on that issue.
+(10), which is the whole z-order complaint on that issue. Measured on the live client (`/bos test 34`,
+2026-10-20): `UIParent` is itself MEDIUM at level 0 and none of these frames are strata-fixed, so levels
+are the only lever. Where a window overlaps Blizzard's own bag window, **Blizzard's draws on top** — its
+chrome carries the same 400/500/510 numbers and its window is `toplevel` — and that is the accepted
+behaviour, not a bug to chase: the client's bags stay reachable (FR-51).

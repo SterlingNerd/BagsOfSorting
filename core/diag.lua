@@ -505,7 +505,9 @@ end
 
 local function bounds(f)
   if not f then return '-' end
-  local left, bottom, width, height = f:GetAbsBounds()
+  -- `GetRect` (left, bottom, width, height) is the documented region call here. `GetAbsBounds` is not
+  -- on this client: the first run of this probe died on it (`attempt to call a nil value`).
+  local left, bottom, width, height = f:GetRect()
   return string.format('%dx%d @ %s,%s', tostring(width), tostring(height), tostring(left), tostring(bottom))
 end
 
@@ -682,23 +684,6 @@ local tests = {
       { text = 'open a BetterBags window during combat' },
       { text = 'close that window' },
       { text = 'capture: stop event logging', run = probes[3] },
-    },
-  },
-  [34] = {
-    issue = 34,
-    what = 'window portrait, background and stacking against the client\'s own bag window',
-    needs = 'our three windows shown, and Blizzard\'s bag window open on the same screen',
-    steps = {
-      { text = 'setup: show our windows and report what is on screen', run = function()
-          local windows = addon:GetModule('WindowFrames')
-          windows.ShowPainted()
-          local bag = _G.ContainerFrameCombinedBags
-          record('our windows shown', windows.Count(),
-            'client bag window shown', tostring(bag and bag:IsShown()))
-        end },
-      { text = 'open Blizzard\'s bag window so it sits next to ours' },
-      { text = 'capture: portrait, ring, background, and the strata and levels of every frame a window overlaps', run = probes[19] },
-      { text = 'look: does anything of Blizzard\'s — action bar, bag bar, its own bag window — draw over our background, money bar or item buttons?' },
     },
   },
 }

@@ -476,12 +476,23 @@ probes[22] = function()
 
   local combined = _G.ContainerFrameCombinedBags
   record('ContainerFrameCombinedBags', combined and tostring(combined:IsShown()) or 'no global')
-  local shown = {}
-  for i = 1, NUM_TOTAL_BAG_FRAMES or (NUM_TOTAL_EQUIPPED_BAG_SLOTS or 5) do
+  local shown, existing = {}, 0
+  -- NUM_CONTAINER_FRAMES: bag slots + backpack + keyring (`ContainerFrame.lua:8-11`). A probe bounded
+  -- at NUM_TOTAL_BAG_FRAMES cannot see the frame that stayed open on 2026-10-22.
+  for i = 1, NUM_CONTAINER_FRAMES or ((NUM_TOTAL_EQUIPPED_BAG_SLOTS or 5) + 2) do
     local frame = _G['ContainerFrame' .. i]
-    if frame and frame:IsShown() then shown[#shown + 1] = tostring(i) end
+    if frame then
+      existing = existing + 1
+      if frame:IsShown() then
+        -- A container frame's own GetID is the container index it is showing — the number that names
+        -- which bag this window is.
+        shown[#shown + 1] = string.format('%s(container %s)', tostring(i),
+          tostring(frame.GetID and frame:GetID()))
+      end
+    end
   end
-  record('ContainerFrame1..N shown', #shown, table.concat(shown, ','))
+  record('ContainerFrame1..' .. tostring(NUM_CONTAINER_FRAMES or 0), 'existing', existing,
+    'shown', #shown, table.concat(shown, ' '))
   record('MerchantFrame', _G.MerchantFrame and tostring(_G.MerchantFrame:IsShown()) or 'no global')
   record('BankFrame', BankFrame and tostring(BankFrame:IsShown()) or 'no global')
   record('our windows shown', windowFrames.Count(),
@@ -769,27 +780,19 @@ local tests = {
   },
   [38] = {
     issue = 38,
-    what = 'the hide itself: Blizzard bags open before a vendor (round 2)',
-    needs = 'a vendor within reach, our windows closed, Blizzard bag window OPEN (CTRL-B here, not B)',
+    what = 'the leftover frame: every Blizzard container window closes at a vendor (round 3)',
+    needs = 'a vendor within reach, the tradeskill bag equipped, Blizzard bags open before you start (CTRL-B here, not B)',
     steps = {
-      { text = 'setup: who is showing bags, then start event logging', run = function()
+      { text = 'setup: which container frames exist and are shown, then start event logging', run = function()
           probes[22]()
           probes[3]()
         end },
       { text = 'press CTRL-B to open Blizzard bags' },
-      { text = 'capture: who is showing bags before the vendor', run = probes[22] },
+      { text = 'capture: which frames are open before the vendor', run = probes[22] },
       { text = 'talk to a vendor and open the vendor window' },
-      { text = 'capture: who is showing bags at the vendor', run = probes[22] },
-      { text = 'capture: where our windows sit at the vendor', run = probes[16] },
-      { text = 'press CTRL-B to open Blizzard bags yourself while the vendor is open' },
-      { text = 'capture: who is showing bags after your own open at the vendor', run = probes[22] },
+      { text = 'capture: which frames are open at the vendor', run = probes[22] },
       { text = 'close the vendor window' },
-      { text = 'capture: who is showing bags after the vendor', run = probes[22] },
-      { text = 'type /bos hide' },
-      { text = 'open the vendor window again' },
-      { text = 'capture: who is showing bags at a vendor with our windows hidden', run = probes[22] },
-      { text = 'close the vendor window' },
-      { text = 'capture: who is showing bags after it, then stop event logging', run = function()
+      { text = 'capture: which frames are open after it, then stop event logging', run = function()
           probes[22]()
           probes[3]()
         end },

@@ -101,8 +101,9 @@ the real bags whenever they want them. Add **C** at M6 only if real conflicts ap
 **Taken on #38:** the narrow slice of C, observation only. `core/interactions.lua` `hooksecurefunc`s
 `OpenAllBags` — the call `MerchantFrame_OnShow` and `BankFrameBaseMixin:OnShow` both make — and hides
 Blizzard's bag windows while an interaction window is open and our windows are shown. Nothing is
-replaced, so `ToggleAllBags`, which is what the B key and a bag-bar click reach, still opens the real
-bags. A stays out of v1.
+replaced, so `ToggleAllBags` — what a bag-bar click and whatever key the player has bound to
+`OPENALLBAGS` reach (CTRL-B on the test account; plain B is ours) — still opens the real bags, and
+measured 2026-10-22 it does so even while a vendor is open. A stays out of v1.
 
 **Taint note:** `ForeverPlus/Modules/BagWindow.lua` documents what happens when an addon calls
 `ContainerFrameSettingsManager:GetBagsShown()` on this client — Blizzard's bag code ran tainted until
@@ -199,8 +200,11 @@ windows shown, Blizzard's bag windows hidden (`core/interactions.lua`). The bar 
 the hide survives the live client — taint, a refused `UseContainerItem`, a vendor that still buys and
 sells — measured in-game 2026-10-22 (`/bos test 38`): a vendor and the bank both open our windows and
 keep Blizzard's closed, closing either closes only what it opened, and buy, sell, deposit and withdraw
-all still work. No refused `UseContainerItem`, no blocked call. What the run never saw is Blizzard's
-bag window **open**, so the hide itself is still unobserved — round 2 starts with it open.
+all still work. No refused `UseContainerItem`, no blocked call. Round 2, same day, started with Blizzard's
+windows genuinely open and closed them at the vendor — the hide is doing the work. What it also found:
+a hide bounded at `NUM_TOTAL_BAG_FRAMES` misses the frames Blizzard numbers past it, which is the
+tradeskill bag window that stayed open (fixed, `NUM_CONTAINER_FRAMES`), and `/bos hide` before a vendor
+ends with our windows open — the case `FR-51`'s toggle is the answer to.
 
 **And borrow its position (`FR-41`).** Where the player put the bag bar *is* where they want their
 bags. Our windows anchor off `BagsBar` / `MainMenuBarBackpackButton` by default, so a fresh install

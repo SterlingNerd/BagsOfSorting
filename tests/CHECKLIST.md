@@ -112,10 +112,10 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 1. Run `/bos test 43` and follow the sheet top to bottom.
 2. Deposit 2901 in the bank.
 3. Deposit 6948 in the bank.
-4. Look at the Tools window: its title, the bag medallion, its side borders and its top edge.
+4. Look at the Tools window and the window directly below it: the collapsed window's title band, its medallion, its top and bottom edges, and its left and right sides.
 5. Withdraw 2901 back into a bag.
 
-**Expected:** the Tools window is still on screen and still 206 wide, but it is **48 px tall** — its title band and the bag medallion, and nothing below them. No blank slot cell, no grid, no body. Its border is drawn inside its own rectangle: no side border reaching above the top edge, no corner clipped, and nothing of the left border over the medallion. `/bos test windows` reports `sections=0` for it and the column still gives it a slot. Step 5 puts the grid back at the same width with the corners intact. The collapse is asserted off-client in `tests/run.lua` and `tests/selftest.lua`; the chrome geometry — the ring, the bottom corners and the left edge, on our windows and on Blizzard's own bag window in the same run — is what `/bos test 43` captures for **issue #31**.
+**Expected:** the Tools window is still on screen and still 206 wide, but **48 px tall** — its title band and the bag medallion, and nothing below them. No blank slot cell, no grid, no body. **No border art runs down the side of it and nothing of it reaches into the window below**: the capture prints `bottom corner … shown false` for the collapsed window and `shown true` for every window tall enough to keep its corners. The ring's bracket sitting 16 px above the window's top edge and its art reaching 79 px down is `HeldBagLayout`'s own geometry, the same on Blizzard's bag windows, and not a defect. Step 5 puts the grid back at the same width with the corners drawn again. The collapse is asserted off-client in `tests/run.lua` and `tests/selftest.lua`; the chrome geometry — ring, bottom corners, left edge, on our windows and on Blizzard's own bag window in the same run — is what `/bos test 43` captures for **issue #31**.
 
 ### Manual test: the window drags by its body, and the position persists (FR-41, section mouse fix)
 

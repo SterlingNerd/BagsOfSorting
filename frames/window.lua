@@ -243,15 +243,21 @@ function windows.Render(model)
   frame.TitleContainer.TitleText:SetText(model.name)
   frame:SetScale(model.scale or 1)
   frame:SetSize(model.width, model.height)
-  -- Issue #43/#31: the client's own answer to a window shorter than its own border art. In
-  -- `HeldBagLayout` the top-left corner (the portrait ring) hangs 16 px above the frame's top edge and
-  -- the bottom corners hang 3 px below its bottom edge; when the two meet, the LeftEdge — anchored
-  -- corner-to-corner — inverts and the bottom corner art reaches up over the medallion. That is the
-  -- "left border above the bag icon" report, and it is why a collapsed window needs it most.
-  -- `ContainerFrameMixin:UpdateFrameSize` clips the bottom corners to fit (`ContainerFrame.lua:992`),
-  -- so we clip them the same way, on every resize. Reversible: a taller window re-reads the atlas and
-  -- restores the full corner.
+  -- Issue #31/#43: the client's own answer to a window shorter than its border art, and the hole in it.
+  -- `UpdateCornerCropping` shrinks the bottom corners so they and the portrait ring exactly share the
+  -- frame's art extent — `ContainerFrameMixin:UpdateFrameSize` calls it the same way (`ContainerFrame.lua:992`).
+  -- Measured 2026-10-20 (`/bos test 43`): the ring renders 95x94 and reaches 79 px below a window's top
+  -- edge, the LeftEdge/RightEdge come back 95x0 on every window we render, and the crop is capped at the
+  -- corner's own atlas height (`NineSlice.lua:253`) — a corner cropped to nothing then renders at its
+  -- full size, 95x512 on the 48 px collapsed window, a border strip down the side of the window and over
+  -- the one below it. A corner taller than the window it is drawn on is not a corner, so below that
+  -- point the side art is hidden rather than clipped: the panel's own FlatPanelBackgroundTemplate frames
+  -- the body, and the top edge, the top corners and the medallion stay.
   NineSliceUtil.UpdateCornerCropping(frame, model.height)
+  local nine = frame.NineSlice
+  local cornersFit = nine.BottomLeftCorner:GetHeight() <= model.height
+  nine.BottomLeftCorner:SetShown(cornersFit)
+  nine.BottomRightCorner:SetShown(cornersFit)
 
   for i = #wf.sections + 1, #model.sections do
     wf.sections[i] = sectionFrames.Acquire()

@@ -534,6 +534,7 @@ local function chrome(label, frame)
   -- corners; these bounds are what shows whether it did.
   local nine = frame.NineSlice
   record('  bottom corner', nine and bounds(nine.BottomLeftCorner),
+    'shown', nine and nine.BottomLeftCorner and tostring(nine.BottomLeftCorner:IsShown()) or '-',
     'corner top above frame bottom', nine and nine.BottomLeftCorner
       and tostring(nine.BottomLeftCorner:GetTop() - frame:GetBottom()) or '-',
     'left edge', nine and bounds(nine.LeftEdge))
@@ -743,7 +744,7 @@ local tests = {
   },
   [43] = {
     issue = 43,
-    what = 'a window with nothing in it, and the border art that has to fit inside it',
+    what = 'the collapsed window with its bottom corners hidden, and what still overlaps the window below it',
     needs = 'our windows shown; Mining Pick (2901) and Hearthstone (6948) are the only Tools items and the bank is reachable',
     steps = {
       { text = 'setup: show our windows and report each one\'s size and section count', run = function()
@@ -758,10 +759,10 @@ local tests = {
       { text = 'deposit 2901 in the bank' },
       { text = 'deposit 6948 in the bank' },
       { text = 'capture: chrome geometry on every window, collapsed', run = probes[19] },
-      { text = 'look: does the empty Tools window show its title band and the bag medallion only, with no body cell and no border art over the medallion?' },
+      { text = 'screenshot the collapsed window and the window directly below it' },
       { text = 'withdraw 2901 back into a bag' },
       { text = 'capture: chrome geometry on every window, expanded', run = probes[19] },
-      { text = 'look: is the grid back with no leftover border art at the corners?' },
+      { text = 'screenshot the same two windows now the collapsed one has its grid back' },
     },
   },
 

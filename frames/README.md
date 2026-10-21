@@ -28,13 +28,18 @@ chrome carries the same 400/500/510 numbers and its window is `toplevel` — and
 behaviour, not a bug to chase: the client's bags stay reachable (FR-51).
 
 
-## The border art fits the window it is drawn on
+## The border art is bigger than the window it is drawn on
 
-`HeldBagLayout`'s top-left corner — the portrait ring — hangs 16 px above the frame's top edge and its
-bottom corners hang 3 px below the bottom edge, so a short window runs out of room for its own border:
-the `LeftEdge`, anchored corner to corner, inverts and the bottom corner art reaches up over the
-medallion. `windows.Render` calls `NineSliceUtil.UpdateCornerCropping` after every `SetSize`, which is
-what `ContainerFrameMixin:UpdateFrameSize` does for the client's own bag windows
-(`origin/forever` `ContainerFrame.lua:992`, `Blizzard_SharedXML/NineSlice.lua:263`). It clips the bottom
-corners to whatever the height allows and restores them when the window grows (issue #43, issue #31).
-Source-verified; the geometry on our own windows is the `/bos test 43` capture.
+Measured on the live client (`/bos test 43`, 2026-10-20). `HeldBagLayout`'s top-left corner — the portrait
+ring — renders **95x94** and reaches **79 px below the window's own top edge**, 16 px above it. The
+`LeftEdge` and `RightEdge` come back **95x0** on every window we render: the side borders are corner art,
+not edges.
+
+`windows.Render` calls `NineSliceUtil.UpdateCornerCropping` after every `SetSize` — the call
+`ContainerFrameMixin:UpdateFrameSize` makes for the client's own bag windows (`ContainerFrame.lua:992`,
+`NineSlice.lua:263`) — which leaves `height + 19 − 90` of bottom corner: 32 px on a 103-tall window, 39 on
+110, 77 on 147, 100 on 171. The crop is capped at the corner's own atlas height (`NineSlice.lua:253`), and
+a corner cropped to nothing renders at its **full** size: the 48 px collapsed window measured 95x512 bottom
+corners, a border strip down the side of the window and over the window below it. So a corner taller than
+the window it is drawn on is hidden instead of clipped, and the panel's own `FlatPanelBackgroundTemplate`
+art frames the body (issue #43, issue #31).

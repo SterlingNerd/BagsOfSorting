@@ -27,3 +27,10 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y lua5.1
       - run: lua5.1 tests/run.lua
+
+  # agents.md is an index, not a fact cache (agents.md hard rule 11). This is what keeps it that way.
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tests/check-docs.sh

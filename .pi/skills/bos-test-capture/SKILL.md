@@ -1,6 +1,6 @@
 ---
 name: bos-test-capture
-description: Manual test capture for the BagsOfSorting WoW addon — writing a pending `/bos test` entry in core/diag.lua (issue-bound, ephemeral), running its in-game steps, syncing, and ingesting the capture into the GitHub issue plus agents.md, then deleting the entry. Use when adding or running an in-game measurement or manual QA pass, when a spike or story issue needs live-client data, when reading BagsOfSortingDB.diag, or before handing anyone a `/script` one-liner.
+description: Manual test capture for the BagsOfSorting WoW addon — writing a pending `/bos test` entry in core/diag.lua (issue-bound, ephemeral), running its in-game steps, syncing, and ingesting the capture into the GitHub issue plus the `wow-forever-api` reference or `docs/` row that owns the verdict, then deleting the entry. Use when adding or running an in-game measurement or manual QA pass, when a spike or story issue needs live-client data, when reading BagsOfSortingDB.diag, or before handing anyone a `/script` one-liner.
 compatibility: BagsOfSorting repo + WoW Forever client. Capture files arrive via ../sync.sh into ../account/SavedVariables/BagsOfSorting.lua.
 ---
 
@@ -24,7 +24,7 @@ prepare the test (issue + entry)
 /bos test <id>        follow the printed sheet, top to bottom — one numbered step each
 /reload
 ../sync.sh
-ingest                issue comment → docs → delete the entry → commit
+ingest                issue comment → references/docs → delete the entry → commit
 ```
 
 `/reload` twice because SavedVariables only flush on `/reload` or logout, and the addon you run must
@@ -105,15 +105,23 @@ Storage rule, which is what makes deleting an entry safe:
 |---|---|
 | `BagsOfSortingDB.diag` | scratch. Overwritten by the next round, no apology |
 | the issue comment | the raw capture, dated, durable |
-| `agents.md`, `docs/` | the verdict, present tense |
+| `wow-forever-api` skill `references/<file>.md` | what the **client** does: an API, a constant, an event payload, a measured value, present tense |
+| `docs/08-window-behavior.md` or the spec `docs/NN` row | what **our** windows/UI do as a result of it |
+| this file's Gotchas | a run-sheet trap that cost a round |
+| `agents.md` | nothing. It is the index |
 
 ## Ingesting a capture
 
 1. `../sync.sh`, then read `../account/SavedVariables/BagsOfSorting.lua` → `BagsOfSortingDB.diag[<id>]`.
 2. Paste the bucket verbatim as a dated comment on the issue.
-3. Write the verdicts into `agents.md` (measured-fact table) and the relevant spec `docs/` row — not
+3. Write the verdicts where they are read again (see the table above): a client fact goes to the
+   `wow-forever-api` reference that matches the question — `containers-and-bags.md` for bags, bank,
+   containers and their events, `item-and-spell-data.md` for item data, `ui-templates.md` for frames,
+   chrome and strata, `client-identity.md` for detection, persistence and probing — and the rule we
+   chose from it goes to `docs/08-window-behavior.md` or the relevant spec `docs/NN` row. Not
    `docs/06`, which is a milestone record and changes at a milestone boundary, not when one story inside
-   it closes. Present and future tense: docs describe what the project does, git records what changed.
+   it closes. Not `agents.md`, which is an index (its hard rule 11). Present and future tense: docs
+   describe what the project does, git records what changed. Run `bash tests/check-docs.sh` afterwards.
 4. Close the question or narrow it to what is genuinely still open, and say what blocks the rest.
 5. **Delete the test entry from `core/diag.lua`.** This is part of ingesting, not a later tidy-up.
 6. `lua5.1 tests/run.lua` and `luacheck .`, then commit.
@@ -132,7 +140,8 @@ Storage rule, which is what makes deleting an entry safe:
 
 - A helper run on its own replaces its bucket, so run the dump **after** the actions, not before and
   after, unless the sheet says which state each run must be in. Inside a test step it does not reset
-  anything — the test owns the bucket.
+  anything — the test owns the bucket, and a helper called from a step names its state inline
+  (`dump while bankOpen`).
 - Two buckets can describe different worlds: a `dump` captured before a purchase and one after sit in
   the same bucket, and the older one is gone. One bucket per test, one state per test.
 - `log` is a **toggle**. A logger left running from an earlier step or session turns the next setup
@@ -144,4 +153,11 @@ Storage rule, which is what makes deleting an entry safe:
   `PLAYERBANKSLOTS_CHANGED` carries a **bank bag slot 1..9**, not a container index.
 - `sync.sh` pulls `WTF/Account` with `-u`: a locally edited `BagsOfSorting.lua` silently wins and you
   analyse a stale capture. Never edit that file locally.
+- A key named in a run sheet is ambiguous on an account that runs our addon. On the test account `B` is
+  ours (`bind B BAGSOF_SORTING_TOGGLE`) and `CTRL-B` is Blizzard's (`bind CTRL-B OPENALLBAGS`), so
+  "open the bags yourself" opened **our** windows instead of testing the client's path. Name the key or
+  the backpack button (`../account/bindings-cache.wtf`, issue #38).
+- A manual action that depends on a Blizzard window being **open** must say so, and the step before it
+  must capture that it is open. Issue #38's runs never saw Blizzard's bag window open, so the hide itself
+  is still unmeasured.
 - `MAX_LINES` caps a bucket at 400 lines; a long investigation is several tests, not one.

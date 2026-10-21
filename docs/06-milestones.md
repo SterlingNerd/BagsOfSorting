@@ -22,7 +22,8 @@ place to be tested.
 
 **Status: done 2026-10-19.** Every deliverable exists, CI runs `luacheck` and the off-client suite
 green on each push, and `/bos` has printed the capability table on the live client with the answers
-written into `agents.md` — which is what turns that file's unverified column into facts.
+written into the `wow-forever-api` skill references — which is what turns their unverified column into
+facts.
 
 
 Deliverables
@@ -47,11 +48,11 @@ Exit criteria
   `/console`). Lua errors found later are chased as they surface rather than treated as a gate on this
   milestone — the one error seen on 2026-10-19 came from a probe's wrong API call, not from loading.
 - `/bos` prints `isForever=true`, `hasWarbank=false`, `itemButtonType=ItemButton`, and **fills in the
-  unverified `agents.md` facts** (keyring presence — expect yes, since
+  unverified `wow-forever-api` facts** (keyring presence — expect yes, since
   `Blizzard_MainMenuBarBagButtons/Camelot/MainMenuBarBagButtons.lua` uses `KEYRING_CONTAINER` and
   `GetKeyRingSize`; reagent bag slot; `NUM_TOTAL_EQUIPPED_BAG_SLOTS`; container index ranges).
-  Update `agents.md` with the answers — this milestone is what turns the "unverified" column into
-  facts.
+  Update the `wow-forever-api` references with the answers — this milestone is what turns the
+  "unverified" column into facts.
 - The four item-data questions in **issue #1** are **deferred 2026-10-19**: cold-cache behaviour is
   measured with the onboarding work later in the plan, where a fresh character and a cold SavedVariables
   file exist anyway. Issue #1 stays open and is assigned to that milestone. What M0 needed from it —
@@ -303,7 +304,7 @@ Exit criteria
 Risks
 - Drop targets on secure item buttons are the classic bag-addon taint trap, and **Forever has no
   secure handler snippets** (`C_SecureHandlerRegisterSnippets` / `SecureHandlerOnSNippet` are absent
-  — `agents.md`), so the modern snippet escape hatch is not available. Spike first: confirm we can
+  — `wow-forever-api` skill: `references/taint-and-secure.md`), so the modern snippet escape hatch is not available. Spike first: confirm we can
   observe a drag started on a secure button (via our own `OnReceiveDrag` on the header +
   `GetCursorInfo`) without adding attributes to the button in combat. If not possible, fall back to
   right-click → "Move to category…" as the only assignment path and record the limitation.
@@ -345,7 +346,7 @@ Risks
   consequences are hard requirements: `harvest.Invalidate()` + `Discover()` on `BANKFRAME_OPENED`
   (opening fires no container event, so nothing else ever reveals the bank container) and dropping it
   on `BANKFRAME_CLOSED` (AC-13). The only unmeasured shape is a **purchased** bank bag — **issue #25**,
-  blocked on gold, with the working assumption recorded in `agents.md`.
+  blocked on gold, with the working assumption recorded in `references/containers-and-bags.md`.
 - A persisted snapshot is the first place this design writes derived state to disk. If it grows
   unbounded or leaks item data a user did not opt into, it is cut back to session-only rather than
   tuned.

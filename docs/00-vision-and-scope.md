@@ -104,7 +104,8 @@ Measured against Baggins as it exists today:
   (`ContainerFrameItemButtonTemplate`, the `ItemButton` frame type, the client's bag atlases) so
   whatever skinning addon a user runs — Masque or its successor — skins our bags the way it skins
   theirs. No `themes/` module, no built-in "looks", no theme editor (`docs/07` Q16).
-- **Reagent bank, warband bank.** They do not exist on Forever (`agents.md`).
+- **Reagent bank, warband bank.** They do not exist on Forever (`wow-forever-api` skill:
+  `references/containers-and-bags.md`).
 - **Bag shopping UI.** Empty-bag, affinity compaction and gated bulk sell are in v1; buying and
   upgrading bags is the player's business, we only make the vanilla bags reachable.
 - **Vendor integration beyond selling.** No price awareness, no restock logic, no merchant-specific

@@ -1,6 +1,7 @@
 -- Container arithmetic and layout constants, derived from the client's own constants.
 --
--- agents.md: never enumerate Enum.BagIndex to find containers. On Forever the enum has no
+-- wow-forever-api skill (references/containers-and-bags.md): never enumerate Enum.BagIndex to find
+-- containers. On Forever the enum has no
 -- BankBag_* values while Camelot's BankFrame computes bank-bag indices arithmetically, and
 -- those land on the same numbers as CharacterBankTab_1..8. The container list data/harvest
 -- iterates is discovered by probing (issue #9), never hardcoded.

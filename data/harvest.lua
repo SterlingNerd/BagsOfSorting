@@ -2,8 +2,9 @@
 --
 -- The container list is discovered by probing at load, never enumerated from Enum.BagIndex:
 -- Forever has no BankBag_* enum values while Camelot computes bank-bag indices
--- arithmetically, and indices read under two names count the same items twice (agents.md,
--- issues #9/#10/#11). Every probe is pcall'd: an index that errors and an index that returns
+-- arithmetically, and indices read under two names count the same items twice
+-- (wow-forever-api skill: references/containers-and-bags.md, issues #9/#10/#11). Every probe is
+-- pcall'd: an index that errors and an index that returns
 -- 0 are both answers, neither is a crash.
 --
 -- shortcut: backpack side only. Issue #9 (closed 2026-10-18) settled the bank side: index 6 is the

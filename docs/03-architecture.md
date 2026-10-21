@@ -171,7 +171,7 @@ if client.has('reagentBank') then ... end
 local btnType = client.get('itemButtonType')     -- 'ItemButton' on Forever
 ```
 
-Forever facts (from `agents.md`) are resolved once at load:
+Forever facts (from the `wow-forever-api` skill references) are resolved once at load:
 
 | capability | Forever |
 |---|---|
@@ -251,7 +251,7 @@ is the ecosystem habits a bag addon is expected to have. Named honestly, with th
 | **Masque** | the user's bag skin applies to our buttons with no config | `LibStub('Masque', true)` + `Masque:Group('Bags of Sorting', …)` + add/remove button, guarded — BetterBags `integrations/masque.lua` is ~60 lines | **optional later** (`FR-121`, `FR-125`); this is the strongest argument for "use Blizzard's bag visuals" (`docs/07` Q16) |
 | **Pawn** | the upgrade arrow everyone already trusts | check for `PawnShouldItemLinkHaveUpgradeArrowUnbudgeted`, register as an upgrade provider behind our own seam | **optional later** (`FR-122`), not a requirement |
 | **Publishing our classification** | an alt-database addon could classify the inventory it already stores using our categories and rule trees | **not shipped.** What we do is keep the model plain-data, named and versioned so it *could* be published without a rewrite (`FR-113`). Transport — a guarded global, a LibDataBroker feed, something else — is decided when a consumer exists (`docs/07` Q22) | **later, not ours.** LibDataBroker is a plausible transport, not a rejected one: we refused LibDBIcon (the display half), not the data feed |
-| **BagSync / Altoholic** | what they do: per-character inventory storage and cross-character search | not integrated. That product is a different problem from this one (`docs/07` Q15), and reading their data would drag their storage model into our UI | **out.** If an alt-database addon wants our classification, `FR-113` is the door |
+| **BagSync / Altoholic** | what they do: per-character inventory storage and cross-character search. Both are alive on this client — Altoholic ships a **Forever-specific 1.60.x build** (maintained via a fork, not the original author) and BagSync is actively updated (20.x, 2026) with per-character item/bank/guild-bank tracking and a LibDataBroker feed meant for other bag addons | not integrated. That product is a different problem from this one (`docs/07` Q15), and reading their data would drag their storage model into our UI | **out.** If an alt-database addon wants our classification, `FR-113` is the door |
 | **Bagnon/BagBrother-compatible API** (`AllInventory`, `BagnonTooltipItemSearch`) | other addons can answer "does any character of mine have X" from *our* data; a large installed surface depends on Bagnon | cannot be done honestly here: `AllInventory` is persisted per-character inventory, which `FR-109` forbids | **out** (`docs/07` Q15). Neither reference addon in `../addons` provides it today, so this is a feature we decline, not a compatibility we lack |
 | **Blizzard's own search matcher** | our search and the client's search agree about what "matches" means | our search box calls `C_Container.SetItemSearch(text)` and filters with `ItemButtonUtil.GetItemContextMatchResultForItem(ItemLocation:CreateFromBagAndSlot(bag, slot))` — the same predicate `BagSearch_OnTextChanged` drives. Our bags already hold `item → (window, section, button)`; search is that map run in reverse (`docs/07` Q7) | use it for anything the client currently knows. It is **not** an index and cannot search a closed bank |
 | **AceConfig option tables** | appearing inside someone else's unified options suite | nothing — and this is a **deliberate refusal, not a platform gap**. AceConfig is out because its layout engine is what makes Baggins' config UI unusable at real scale: it wraps, truncates and reorders long section and category names, and its widget set fights a UI whose whole point is in-place editing. Forever's own settings API removes the only real reason addons reached for it | loss: none measured. No installed addon here aggregates option trees |
@@ -273,7 +273,7 @@ of either in its own 28k LOC — its entire settings UI is `WowScrollBox` + `Min
 `UICheckButtonTemplate` + `UISliderTemplate` + `ButtonFrameTemplate`. The only Ace3 it actually
 consumes is `AceAddon` (70 `NewModule` calls), `AceDB`, `AceEvent`, `AceHook`, `AceConsole`.
 
-Forever already ships every widget we need (`agents.md` §Forever UI toolkit), including
+Forever already ships every widget we need (`wow-forever-api` skill: `references/ui-templates.md`), including
 `UIDropDownMenu`/`EasyMenu` via `Blizzard_SharedXML/Mainline/UIDropDownMenuTemplates.xml` — so
 BetterBags vendoring `LibUIDropDownMenu` is a Classic concession we do not need.
 
@@ -284,7 +284,7 @@ BetterBags vendoring `LibUIDropDownMenu` is a Classic concession we do not need.
 | AceEvent | one owned frame + dispatch table + `util/bucket.lua` | ~60 lines |
 | AceHook | `hooksecurefunc` + manual swap | ~30 lines |
 | AceLocale | `L` table with `__index` fallback-to-key | ~15 lines |
-| AceGUI widgets | vanilla templates (see `agents.md`) | 0 |
+| AceGUI widgets | vanilla templates (`references/ui-templates.md`) | 0 |
 | AceConfig / AceDBOptions | banned by design (`docs/05`) | 0 |
 | LibWindow-1.1 saved positions | `frames/movemode.lua` | ~100 lines |
 | LibUIDropDownMenu | Blizzard-provided on Forever | 0 |

@@ -145,8 +145,9 @@ What Blizzard gives us for free is the *predicate*, not an index:
   `GuildItemSearchBox` and calls `C_Container.SetItemSearch(text)`; buttons answer
   `ItemButtonUtil.GetItemContextMatchResultForItem(ItemLocation:CreateFromBagAndSlot(bag, slot))` and
   dim themselves.
-- That is a per-button filter over known inventory. No result list, no closed bank, no alts, and
-  `GetItemContextMatchResultForContainer` is absent on camelot (`agents.md`).
+- That is a per-button filter over known inventory. No result list, no closed bank, no alts. Both
+  `ItemButtonUtil` matchers are present on the live client (`wow-forever-api` skill:
+  `references/item-and-spell-data.md`), so the client's own matcher is available for our buttons too.
 
 So: **drive the client's search and reuse its matcher** (`FR-50`) so our search and the game's agree,
 then add our own fields (type, quality, ilvl, expansion, category) on the enriched record. Anything that
@@ -238,8 +239,8 @@ Partly answered by reading `origin/forever` (2026-10-15), and measured on the li
 | `/script` available for testing | **yes, gated** | `Blizzard_ChatFrameBase/Shared/SlashCommands.lua`: `SCRIPT` → `RunScript`, gated by `C_GameRules.IsGameRuleActive(Enum.GameRule.UserScriptsDisabled)` and a one-time dangerous-scripts popup. `/dump`, `/eventtrace`, `/framestack`, `/api` also present |
 
 **Recommendation:** unchanged — M0's `/bos` capability dump answers the rest in one run, and every
-container loop iterates a **discovered** list built at load, never a hardcoded constant. Update
-`agents.md` with the results.
+container loop iterates a **discovered** list built at load, never a hardcoded constant. Update the
+`wow-forever-api` references with the results.
 
 ## Q11 — Profile default, and can profiles inherit? — **DECIDED: shared Default + copy + explicit link**
 
@@ -429,7 +430,7 @@ it is documentation instead of onboarding. It also carries the first-run keybind
 
 ## Q21 — Where do spikes and plans live? — **DECIDED: GitHub issues, not a docs file**
 
-`docs/08-test-plan.md` is deleted. Spikes (container index ranges, EditMode registration, Masque
+A `docs/` test-plan file is out. Spikes (container index ranges, EditMode registration, Masque
 reach, `RequestLoadItemDataByID` behaviour, coexistence runs) become GitHub issues with their
 `/script` snippets in the issue body, because that is where results get recorded, closed and linked to
 commits. Stabilised plans graduate into issues too. Docs keep *decisions*, issues keep *open work*.

@@ -206,8 +206,8 @@ binding. `config/config.lua` (1,142 lines) builds the whole settings UI from it 
 dialog anywhere (the only `AceConfigRegistry:NotifyChange` call in the addon is commented out).
 
 Worth knowing, **not worth stealing**: BetterBags had to build this because it targets Classic, where
-the modern settings API is not available to addons. On Forever it is (`agents.md` §Present on
-Forever), so the equivalent of these 1,100 lines for us is a handful of `Settings.Register*` /
+the modern settings API is not available to addons. On Forever it is (`wow-forever-api` skill:
+`references/ui-templates.md`), so the equivalent of these 1,100 lines for us is a handful of `Settings.Register*` /
 `Settings.Create*` calls.
 This is the single most reusable idea in either repo.
 

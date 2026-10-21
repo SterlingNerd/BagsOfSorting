@@ -212,7 +212,7 @@ classifier keeps a `trace` (`docs/03`).
 
 Forever ships a real move mode and users already know it. ThreatMeter joins it on Camelot
 (`../addons/ThreatMeter/editmode.lua`, `## OptionalDeps: Blizzard_EditMode`), so the path is proven
-here, not theoretical. Recipe in `agents.md` §EditMode.
+here, not theoretical. Recipe in the `wow-forever-api` skill: `references/editmode-move-mode.md`.
 
 - **`/bos move`** opens vanilla EditMode with our windows participating: selection highlight, snap
   preview, magnetism, the user's existing layout habits.
@@ -235,7 +235,7 @@ here, not theoretical. Recipe in `agents.md` §EditMode.
 Demoted, small, four panes, no nesting deeper than pane → row. It is **not our own window**: it
 registers into the client's own settings panel with `Settings.RegisterAddOnCategory` +
 `RegisterVerticalLayoutCategory`/`RegisterCanvasLayoutCategory` + `CreateCheckbox`/`CreateSlider`/
-`CreateDropdown` — all verified present on Forever (`agents.md` §Present on Forever), and Blizzard's
+`CreateDropdown` — all verified present on Forever (`wow-forever-api` skill: `references/ui-templates.md`), and Blizzard's
 own guide for it ships in `Blizzard_ImplementationReadme.lua`. `/bos settings` is a shortcut that
 calls `Settings.OpenToCategory`.
 

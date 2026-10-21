@@ -139,7 +139,8 @@ local contents = {
   [5] = { 765, 3355, 3434 },
 }
 
--- index -> total slots, at the sizes the live client reports (agents.md storage shape): a 20-slot
+-- index -> total slots, at the sizes the live client reports (references/containers-and-bags.md
+-- storage shape): a 20-slot
 -- backpack, a 6-slot bag, a 4-slot reagent pouch, the 32-slot keyring. Real bags have free space,
 -- and issue #36 is about what the addon does with it, so the fixture has some.
 local slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [5] = 4 }

@@ -94,7 +94,7 @@ function init.Start()
   pipeline.Refresh('login')
 end
 
---- Plain-frame deferral, never an AceEvent-mediated one (agents.md §Debugging).
+--- Plain-frame deferral, never an AceEvent-mediated one (parent `../agents.md` §Debugging).
 function init.Enable()
   if InCombatLockdown() then
     log.Debug('combat lockdown, deferring enable until PLAYER_REGEN_ENABLED')

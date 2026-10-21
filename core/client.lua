@@ -1,7 +1,8 @@
 -- The only file that knows what the client can do (FR-2). Everything else asks
 -- client.get('itemButtonType') or client.has('reagentBank').
 --
--- Pattern copied from agents.md §Detection pattern; capability values are resolved once
+-- Pattern copied from the wow-forever-api skill (references/client-identity.md); capability values are
+-- resolved once
 -- at load, and a false capability means the table that would drive the feature is never
 -- built (docs/03 §Client capability layer) rather than a branch at every call site.
 

@@ -9,8 +9,10 @@ to an open issue, defined in `core/diag.lua` and deleted once their capture is i
 and deleting the entry — is `.pi/skills/bos-test-capture/SKILL.md`.
 
 What stays here is the standing acceptance checklist: milestone acceptance criteria, and what those
-runs found. Verdicts go to `agents.md` and `docs/06` with the date and patch (standing discipline
-#3); the raw capture goes to the issue as a dated comment.
+runs found. A client fact goes to the `wow-forever-api` reference that owns it; a decision about our own
+windows goes to `docs/08-window-behavior.md`; `docs/06` moves only at a milestone boundary (standing
+discipline #3). The raw capture goes to the issue as a dated comment. `agents.md` is the index, not the
+destination.
 
 `/script` is gated on Forever: expect the one-time dangerous-scripts popup the first time. A test step
 reaches the same API from the addon instead, which is why the run sheets here do not hand out
@@ -49,9 +51,10 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 **Precondition:** standing at an open bank. Bank bags help but are not required — if you cannot afford one yet, say so in the paste, because "eight slots visible, none filled" is itself an answer.
 
 1. Run `/bos` and copy the whole output into **issue #2**.
-2. Run `/bos test dump` at the bank and compare it against the storage-shape rows in `agents.md`.
+2. Run `/bos test dump` at the bank and compare it against the storage-shape table in the
+   `wow-forever-api` skill's `references/containers-and-bags.md`.
 3. Write the numbers you can see next to the paste: base grid rows × columns (measured 2026-10-17: **6 × 8 = 48**) and how many bank bag slots the UI shows (**8**, against `NUM_CHARACTER_BANK_SLOTS = 9`).
-4. Update the `unverified` rows in `agents.md` with what the client actually said.
+4. Update the `unverified` rows in that reference with what the client actually said.
 
 **Expected:** `NUM_BAG_SLOTS=4`, `NUM_REAGENTBAG_SLOTS=1`, `NUM_TOTAL_EQUIPPED_BAG_SLOTS=5`, `KEYRING_CONTAINER=-1` with 32 slots. The `total container slots` line must account for the 48-slot base grid — if it comes up short by 48, the grid is not a container index. The `bank bag` lines say whether the client has inventory slots for 8 or 9.
 

@@ -46,12 +46,17 @@ end
 
 _G.ContainerFrameCombinedBags = fakeFrame('ContainerFrameCombinedBags')
 _G.ContainerFrame1 = fakeFrame('ContainerFrame1')
+-- NUM_TOTAL_BAG_FRAMES + backpack + keyring: the range Blizzard itself iterates
+-- (ContainerFrame.lua:8-11, :140). Frame 6 is the one a loop bounded at NUM_TOTAL_BAG_FRAMES misses.
+_G.NUM_CONTAINER_FRAMES = 7
+_G.ContainerFrame6 = fakeFrame('ContainerFrame6')
 
 --- Blizzard's own "show every bag", and hooksecurefunc's semantics: the hook runs after the
 --- original, with the same arguments.
 _G.OpenAllBags = function()
   _G.ContainerFrameCombinedBags:Show()
   _G.ContainerFrame1:Show()
+  _G.ContainerFrame6:Show()
 end
 _G.hooksecurefunc = function(name, hook)
   local original = _G[name]
@@ -736,6 +741,8 @@ local function testVendorOpensOurBags()
   blizzardOpensBags()
   check('Blizzard re-opening its bags in its own OnShow is hidden again', combined.shown, false)
   check('and the individual container frames with it', individual.shown, false)
+  check('and the frames past NUM_TOTAL_BAG_FRAMES — the backpack, keyring and specialty bag windows',
+    _G.ContainerFrame6.shown, false)
 
   eventsMod.Emit('MERCHANT_CLOSED')
   check('closing the vendor hides the windows it opened', windowFramesStub.hides, 1)

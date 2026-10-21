@@ -50,7 +50,11 @@ local function hideBlizzardBags()
 
   local combined = _G.ContainerFrameCombinedBags
   if combined and combined:IsShown() then combined:Hide() end
-  for i = 1, NUM_TOTAL_BAG_FRAMES or constants.NUM_TOTAL_EQUIPPED_BAG_SLOTS do
+  -- NUM_CONTAINER_FRAMES, not NUM_TOTAL_BAG_FRAMES: Blizzard numbers its container frames over the
+  -- bag slots **plus the backpack plus the keyring** (`ContainerFrame.lua:8-11`) and iterates that
+  -- same range itself (`:140`). Bounded at NUM_TOTAL_BAG_FRAMES = 5 the loop missed frame 6, and the
+  -- live client showed the tradeskill bag window stay open at a vendor (issue #38, 2026-10-22).
+  for i = 1, NUM_CONTAINER_FRAMES or (constants.NUM_TOTAL_EQUIPPED_BAG_SLOTS + 2) do
     local frame = _G['ContainerFrame' .. i]
     if frame and frame:IsShown() then frame:Hide() end
   end

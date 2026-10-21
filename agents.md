@@ -3,10 +3,10 @@
 A WoW: **Forever** (Blizzard codename *Camelot*) bag addon. Baggins' multi-window virtual-bag
 shape, with a configuration model and UI that a human can actually use.
 
-**Current phase: prototype (M0 + M1 done, M2 in progress).** The pipeline, the rule grammar, three
-rendered windows (`Backpack`, `Quests`, `Tools`) and the `FR-41` placement rule exist. The
-configuration UI does not. `docs/` is still the source of truth for what to build;
-change the spec there before changing direction in code.
+**Current phase: prototype (M0 + M1 done, M2 in progress).** The pipeline, the rule grammar, five
+rendered windows (`Backpack`, `Quests`, `Consumables`, `Tradeskills`, `Tools`) and the `FR-41`
+placement rule exist. The configuration UI does not. `docs/` is still the source of truth for what to
+build; change the spec there before changing direction in code.
 
 ---
 
@@ -91,6 +91,8 @@ If a task contradicts `docs/02-requirements.md` or `docs/05-config-ui.md`, stop 
 | `C_Item.CanItemFitInContainer` | **absent** on Forever — bag restrictions must be inferred from `GetBagSlotFlag` + item type | grep of `Blizzard_APIDocumentationGenerated` |
 | **Everything parented to `UIParent` shares one MEDIUM strata band, so only frame levels separate it** (measured 2026-10-20, `/bos test 34`) | `UIParent` itself reads `strata MEDIUM level 0 fixed false`, and so does every frame our windows can overlap: `MainActionBar` **50** (its EndCaps 100), `BagsBar` **52**, `MainMenuBarBackpackButton` **53**, `MicroButtonAndBagsBar` 1, `ContainerFrameCombinedBags` 1. `HasFixedFrameStrata()` is **false** on all of them — they follow UIParent rather than declaring a band — so there is no strata trick available, only levels. Our shells therefore sit on an explicit base (`frames/window.lua` `CONTENT_BASE = 300`): above every bar and above Blizzard's bag buttons (`ContainerFrameItemButtonTemplate` `frameLevel 10`), below the chrome the portrait template carries (portrait 400, border 500, title/close 510). Where our windows overlap Blizzard's own bag window **Blizzard's draws on top** — its chrome carries the same 400/500/510 numbers and its window is `toplevel` — and that is accepted, because the client's bags stay reachable (FR-51) | `/bos test 34` capture 2026-10-20, build 1.60.1 (70450); `MainActionBar.xml:29`, `Camelot/MainMenuBarBagButtons.xml:44`, `ContainerFrame.xml:308`; issue #34 |
 | **Region bounds: `GetRect` is the one this client has** | `GetRect()` returns `left, bottom, width, height` and works on frames, textures and fontstrings. **`GetAbsBounds` is absent** — the first run of the `portrait` probe died on it with `attempt to call a nil value`. `GetBounds` is likewise undocumented on `origin/forever` | `/bos test 34` 2026-10-20, `SimpleScriptRegionAPIDocumentation.lua` |
+
+| **Item class and subclass names are the client's own, and they are not retail's** (read off the persisted item cache, 64 entries, 2026-10-20) | `type`/`subtype` as the client reports them: **`Trade Goods`** — not retail's `Tradeskill` — with subtypes **`Herb`** (Silverleaf 765), **`Metal & Stone`** (Copper Ore 2770), **`Cooking`** (Stringy Wolf Meat 2672); **`Consumable`** — not `Potion`/`Food` — with subtypes **`Potions`** (Minor Healing Potion 118), **`Food & Drink`** (159), **`Bandages`** (1251); plus `Quest/Quest`, `Miscellaneous/Junk·Mount·Pet`, `Container/Herb Bag`, `Armor/Miscellaneous`, `Weapon/Miscellaneous`. A `type`/`subtype` rule is a case-insensitive string match against **these** names, which is why the tradeskill categories pin `type = "Trade Goods"` as well as the subtype — `Cloth` and `Leather` are Armor subtypes too. `C_Item.GetItemClassInfo` and `C_Item.GetItemSubClassInfo` are documented on this client, so `/bos test subclasses` dumps the whole vocabulary without owning a single item; `/bos test owners` prints what the pipeline did with what you carry | `WTF/Account/<account>/SavedVariables/BagsOfSorting.lua` itemCache read 2026-10-20 (issue #41); `origin/forever` `ItemDocumentation.lua:404` and `:1020` |
 
 Detection pattern (copy this, do not invent another):
 

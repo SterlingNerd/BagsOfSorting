@@ -85,12 +85,15 @@ local fixtures = addon.modules['Fixtures']
 local byID = {}
 for _, item in ipairs(fixtures.items) do byID[item.itemID] = item end
 
--- bag index -> slot -> itemID. The keyring, the backpack and one bag hold things; the
--- remaining probed indices are empty, which is a result harvest must tolerate.
+-- bag index -> slot -> itemID. The keyring, the backpack, one equipped bag and the reagent pouch
+-- hold things; the remaining probed indices are empty, which is a result harvest must tolerate.
+-- Issue #41 spreads its materials across three of those containers on purpose: where an item sits
+-- is not what decides its section.
 local contents = {
   [-1] = { 1005 },
-  [0] = { 1001, 1002, 1003, 1004, 5411, 2901 },
-  [1] = { 26042, 1006, 6948 },
+  [0] = { 1001, 1002, 1003, 1004, 5411, 2901, 2770, 2672, 118, 159, 1251 },
+  [1] = { 26042, 1006, 6948, 2320, 2578, 1210 },
+  [5] = { 765, 3355, 3434 },
 }
 
 -- index -> total slots, at the sizes the live client reports (agents.md storage shape): a 20-slot
@@ -156,7 +159,7 @@ local containers = harvest.Discover()
 check('containers discovered (keyring, backpack, one bag, the reagent pouch)', #containers, 4)
 
 local items = harvest.Items()
-check('harvested slot count', #items, 10)
+check('harvested slot count', #items, 21)
 
 pipeline.Refresh('smoke')
 local model = pipeline.Model()
@@ -186,9 +189,11 @@ local function binds(window)
   return table.concat(out, ',')
 end
 
-check('three windows in the model', #model, 3)
-check('profile order is model order',
-  model[1].name .. ',' .. model[2].name .. ',' .. model[3].name, 'Backpack,Quests,Tools')
+check('five windows in the model', #model, 5)
+local names = {}
+for _, window in ipairs(model) do names[#names + 1] = window.name end
+check('profile order is model order', table.concat(names, ','),
+  'Backpack,Quests,Consumables,Tradeskills,Tools')   -- issue #41 inserted two between Quests and Tools
 local backpack = windowIn(model, 'Backpack')
 local quests = windowIn(model, 'Quests')
 local tools = windowIn(model, 'Tools')
@@ -222,15 +227,15 @@ check('windows are sized independently', quests.height ~= backpack.height, true)
 
 -- Issue #36: the free-slot indicator. One slot at the end of the default backpack window carrying
 -- the number of slots the player's bags still have open, and nothing at all when they have none.
-check('the backpack family has 17 free slots', harvest.FreeSlots('backpack'), 17)
+check('the backpack family has 9 free slots', harvest.FreeSlots('backpack'), 9)
 check('the keyring is counted apart from the bags', harvest.FreeSlots('keyring'), 31)
-check('the reagent pouch is its own family, 4 free slots', harvest.FreeSlots('reagent'), 4)
-check('and its free space is not in the number the window shows', backpack.emptySlots, 17)
+check('the reagent pouch is its own family, 1 free slot', harvest.FreeSlots('reagent'), 1)
+check('and its free space is not in the number the window shows', backpack.emptySlots, 9)
 check('the indicator points at a real empty slot, and not the keyring slot before it',
-  harvest.FirstFreeSlot().bagID .. ':' .. harvest.FirstFreeSlot().slot, '0:7')
-check('the default backpack window carries the count', backpack.emptySlots, 17)
+  harvest.FirstFreeSlot().bagID .. ':' .. harvest.FirstFreeSlot().slot, '0:12')
+check('the default backpack window carries the count', backpack.emptySlots, 9)
 check('the slot it points at travels with the count',
-  backpack.emptySlot.bagID .. ':' .. backpack.emptySlot.slot, '0:7')
+  backpack.emptySlot.bagID .. ':' .. backpack.emptySlot.slot, '0:12')
 check('the other backpack windows do not repeat the same number', quests.emptySlots, nil)
 check('the indicator gets its own cell after the last section',
   backpack.emptyOffsetY, 3 * (18 + CELL + 6))
@@ -240,8 +245,8 @@ check('Quests is not sized for a cell it does not draw',
 -- Priority ladder, measured against the real item that motivated it: Winterhoof Cleansing Totem is
 -- type Armor *and* a quest item. Junk (10) also matches nothing here, Armor (20) does. The ladder is
 -- unchanged by windows (#28 decision 4), so 5411 lands in the Quests window, not in w1's Armor.
-local function placeOf(itemID)
-  for _, window in ipairs(model) do
+local function placeIn(models, itemID)
+  for _, window in ipairs(models) do
     for _, section in ipairs(window.sections) do
       for _, item in ipairs(section.items) do
         if item.itemID == itemID then return window.name .. '/' .. section.name end
@@ -249,10 +254,53 @@ local function placeOf(itemID)
     end
   end
 end
+
+local function placeOf(itemID) return placeIn(model, itemID) end
 check('a quest item that is also Armor wins on priority (5411)', placeOf(5411), 'Quests/Quest Items')
 check('the manual list beats the type rule (2901 is a Weapon)', placeOf(2901), 'Tools/Tools')
 check('grey armour is still junk (1001 is quality 0 Armor)', placeOf(1001), 'Backpack/Junk')
 check('an ordinary weapon is not a tool', placeOf(1002), 'Backpack/Everything else')
+
+-- Issue #41: the two new windows and the two rules that decide where a material lands.
+local consumables = windowIn(model, 'Consumables')
+local tradeskills = windowIn(model, 'Tradeskills')
+
+check('Consumables binds its one category', binds(consumables), 'Consumables')
+check('Tradeskills binds one category per section, Engineering dropped while it is empty',
+  binds(tradeskills), 'Tradeskills.Herbs,Tradeskills.Ore,Tradeskills.Leather,Tradeskills.Cloth,'
+    .. 'Tradeskills.Gems,Tradeskills.Elements,Tradeskills.Cooking')
+check('Consumables holds the potion, the water and the bandage',
+  countSection(consumables, 'Consumables'), 3)
+check('Herbs holds one and Elements holds two',
+  countSection(tradeskills, 'Herbs') .. '/' .. countSection(tradeskills, 'Elements'), '1/2')
+
+-- Sorting follows what the item is, not which container holds it. 765 and 3434 sit in the reagent
+-- pouch (index 5), 2320 and 1210 in an equipped bag, 2770 in the backpack: all three containers
+-- feed the same Tradeskills window.
+check('a herb in the reagent pouch sorts with the herbs (765)', placeOf(765), 'Tradeskills/Herbs')
+check('enchanting reagents share Elements with elemental ones (3434)', placeOf(3434), 'Tradeskills/Elements')
+check('ore (2770)', placeOf(2770), 'Tradeskills/Ore')
+check('leather (2320)', placeOf(2320), 'Tradeskills/Leather')
+check('cloth (2578)', placeOf(2578), 'Tradeskills/Cloth')
+check('a gem (1210)', placeOf(1210), 'Tradeskills/Gems')
+check('a cooking ingredient (2672)', placeOf(2672), 'Tradeskills/Cooking')
+check('nothing matches the Engineering section, so it is not drawn',
+  sectionIn(tradeskills, 'Engineering'), nil)
+-- The tradeskill rules pin `type` as well as `subtype`: 'Cloth' is an Armor subtype too, and a
+-- cloth shirt is not tailoring material.
+check('cloth armour stays Armor, not cloth material (1003)', placeOf(1003), 'Backpack/Armor')
+
+-- The priority half: Consumables (12) outranks every tradeskill category (15).
+check('a potion is a consumable, not an alchemy reagent (118)', placeOf(118), 'Consumables/Consumables')
+check('food and drink (159)', placeOf(159), 'Consumables/Consumables')
+check('bandages (1251)', placeOf(1251), 'Consumables/Consumables')
+
+check('Consumables is sized to its one 3-item section',
+  consumables.height, TITLE + (18 + CELL) + 6 + 8 + MONEY)
+check('Tradeskills is sized to its seven non-empty sections',
+  tradeskills.height, TITLE + 7 * (18 + CELL) + 7 * 6 + 8 + MONEY)
+check('neither new window repeats the free-slot count',
+  tostring(consumables.emptySlots) .. '/' .. tostring(tradeskills.emptySlots), 'nil/nil')
 
 -- FR-15: with duplication off, every harvested item is drawn exactly once **across every window**.
 local drawn, seen = 0, {}
@@ -377,7 +425,7 @@ local function testWindowVisibility()
   check('closed windows leave the model', #pipeline.Model(), 0)
   db.SetWindowsOpen(true)
   pipeline.Refresh('reopen')
-  check('reopened windows are back in the model', #pipeline.Model(), 3)
+  check('reopened windows are back in the model', #pipeline.Model(), 5)
   check('reopen clears the flag rather than setting it', db.Windows()[1].hidden, nil)
 end
 
@@ -392,8 +440,8 @@ local function testDuplicateBinding()
   local models = pipeline.Model()
   check('the first window in array order gets the items',
     countSection(windowIn(models, 'Backpack'), 'Tools copy'), 2)
-  check('the later window keeps its slot with no sections', #models, 3)
-  check('and holds nothing', #models[3].sections, 0)
+  check('the later window keeps its slot with no sections', #models, 5)
+  check('and holds nothing', #models[5].sections, 0)
   table.remove(db.Windows()[1].sections)
   pipeline.Refresh('unduplicate')
 end
@@ -410,7 +458,7 @@ local function testFullBags()
   pipeline.Refresh('full-bags')
   local full = windowIn(pipeline.Model(), 'Backpack')
   check('a full inventory has no free slots', harvest.FreeSlots('backpack'), 0)
-  check('even with the reagent pouch still open', harvest.FreeSlots('reagent'), 4)
+  check('even with one reagent pouch slot still open', harvest.FreeSlots('reagent'), 1)
   check('and no empty slot to point at', harvest.FirstFreeSlot(), nil)
   check('the window carries no count', full.emptySlots, nil)
   check('the window carries no slot', full.emptySlot, nil)
@@ -434,7 +482,7 @@ local function testBankWindow()
   })
   pipeline.Refresh('bank-window')
   local models = pipeline.Model()
-  check('a bank window stays out of the model', #models, 3)
+  check('a bank window stays out of the model', #models, 5)
   local bank = false
   for _, window in ipairs(models) do
     if window.kind == 'bank' then bank = true end
@@ -450,10 +498,10 @@ testBankWindow()
 -- placement tests need the default placement (FR-41).
 local function testClearPositions()
   local db = addon.modules['DB']
-  db.Windows()[3].position = { point = 'TOP', relativePoint = 'TOP', x = 295.2, y = -191.7 }
+  db.Windows()[5].position = { point = 'TOP', relativePoint = 'TOP', x = 295.2, y = -191.7 }
   check('a saved position is counted as cleared', db.ClearPositions(), 1)
   check('the window keeps everything else about itself',
-    db.Windows()[3].id .. '/' .. tostring(db.Windows()[3].position), 'w3/nil')
+    db.Windows()[5].id .. '/' .. tostring(db.Windows()[5].position), 'w3/nil')
   check('nothing saved means nothing cleared', db.ClearPositions(), 0)
 end
 
@@ -513,6 +561,48 @@ check('a single window taller than the cap never gets a phantom column',
 -- Decision 2: an empty window still occupies a slot. 72 is what flow gives a window with no sections.
 local empty = stack({ 26 + 38 + 8, 100 }, 1200, 45)
 check('an empty window still consumes its slot in the column', empty[2].y, (26 + 38 + 8) + GAP)
+
+
+-- Issue #41's negative half. The shipped rules are disjoint — no item is type "Consumable" *and*
+-- type "Trade Goods" — so the ladder only gets exercised the way a user will break it: an Alchemy
+-- category with the potion's ID pasted into its curated list.
+local function testConsumablesBeatTradeskills()
+  local db = addon.modules['DB']
+  db.Categories()['Tradeskills.Alchemy'] = {
+    priority = 15, kind = 'manual', enabled = true, duplicate = false, itemIDs = { [118] = true },
+  }
+  table.insert(db.Windows()[4].sections,
+    { id = 's15', name = 'Alchemy', categories = { 'Tradeskills.Alchemy' } })
+  pipeline.Refresh('alchemy-list')
+  local models = pipeline.Model()
+  check('Consumables still owns the potion a tradeskill list claims (118)',
+    placeIn(models, 118), 'Consumables/Consumables')
+  check('the Alchemy section gets nothing, so it is not drawn',
+    sectionIn(windowIn(models, 'Tradeskills'), 'Alchemy'), nil)
+  db.Categories()['Tradeskills.Alchemy'] = nil
+  table.remove(db.Windows()[4].sections)
+  pipeline.Refresh('unalchemy')
+end
+
+testConsumablesBeatTradeskills()
+
+-- The enable/disable option (docs/05's `category.setEnabled`): a disabled category stops owning its
+-- items, they fall to the catch-all, and re-enabling puts them back where they were.
+local function testCategoryEnabled()
+  local db = addon.modules['DB']
+  check('an unknown category is refused', db.SetCategoryEnabled('Nope', false), false)
+  check('disabling Herbs is a change', db.SetCategoryEnabled('Tradeskills.Herbs', false), true)
+  check('disabling it a second time is not', db.SetCategoryEnabled('Tradeskills.Herbs', false), false)
+  pipeline.Refresh('disable-herbs')
+  local models = pipeline.Model()
+  check('the Herbs section is gone', sectionIn(windowIn(models, 'Tradeskills'), 'Herbs'), nil)
+  check('its herb falls to the catch-all', placeIn(models, 765), 'Backpack/Everything else')
+  check('re-enabling is a change', db.SetCategoryEnabled('Tradeskills.Herbs', true), true)
+  pipeline.Refresh('enable-herbs')
+  check('and the herb is back in its own section', placeIn(pipeline.Model(), 765), 'Tradeskills/Herbs')
+end
+
+testCategoryEnabled()
 
 
 for _, failure in ipairs(failures) do

@@ -610,6 +610,50 @@ probes[19] = function()
   end
 end
 
+--- The client's own item class and subclass names: the exact strings a `type`/`subtype` rule has to
+--- match. Forever is a Vanilla-ruleset client, so they are not retail's — the persisted item cache
+--- already reads "Trade Goods" (not "Tradeskill") and "Consumable" (not "Potion" or "Food"). This
+--- asks the DBC directly, so it answers for the subtypes the character carries nothing of.
+probes[20] = function()
+  if inTest then record('classes') else fresh('subclasses') end
+  if not (C_Item and C_Item.GetItemClassInfo) then
+    record('no C_Item.GetItemClassInfo on this client')
+    return
+  end
+  for class = 0, 20 do
+    local okClass, className = pcall(C_Item.GetItemClassInfo, class)
+    if okClass and className then
+      local subs = {}
+      for sub = 0, 25 do
+        local okSub, subName = pcall(C_Item.GetItemSubClassInfo, class, sub)
+        if okSub and subName then subs[#subs + 1] = sub .. '=' .. subName end
+      end
+      record(class, className, #subs > 0 and table.concat(subs, ' · ') or '(none)')
+    end
+  end
+end
+
+--- Where the pipeline actually put everything, with the type/subtype pair that decided it. This is
+--- the capture that says whether a shipped category name is one this client uses.
+probes[21] = function()
+  local models = addon:GetModule('Pipeline').Model()
+  if inTest then record('placements') else fresh('owners') end
+  if not models then
+    record('no refresh has run yet')
+    return
+  end
+  for _, window in ipairs(models) do
+    record(string.format('%s  %d sections', window.name, #window.sections))
+    for _, section in ipairs(window.sections) do
+      record(string.format('  %s  %d', section.name, #section.items))
+      for _, item in ipairs(section.items) do
+        record(string.format('    %d %s  %s / %s', item.itemID, tostring(item.name),
+          tostring(item.type), tostring(item.subtype)))
+      end
+    end
+  end
+end
+
 --- Which container index holds this item? Answers "is the base grid a container?" with an item you
 --- can see and place on purpose, rather than with slot arithmetic. Read-only: `GetContainerItemInfo`
 --- reads, it builds nothing (agents.md hard rule 8).
@@ -659,6 +703,7 @@ local HELPERS = {
   dump = probes[2], log = probes[3], keybind = probes[7], newitem = probes[11],
   clock = probes[13], expansion = probes[14], flags = flagsScan, windows = probes[16],
   freeslots = probes[17], newitems = probes[18], portrait = probes[19],
+  subclasses = probes[20], owners = probes[21],
 }
 
 -- ---------------------------------------------------------------------------
@@ -669,6 +714,19 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
+  [41] = {
+    issue = 41,
+    what = 'The Tradeskills and Consumables categories against the client\'s own item vocabulary',
+    needs = 'our windows open, and herbs, ore, cloth, leather, a gem, an enchanting reagent, a '
+      .. 'potion, food and a bandage in your bags (the reagent pouch counts — sorting ignores it)',
+    steps = {
+      { text = 'look at the Tradeskills window: does every material you carry sit under a header '
+        .. 'that names it, and is every header named for something you carry?' },
+      { text = 'capture: the client\'s own class and subclass names', run = probes[20] },
+      { text = 'capture: where the pipeline put every item, and the type/subtype that decided it',
+        run = probes[21] },
+    },
+  },
   [22] = {
     issue = 22,
     what = "BetterBags' combat behaviour (input to the Q23 decision)",
@@ -795,7 +853,7 @@ function diag.Command(rest)
     print(string.format('  %d  %s  —  %s', t.id, t.what, t.needs))
   end
   print('helpers: dump · log · flags · keybind · newitem · newitems · clock · expansion · windows · '
-    .. 'freeslots · portrait')
+    .. 'freeslots · portrait · subclasses · owners')
 end
 
 return diag

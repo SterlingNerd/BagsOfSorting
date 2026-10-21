@@ -77,7 +77,20 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 3. Find the mining pick.
 4. Run `/bos find 5411` and `/bos find 2901` to confirm they are where the window says they are.
 
-**Expected:** three windows — **Backpack** (Junk, Armor, Everything else), **Quests** (Quest Items), **Tools** (Tools). 5411 sits in the **Quests** window, not in Backpack's Armor section (priority 5 beats 20). The mining pick sits in the **Tools** window, not Everything else, even though it is a Weapon — a curated list beats a type rule (8 beats 20). A grey item still lands in **Junk** (10 beats 20). A window adds nothing to the ladder: precedence is `category.priority` alone, and a category lands in the one window that binds it.
+**Expected:** five windows — **Backpack** (Junk, Armor, Everything else), **Quests** (Quest Items), **Consumables** (Consumables), **Tradeskills** (one section per material type), **Tools** (Tools). 5411 sits in the **Quests** window, not in Backpack's Armor section (priority 5 beats 20). The mining pick sits in the **Tools** window, not Everything else, even though it is a Weapon — a curated list beats a type rule (8 beats 20). A grey item still lands in **Junk** (10 beats 20). A window adds nothing to the ladder: precedence is `category.priority` alone, and a category lands in the one window that binds it.
+
+### Manual test: materials and consumables sort by what they are (issue #41)
+
+**Precondition:** fresh SavedVariables (Setup step 2), our windows open (`/bos show`), and a bag holding at least one herb, one ore, a cooking ingredient, a potion, food and a bandage. Put one of them in the **reagent pouch** (container index 5) on purpose — where an item sits is the thing this test rules out.
+
+1. Look at the stack bottom-up: **Consumables** and **Tradeskills** sit between **Quests** and **Tools**.
+2. Find the herb (Silverleaf 765 is the one this account carries). It is in the Tradeskills window's **Herbs** section even if it was in the reagent pouch.
+3. Find the potion (118), the water (159) and the bandage (1251): all three in **Consumables**, none in a tradeskill section.
+4. Find a cloth or leather **armour**: it stays in Backpack's Armor section, not in the Cloth or Leather section.
+5. Run `/bos find 765` and `/bos find 118` and confirm the window agrees with the container.
+6. Run `/bos test 41` and follow its run sheet: the two captured steps print the client's own class/subclass vocabulary and every placement the pipeline made, with the `type / subtype` pair that decided each one.
+
+**Expected:** a tradeskill section is drawn only when it holds something, so the Tradeskills window shows headers for what you actually carry and nothing else. Consumables (priority 12) outranks every tradeskill category (15), so nothing consumable reaches a materials section. The tradeskill rules match `type = "Trade Goods"` **and** a subtype, so a subtype armour shares (`Cloth`, `Leather`) does not pull gear into the materials window. Sorting never consults the container: the reagent pouch, an equipped bag and the backpack all feed the same section. Step 6 is the half that decides whether the shipped subtype names are the names this client uses — `/bos test subclasses` and `/bos test owners` run the same two captures on their own.
 
 ### Manual test: the stack starts at the client's bag window (FR-41, issue #28)
 
@@ -88,11 +101,11 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 3. Look at the gap between each pair of stacked windows.
 4. Click the backpack button.
 
-**Expected:** our windows' right edge sits just left of the client backpack window's right edge, with a visible gap between our windows and the screen edge; Quests and Tools stack above it with the same gap between each pair and no window overlapping another; no bag button and no micro-bar button is covered; the backpack button still opens Blizzard's bags. `/bos test windows` prints the anchor frame, its bottom and right, the screen size, and each frame's own right edge — the margin as a number rather than an impression. Measured 2026-10-20 against the **bag bar**: the stack started 317 px up the screen with no margin on a vertical bar — that anchor was issue **#30**, resolved.
+**Expected:** our windows' right edge sits just left of the client backpack window's right edge, with a visible gap between our windows and the screen edge; Quests, Consumables, Tradeskills and Tools stack above it with the same gap between each pair and no window overlapping another; no bag button and no micro-bar button is covered; the backpack button still opens Blizzard's bags. `/bos test windows` prints the anchor frame, its bottom and right, the screen size, and each frame's own right edge — the margin as a number rather than an impression. Measured 2026-10-20 against the **bag bar**: the stack started 317 px up the screen with no margin on a vertical bar — that anchor was issue **#30**, resolved.
 
 ### Manual test: a window with nothing in it still renders (issue #28 decision 2)
 
-**Precondition:** three windows shown; Mining Pick (2901) and Hearthstone (6948) are the only items the Tools category matches, and the bank is reachable.
+**Precondition:** five windows shown; Mining Pick (2901) and Hearthstone (6948) are the only items the Tools category matches, and the bank is reachable.
 
 1. Deposit 2901 and 6948 in the bank.
 2. Run `/bos refresh`.
@@ -114,7 +127,7 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 ### Manual test: the X closes a window and it stays closed (FR-41)
 
-**Precondition:** all three windows shown, nothing dragged.
+**Precondition:** all five windows shown, nothing dragged.
 
 1. Click the **Tools** window's own X — it is the topmost one.
 2. Pick up an item from the ground, or run `/bos refresh`.

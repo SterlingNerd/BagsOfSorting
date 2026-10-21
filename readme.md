@@ -5,9 +5,9 @@ separate bag windows, each split into labeled sections, plus user-defined custom
 fixes the thing Baggins is bad at: configuring it.
 
 Status: **prototype (M0 + M1 done, M2 in progress).** The pipeline runs — harvest → enrich →
-classify → assign → sort → render — on the Forever client, and renders three windows (Backpack,
-Quests, Tools) stacked above the client's bags bar. The configuration UI that is this project's
-reason to exist is still spec. Start with
+classify → assign → sort → render — on the Forever client, and renders five windows (Backpack,
+Quests, Consumables, Tradeskills, Tools) stacked above the client's bags bar. The configuration UI
+that is this project's reason to exist is still spec. Start with
 [`docs/00-vision-and-scope.md`](docs/00-vision-and-scope.md), review
 [`docs/02-requirements.md`](docs/02-requirements.md) and
 [`docs/05-config-ui.md`](docs/05-config-ui.md) (the two docs that decide whether this is worth
@@ -16,7 +16,7 @@ building), then [`docs/06-milestones.md`](docs/06-milestones.md) for the build o
 ### What exists today
 
 ```bash
-lua5.1 tests/run.lua   # 58 headless checks: rule grammar, precedence, sort modes, flow, pipeline
+lua5.1 tests/run.lua   # 168 headless checks: rule grammar, precedence, sort modes, flow, pipeline
 luacheck .             # CI runs both
 ```
 

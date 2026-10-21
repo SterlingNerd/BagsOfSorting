@@ -145,10 +145,13 @@ probes[2] = function()
   record('total container slots', total)
 end
 
-local BANK_EVENTS = {
+-- The client's interaction windows and the container traffic around them. Issue #9 filled the bank
+-- half; issue #38 added the vendor half.
+local INTERACTION_EVENTS = {
   'BANKFRAME_OPENED', 'BANKFRAME_CLOSED', 'PLAYERBANKSLOTS_CHANGED',
   'BANK_TABS_CHANGED', 'BANK_BAG_SLOT_FLAGS_UPDATED', 'BANK_TAB_SETTINGS_UPDATED',
   'PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED', 'ITEM_LOCK_CHANGED', 'BAG_UPDATE',
+  'MERCHANT_SHOW', 'MERCHANT_CLOSED',
 }
 
 --- PLAYERBANKSLOTS_CHANGED carries a **bank bag slot number 1..9**, not a container index (measured
@@ -190,7 +193,7 @@ probes[3] = function()
     record(string.format('#%d %s %s', count, event, table.concat(args, ' ')))
     if event == 'PLAYERBANKSLOTS_CHANGED' then diag.ExplainBankSlot((...)) end
   end)
-  for _, name in ipairs(BANK_EVENTS) do bankLogger:RegisterEvent(name) end
+  for _, name in ipairs(INTERACTION_EVENTS) do bankLogger:RegisterEvent(name) end
   record('bank event logging on — one action at a time, then run the log helper again to stop')
 end
 
@@ -464,6 +467,27 @@ probes[17] = function()
   end
 end
 
+--- bags — who is showing bags right now (issue #38). Blizzard's bag windows, ours, the two
+--- interaction windows, and whether the suppression rule is currently active. Read-only.
+probes[22] = function()
+  if not inTest then fresh('bags') end
+  local interactions = addon:GetModule('Interactions')
+  local windowFrames = addon:GetModule('WindowFrames')
+
+  local combined = _G.ContainerFrameCombinedBags
+  record('ContainerFrameCombinedBags', combined and tostring(combined:IsShown()) or 'no global')
+  local shown = {}
+  for i = 1, NUM_TOTAL_BAG_FRAMES or (NUM_TOTAL_EQUIPPED_BAG_SLOTS or 5) do
+    local frame = _G['ContainerFrame' .. i]
+    if frame and frame:IsShown() then shown[#shown + 1] = tostring(i) end
+  end
+  record('ContainerFrame1..N shown', #shown, table.concat(shown, ','))
+  record('MerchantFrame', _G.MerchantFrame and tostring(_G.MerchantFrame:IsShown()) or 'no global')
+  record('BankFrame', BankFrame and tostring(BankFrame:IsShown()) or 'no global')
+  record('our windows shown', windowFrames.Count(),
+    'suppression', interactions and tostring(interactions.Suppressing()) or 'no module')
+end
+
 --- newitems — what the client's own new-item list actually holds (issue #35). The acceptance
 --- criterion is "nothing is new at login", and only the client can say what it flags. Read-only:
 --- IsNewItem reads a list, it builds nothing (agents.md hard rule 8).
@@ -715,7 +739,7 @@ local HELPERS = {
   dump = probes[2], log = probes[3], keybind = probes[7], newitem = probes[11],
   clock = probes[13], expansion = probes[14], flags = flagsScan, windows = probes[16],
   freeslots = probes[17], newitems = probes[18], portrait = probes[19],
-  subclasses = probes[20], owners = probes[21],
+  subclasses = probes[20], owners = probes[21], bags = probes[22],
 }
 
 -- ---------------------------------------------------------------------------
@@ -741,6 +765,35 @@ local tests = {
       { text = 'open a BetterBags window during combat' },
       { text = 'close that window' },
       { text = 'capture: stop event logging', run = probes[3] },
+    },
+  },
+  [38] = {
+    issue = 38,
+    what = 'our bags at a vendor and at the bank',
+    needs = 'a vendor you can reach, the bank reachable, our windows closed when you start',
+    steps = {
+      { text = 'setup: who is showing bags, then start event logging', run = function()
+          probes[22]()
+          probes[3]()
+        end },
+      { text = 'talk to a vendor and open the vendor window' },
+      { text = 'capture: who is showing bags at the vendor', run = probes[22] },
+      { text = 'buy one item from the vendor' },
+      { text = 'sell one item out of one of our windows' },
+      { text = 'close the vendor window' },
+      { text = 'capture: who is showing bags after the vendor', run = probes[22] },
+      { text = 'press B to open the bags yourself' },
+      { text = 'capture: who is showing bags after your own open', run = probes[22] },
+      { text = 'press B again to close them' },
+      { text = 'walk to the bank and open the bank window' },
+      { text = 'capture: who is showing bags at the bank', run = probes[22] },
+      { text = 'deposit one item into the bank grid' },
+      { text = 'withdraw it back into your bags' },
+      { text = 'close the bank window' },
+      { text = 'capture: who is showing bags after the bank, then stop event logging', run = function()
+          probes[22]()
+          probes[3]()
+        end },
     },
   },
 }
@@ -852,7 +905,7 @@ function diag.Command(rest)
     print(string.format('  %d  %s  —  %s', t.id, t.what, t.needs))
   end
   print('helpers: dump · log · flags · keybind · newitem · newitems · clock · expansion · windows · '
-    .. 'freeslots · portrait · subclasses · owners')
+    .. 'freeslots · portrait · subclasses · owners · bags')
 end
 
 return diag

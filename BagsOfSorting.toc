@@ -58,5 +58,9 @@ config\settingspanel.lua
 
 integrations\compartment.lua
 
+# core/interactions.lua is core wiring, but it loads after the frames layer because it drives it:
+# it opens and closes our windows when the client opens a vendor or the bank (issue #38).
+core\interactions.lua
+
 core\diag.lua
 core\init.lua

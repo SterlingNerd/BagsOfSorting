@@ -43,6 +43,8 @@ globals = {
     "ItemButtonUtil",
     "ContainerFrameSettingsManager",
     "ContainerFrameCombinedBags",
+    "OpenAllBags",
+    "hooksecurefunc",
     "BankFrame",
     "GetBindingKey",
     "GetCurrentBindingSet",

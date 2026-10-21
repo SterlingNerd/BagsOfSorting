@@ -30,6 +30,38 @@ _G.Enum = {
   },
 }
 
+-- Issue #38 stands-ins. Off the client there is no FrameXML, so the frames Blizzard owns and the
+-- global calls a vendor and the bank make are replaced by tables that remember being hidden.
+_G.InCombatLockdown = function() return false end
+
+local function fakeFrame(name)
+  return {
+    shown = true,
+    GetName = function(self) return name end,
+    IsShown = function(self) return self.shown end,
+    Show = function(self) self.shown = true end,
+    Hide = function(self) self.shown = false end,
+  }
+end
+
+_G.ContainerFrameCombinedBags = fakeFrame('ContainerFrameCombinedBags')
+_G.ContainerFrame1 = fakeFrame('ContainerFrame1')
+
+--- Blizzard's own "show every bag", and hooksecurefunc's semantics: the hook runs after the
+--- original, with the same arguments.
+_G.OpenAllBags = function()
+  _G.ContainerFrameCombinedBags:Show()
+  _G.ContainerFrame1:Show()
+end
+_G.hooksecurefunc = function(name, hook)
+  local original = _G[name]
+  _G[name] = function(...)
+    local results = { original(...) }
+    hook(...)
+    return unpack(results)
+  end
+end
+
 local ORDER = {
   'core/boot.lua',
   'core/log.lua',
@@ -53,12 +85,18 @@ local ORDER = {
   'layout/flow.lua',
   'layout/anchors.lua',
   'config/keybinds.lua',
+  'core/interactions.lua',
   'core/diag.lua',
   'tests/fixtures.lua',
   'tests/selftest.lua',
 }
 
 local addon = {}
+-- The frames layer is not loaded off the client (docs/03: phases 1-7 never touch a frame), so the
+-- one frames call issue #38 wires gets a counting stand-in. boot.lua keeps a table already here.
+local windowFramesStandIn = { hides = 0 }
+windowFramesStandIn.HideAll = function() windowFramesStandIn.hides = windowFramesStandIn.hides + 1 end
+addon.modules = { WindowFrames = windowFramesStandIn }
 for _, path in ipairs(ORDER) do
   local chunk, err = loadfile(path)
   if not chunk then
@@ -668,6 +706,104 @@ local function testEmptyWindowCollapses()
 end
 
 testEmptyWindowCollapses()
+
+-- Issue #38: a vendor or the bank opens our windows instead of Blizzard's bag window, and closing
+-- the interaction closes the windows it opened. Blizzard's own panels already open and close its
+-- bags around an interaction (MerchantFrame.lua:149/:163, BankFrameTemplates.lua:99/:104), so the
+-- only thing changed is who is showing them.
+local interactions = addon.modules['Interactions']
+local windowFramesStub = addon.modules['WindowFrames']
+local combined = _G.ContainerFrameCombinedBags
+local individual = _G.ContainerFrame1
+local eventsMod = addon.modules['Events']
+
+local function blizzardOpensBags() OpenAllBags() end
+
+local function testVendorOpensOurBags()
+  local db = addon.modules['DB']
+  db.SetWindowsOpen(false)
+  pipeline.Refresh('38-vendor-start')
+  blizzardOpensBags()
+  check('start state: Blizzard bags shown, ours closed',
+    tostring(combined.shown) .. '/' .. #pipeline.Model(), 'true/0')
+
+  eventsMod.Emit('MERCHANT_SHOW')
+  check('a vendor opens our windows', #pipeline.Model(), 5)
+  check('a vendor hides Blizzard bag window', combined.shown, false)
+  check('suppression is on while the vendor is open', interactions.Suppressing(), true)
+
+  -- MerchantFrame_OnShow calls OpenAllBags after the MERCHANT_SHOW event we react to.
+  blizzardOpensBags()
+  check('Blizzard re-opening its bags in its own OnShow is hidden again', combined.shown, false)
+  check('and the individual container frames with it', individual.shown, false)
+
+  eventsMod.Emit('MERCHANT_CLOSED')
+  check('closing the vendor hides the windows it opened', windowFramesStub.hides, 1)
+  pipeline.Refresh('38-after-vendor')
+  check('and no refresh brings them back', #pipeline.Model(), 0)
+  check('suppression is off once the vendor is closed', interactions.Suppressing(), false)
+
+  blizzardOpensBags()
+  check('outside an interaction Blizzard keeps its bags', combined.shown, true)
+  check('and the individual frames too', individual.shown, true)
+end
+
+testVendorOpensOurBags()
+
+-- The negative half: windows the player opened themselves are not the interaction's to close.
+local function testInteractionLeavesPlayerWindowsAlone()
+  local db = addon.modules['DB']
+  db.SetWindowsOpen(true)
+  pipeline.Refresh('38-player-open')
+  local hides = windowFramesStub.hides
+  eventsMod.Emit('MERCHANT_SHOW')
+  check('a vendor does not re-open or re-close what the player already opened',
+    windowFramesStub.hides - hides, 0)
+  eventsMod.Emit('MERCHANT_CLOSED')
+  check('closing the vendor leaves the player windows open', #pipeline.Model(), 5)
+  check('and nothing was hidden on the way out', windowFramesStub.hides - hides, 0)
+end
+
+testInteractionLeavesPlayerWindowsAlone()
+
+-- The bank, including the ordering measured on issue #9: a BANKFRAME_CLOSED lands immediately
+-- before the BANKFRAME_OPENED that opens it.
+local function testBankOpensOurBags()
+  local db = addon.modules['DB']
+  db.SetWindowsOpen(false)
+  pipeline.Refresh('38-bank-start')
+  blizzardOpensBags()
+  eventsMod.Emit('BANKFRAME_CLOSED')
+  check('the stray BANKFRAME_CLOSED before an opening opens nothing', #pipeline.Model(), 0)
+  eventsMod.Emit('BANKFRAME_OPENED')
+  check('the bank opens our windows', #pipeline.Model(), 5)
+  check('and hides Blizzard bag window', combined.shown, false)
+  eventsMod.Emit('BANKFRAME_CLOSED')
+  check('closing the bank hides the windows it opened', windowFramesStub.hides, 2)
+  pipeline.Refresh('38-after-bank')
+  check('and no refresh brings them back', #pipeline.Model(), 0)
+end
+
+testBankOpensOurBags()
+
+-- Hard rule 2: Blizzard's container frames are Blizzard's to hide during a combat lockdown. Ours
+-- still open — the render half is already deferred by core/init.lua.
+local function testNoHidingInCombat()
+  local db = addon.modules['DB']
+  db.SetWindowsOpen(false)
+  pipeline.Refresh('38-combat-start')
+  blizzardOpensBags()
+  _G.InCombatLockdown = function() return true end
+  eventsMod.Emit('BANKFRAME_OPENED')
+  check('a bank opened in combat still opens our windows', #pipeline.Model(), 5)
+  check('and leaves Blizzard bag window shown', combined.shown, true)
+  blizzardOpensBags()
+  check('the OpenAllBags hook hides nothing during lockdown either', combined.shown, true)
+  _G.InCombatLockdown = function() return false end
+  eventsMod.Emit('BANKFRAME_CLOSED')
+end
+
+testNoHidingInCombat()
 
 for _, failure in ipairs(failures) do
   print('FAIL ' .. failure)

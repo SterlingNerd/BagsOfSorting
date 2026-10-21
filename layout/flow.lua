@@ -71,7 +71,11 @@ function flow.Layout(window)
   end
 
   window.width = math.max(widest, maxColumns * CELL) + constants.WINDOW_PADDING * 2
-  window.height = constants.WINDOW_TITLE_HEIGHT + math.max(contentHeight, CELL)
+  -- Issue #43: with nothing in it a window is its title band and nothing more. The old floor of one
+  -- blank cell drew a body for a block that holds nothing. The window still exists and still takes its
+  -- slot in the column (#28 decision 2); it only stops drawing empty space. The shorter frame is what
+  -- frames/window.lua clips the border art for (#31).
+  window.height = constants.WINDOW_TITLE_HEIGHT + contentHeight
     + constants.WINDOW_PADDING + (window.showMoney and constants.MONEY_BAR_SPACE or 0)
   return window
 end

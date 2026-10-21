@@ -52,6 +52,7 @@ globals = {
     "BINDING_NAME_BAGSOF_SORTING_TOGGLE",
     "IconDataProviderMixin",
     "EditModeManagerFrame",
+    "NineSliceUtil",
     "IsUsingCombinedBags",
     "C_Bank",
 

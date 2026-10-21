@@ -105,16 +105,17 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 **Expected:** our windows' right edge sits just left of the client backpack window's right edge, with a visible gap between our windows and the screen edge; Quests, Consumables, Tradeskills and Tools stack above it with the same gap between each pair and no window overlapping another; no bag button and no micro-bar button is covered; the backpack button still opens Blizzard's bags. `/bos test windows` prints the anchor frame, its bottom and right, the screen size, and each frame's own right edge — the margin as a number rather than an impression. Measured 2026-10-20 against the **bag bar**: the stack started 317 px up the screen with no margin on a vertical bar — that anchor was issue **#30**, resolved.
 
-### Manual test: a window with nothing in it still renders (issue #28 decision 2)
+### Manual test: a window with nothing in it collapses to its title bar and icon (issue #28 decision 2, #43)
 
 **Precondition:** five windows shown; Mining Pick (2901) and Hearthstone (6948) are the only items the Tools category matches, and the bank is reachable.
 
-1. Deposit 2901 and 6948 in the bank.
-2. Run `/bos refresh`.
-3. Look at the Tools window: its title, its side borders, and its top edge.
-4. Withdraw them back.
+1. Run `/bos test 43` and follow the sheet top to bottom.
+2. Deposit 2901 in the bank.
+3. Deposit 6948 in the bank.
+4. Look at the Tools window: its title, the bag medallion, its side borders and its top edge.
+5. Withdraw 2901 back into a bag.
 
-**Expected:** the Tools window is still on screen, still 206 wide, with its title and its full border drawn **inside** its own rectangle — no border art above the top edge, no side border clipped. `/bos test windows` reports `sections=0` for it and the column still gives it a slot. Open defect: at 72 px tall the template's chrome draws outside the window (`docs/reference/empty-window-chrome-clipped.png`, **issue #31**).
+**Expected:** the Tools window is still on screen and still 206 wide, but it is **48 px tall** — its title band and the bag medallion, and nothing below them. No blank slot cell, no grid, no body. Its border is drawn inside its own rectangle: no side border reaching above the top edge, no corner clipped, and nothing of the left border over the medallion. `/bos test windows` reports `sections=0` for it and the column still gives it a slot. Step 5 puts the grid back at the same width with the corners intact. The collapse is asserted off-client in `tests/run.lua` and `tests/selftest.lua`; the chrome geometry — the ring, the bottom corners and the left edge, on our windows and on Blizzard's own bag window in the same run — is what `/bos test 43` captures for **issue #31**.
 
 ### Manual test: the window drags by its body, and the position persists (FR-41, section mouse fix)
 

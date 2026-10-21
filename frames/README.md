@@ -26,3 +26,15 @@ order inside a window is Blizzard's: background, content, portrait, border, titl
 are the only lever. Where a window overlaps Blizzard's own bag window, **Blizzard's draws on top** — its
 chrome carries the same 400/500/510 numbers and its window is `toplevel` — and that is the accepted
 behaviour, not a bug to chase: the client's bags stay reachable (FR-51).
+
+
+## The border art fits the window it is drawn on
+
+`HeldBagLayout`'s top-left corner — the portrait ring — hangs 16 px above the frame's top edge and its
+bottom corners hang 3 px below the bottom edge, so a short window runs out of room for its own border:
+the `LeftEdge`, anchored corner to corner, inverts and the bottom corner art reaches up over the
+medallion. `windows.Render` calls `NineSliceUtil.UpdateCornerCropping` after every `SetSize`, which is
+what `ContainerFrameMixin:UpdateFrameSize` does for the client's own bag windows
+(`origin/forever` `ContainerFrame.lua:992`, `Blizzard_SharedXML/NineSlice.lua:263`). It clips the bottom
+corners to whatever the height allows and restores them when the window grows (issue #43, issue #31).
+Source-verified; the geometry on our own windows is the `/bos test 43` capture.

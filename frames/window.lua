@@ -243,6 +243,15 @@ function windows.Render(model)
   frame.TitleContainer.TitleText:SetText(model.name)
   frame:SetScale(model.scale or 1)
   frame:SetSize(model.width, model.height)
+  -- Issue #43/#31: the client's own answer to a window shorter than its own border art. In
+  -- `HeldBagLayout` the top-left corner (the portrait ring) hangs 16 px above the frame's top edge and
+  -- the bottom corners hang 3 px below its bottom edge; when the two meet, the LeftEdge — anchored
+  -- corner-to-corner — inverts and the bottom corner art reaches up over the medallion. That is the
+  -- "left border above the bag icon" report, and it is why a collapsed window needs it most.
+  -- `ContainerFrameMixin:UpdateFrameSize` clips the bottom corners to fit (`ContainerFrame.lua:992`),
+  -- so we clip them the same way, on every resize. Reversible: a taller window re-reads the atlas and
+  -- restores the full corner.
+  NineSliceUtil.UpdateCornerCropping(frame, model.height)
 
   for i = #wf.sections + 1, #model.sections do
     wf.sections[i] = sectionFrames.Acquire()

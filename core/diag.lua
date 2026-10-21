@@ -528,6 +528,16 @@ local function chrome(label, frame)
   record('  ring', ring and tostring(ring:GetAtlas()) or '-', bounds(ring),
     'ring bottom below frame top', ring and tostring(frame:GetTop() - ring:GetBottom()) or '-')
 
+  -- Issue #43: the pieces a short window runs out of room for. The bottom corners hang 3 px below the
+  -- bottom edge and the LeftEdge is anchored between them and the ring, so when the three overlap the
+  -- edge inverts and the corner art reaches up over the medallion. UpdateCornerCropping clips the
+  -- corners; these bounds are what shows whether it did.
+  local nine = frame.NineSlice
+  record('  bottom corner', nine and bounds(nine.BottomLeftCorner),
+    'corner top above frame bottom', nine and nine.BottomLeftCorner
+      and tostring(nine.BottomLeftCorner:GetTop() - frame:GetBottom()) or '-',
+    'left edge', nine and bounds(nine.LeftEdge))
+
   local bg = frame.Bg
   record('  bg', bg and ('level ' .. tostring(bg:GetFrameLevel())) or 'none',
     'TopSection', face(bg and bg.TopSection), 'BottomEdge', face(bg and bg.BottomEdge),
@@ -731,6 +741,30 @@ local tests = {
       { text = 'capture: stop event logging', run = probes[3] },
     },
   },
+  [43] = {
+    issue = 43,
+    what = 'a window with nothing in it, and the border art that has to fit inside it',
+    needs = 'our windows shown; Mining Pick (2901) and Hearthstone (6948) are the only Tools items and the bank is reachable',
+    steps = {
+      { text = 'setup: show our windows and report each one\'s size and section count', run = function()
+          local windows = addon:GetModule('WindowFrames')
+          windows.ShowPainted()
+          for _, window in ipairs(addon:GetModule('Pipeline').Model() or {}) do
+            local frame = _G['BagsOfSortingWindow' .. window.id]
+            record('window', window.id, window.name, 'sections', #window.sections, 'size',
+              frame and string.format('%dx%d', frame:GetWidth(), frame:GetHeight()) or '-')
+          end
+        end },
+      { text = 'deposit 2901 in the bank' },
+      { text = 'deposit 6948 in the bank' },
+      { text = 'capture: chrome geometry on every window, collapsed', run = probes[19] },
+      { text = 'look: does the empty Tools window show its title band and the bag medallion only, with no body cell and no border art over the medallion?' },
+      { text = 'withdraw 2901 back into a bag' },
+      { text = 'capture: chrome geometry on every window, expanded', run = probes[19] },
+      { text = 'look: is the grid back with no leftover border art at the corners?' },
+    },
+  },
+
 }
 
 local function letterOf(n) return string.char(96 + n) end

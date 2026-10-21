@@ -778,26 +778,6 @@ local tests = {
       { text = 'capture: stop event logging', run = probes[3] },
     },
   },
-  [38] = {
-    issue = 38,
-    what = 'the leftover frame: every Blizzard container window closes at a vendor (round 3)',
-    needs = 'a vendor within reach, the tradeskill bag equipped, Blizzard bags open before you start (CTRL-B here, not B)',
-    steps = {
-      { text = 'setup: which container frames exist and are shown, then start event logging', run = function()
-          probes[22]()
-          probes[3]()
-        end },
-      { text = 'press CTRL-B to open Blizzard bags' },
-      { text = 'capture: which frames are open before the vendor', run = probes[22] },
-      { text = 'talk to a vendor and open the vendor window' },
-      { text = 'capture: which frames are open at the vendor', run = probes[22] },
-      { text = 'close the vendor window' },
-      { text = 'capture: which frames are open after it, then stop event logging', run = function()
-          probes[22]()
-          probes[3]()
-        end },
-    },
-  },
 }
 
 local function letterOf(n) return string.char(96 + n) end

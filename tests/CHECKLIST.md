@@ -105,17 +105,17 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 **Expected:** our windows' right edge sits just left of the client backpack window's right edge, with a visible gap between our windows and the screen edge; Quests, Consumables, Tradeskills and Tools stack above it with the same gap between each pair and no window overlapping another; no bag button and no micro-bar button is covered; the backpack button still opens Blizzard's bags. `/bos test windows` prints the anchor frame, its bottom and right, the screen size, and each frame's own right edge — the margin as a number rather than an impression. Measured 2026-10-20 against the **bag bar**: the stack started 317 px up the screen with no margin on a vertical bar — that anchor was issue **#30**, resolved.
 
-### Manual test: a window with nothing in it collapses to its title bar and icon (issue #28 decision 2, #43)
+### Manual test: a window with nothing in it draws no body (issue #28 decision 2, #43)
 
 **Precondition:** five windows shown; Mining Pick (2901) and Hearthstone (6948) are the only items the Tools category matches, and the bank is reachable.
 
 1. Run `/bos test 43` and follow the sheet top to bottom.
 2. Deposit 2901 in the bank.
 3. Deposit 6948 in the bank.
-4. Look at the Tools window and the window directly below it: the collapsed window's title band, its medallion, its top and bottom edges, and its left and right sides.
+4. Look at the Tools window and the window directly below it: the collapsed window's title band, its medallion and arm, its corners, its top and bottom edges.
 5. Withdraw 2901 back into a bag.
 
-**Expected:** the Tools window is still on screen and still 206 wide, but **48 px tall** — its title band, the round bag icon, its top and bottom edges, and nothing below them. No blank slot cell, no grid, no body, and **no corner art**: the capture prints `ring … shown false` and `bottom corner … shown false` for it and `shown true` for every window at least 95 px tall, which is the height the art needs (the ring is 95x94 and reaches 79 px below the window's top edge). Nothing of the collapsed window reaches into the window below it. Step 5 puts the grid back at the same width with the medallion, the arm and the corners drawn again. The collapse is asserted off-client in `tests/run.lua` and `tests/selftest.lua`; the chrome geometry — ring, bottom corner, left edge, shown state, on our windows and on Blizzard's own bag window in the same run — is what `/bos test 43` captures for **issue #31**.
+**Expected:** the Tools window is still on screen, still 206 wide, and **95 px tall** — `constants.WINDOW_CHROME_HEIGHT`, the height the client's own bag chrome measures end to end. No blank slot cell, no grid, no body. Its medallion, its arm and all four corners are drawn: the capture prints `ring … shown true` and `bottom corner 95x24 … shown true` for it, against 32 px of corner on the 103-tall Backpack and 100 px on the 171-tall Tradeskills. **Its arm does reach past its own bottom edge into the window below** — 79 px of arm on a 95 px window, 16 px of the next window's arm above its own top edge, 8 px of gap — and that overlap is accepted until the art itself is edited. Step 5 puts the grid back at the same width. The height and the no-body rule are asserted off-client in `tests/run.lua` and `tests/selftest.lua`; the chrome geometry — ring, bottom corner, left edge, shown state, on our windows and on Blizzard's own bag window in the same run — is what `/bos test 43` captures for **issue #31**.
 
 ### Manual test: the window drags by its body, and the position persists (FR-41, section mouse fix)
 

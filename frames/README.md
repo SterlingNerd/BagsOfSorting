@@ -28,7 +28,7 @@ chrome carries the same 400/500/510 numbers and its window is `toplevel` — and
 behaviour, not a bug to chase: the client's bags stay reachable (FR-51).
 
 
-## The border art is 95 px tall, and a shorter window hides it
+## The border art is 95 px tall, and the window is floored at it
 
 Measured on the live client (`/bos test 43`, 2026-10-20 and 2026-10-21). `HeldBagLayout`'s top-left
 corner — the portrait ring — renders **95x94**, its top 16 px above the window's top edge and its bottom
@@ -39,10 +39,12 @@ not edges.
 `windows.Render` calls `NineSliceUtil.UpdateCornerCropping` after every `SetSize` — the call
 `ContainerFrameMixin:UpdateFrameSize` makes for the client's own bag windows (`ContainerFrame.lua:992`,
 `NineSlice.lua:263`) — which leaves `height + 19 − 90` of bottom corner: 32 px on a 103-tall window, 39 on
-110, 77 on 147, 100 on 171. The crop is capped at the corner's own atlas height (`NineSlice.lua:253`) and a
-corner cropped to nothing renders at its **full** size: the 48 px collapsed window measured 95x512.
+110, 77 on 147, 100 on 171. Without that call every window draws its bottom corners at their full 512 px
+atlas. The crop is capped at the corner's own atlas height (`NineSlice.lua:253`), so below 72 px there is
+no valid bottom corner at all — the shrink needed exceeds the whole corner, and a corner the client cannot
+shrink renders at full size.
 
-So below `CHROME_HEIGHT = 95` the four corner pieces are hidden instead: the window keeps its top and
-bottom edges, the panel's own `FlatPanelBackgroundTemplate` art and the round masked bag icon. The ring and
-its arm are one texture, so the medallion cannot be kept without the arm running past the bottom of the
-window and into the one below it (issue #43, issue #31).
+So the height is floored instead of the art clipped: `constants.WINDOW_CHROME_HEIGHT = 95` is the art's own
+extent, and `layout/flow.lua` measures every window against it. A window shorter than 95 px has its arm
+hanging past its own bottom edge and into the window below — known, accepted, and open for the art edit
+that would fix it (issue #43, issue #31).

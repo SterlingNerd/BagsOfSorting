@@ -71,12 +71,13 @@ function flow.Layout(window)
   end
 
   window.width = math.max(widest, maxColumns * CELL) + constants.WINDOW_PADDING * 2
-  -- Issue #43: with nothing in it a window is its title band and nothing more. The old floor of one
-  -- blank cell drew a body for a block that holds nothing. The window still exists and still takes its
-  -- slot in the column (#28 decision 2); it only stops drawing empty space. The shorter frame is what
-  -- frames/window.lua clips the border art for (#31).
-  window.height = constants.WINDOW_TITLE_HEIGHT + contentHeight
-    + constants.WINDOW_PADDING + (window.showMoney and constants.MONEY_BAR_SPACE or 0)
+  -- Issue #43: with nothing in it a window is its title band and nothing more — no blank cell, no body,
+  -- no grid. The floor under it is the chrome, not a body cell: the art `HeldBagLayout` draws is 95 px
+  -- end to end and the client cannot shrink its bottom corners below 72 px at all. The window still
+  -- exists and still takes its slot in the column (#28 decision 2).
+  window.height = math.max(constants.WINDOW_CHROME_HEIGHT,
+    constants.WINDOW_TITLE_HEIGHT + contentHeight
+      + constants.WINDOW_PADDING + (window.showMoney and constants.MONEY_BAR_SPACE or 0))
   return window
 end
 

@@ -100,16 +100,6 @@ local BAG_PORTRAIT = 'Interface/Icons/Inv_misc_bag_08'  -- what ContainerFrameCo
 --- is Blizzard's own: background, content, portrait, border, title.
 local CONTENT_BASE = 300
 
---- Measured 2026-10-21 (`/bos test 43`): the corner art `HeldBagLayout` draws is 95 px end to end — the
---- ring renders 95x94 with its bottom 79 px below the window's top edge and its top 16 px above it — so a
---- window shorter than 95 px cannot hold its own frame. The medallion's arm runs out of the bottom of the
---- window and down into the window below it. `UpdateCornerCropping` cannot help there: its shrink is
---- capped at the corner's own atlas height (`NineSlice.lua:253`) and a corner cropped to nothing renders
---- at its full size, 95x512 on the 48 px collapsed window. Below that height the corner art is hidden and
---- the window keeps its top and bottom edges, the panel's own FlatPanelBackgroundTemplate, and the round
---- masked bag icon.
-local CHROME_HEIGHT = 95
-
 ---@param frame Frame
 local function bagChrome(frame)
   -- The template's own OnLoad already drew the full-size ring from its `layoutType` KeyValue, so the
@@ -253,23 +243,15 @@ function windows.Render(model)
   frame.TitleContainer.TitleText:SetText(model.name)
   frame:SetScale(model.scale or 1)
   frame:SetSize(model.width, model.height)
-  -- Issue #31/#43: the client's own answer to a window shorter than its border art, and the hole in it.
-  -- `UpdateCornerCropping` shrinks the bottom corners so they and the portrait ring exactly share the
-  -- frame's art extent — `ContainerFrameMixin:UpdateFrameSize` calls it the same way (`ContainerFrame.lua:992`).
-  -- Measured 2026-10-20 (`/bos test 43`): the ring renders 95x94 and reaches 79 px below a window's top
-  -- edge, the LeftEdge/RightEdge come back 95x0 on every window we render, and the crop is capped at the
-  -- corner's own atlas height (`NineSlice.lua:253`) — a corner cropped to nothing then renders at its
-  -- full size, 95x512 on the 48 px collapsed window, a border strip down the side of the window and over
-  -- the one below it. A corner taller than the window it is drawn on is not a corner, so below that
-  -- point the side art is hidden rather than clipped: the panel's own FlatPanelBackgroundTemplate frames
-  -- the body, and the top edge, the top corners and the medallion stay.
+  -- Issue #31/#43: the client's own answer to a window shorter than its border art — the same call
+  -- `ContainerFrameMixin:UpdateFrameSize` makes (`ContainerFrame.lua:992`). Without it every window we
+  -- render draws its bottom corners at their full 512 px atlas. Measured 2026-10-20/21 (`/bos test 43`):
+  -- the ring renders 95x94 and reaches 79 px below a window's top edge, the LeftEdge/RightEdge come back
+  -- 95x0 on every window, and the crop leaves `height + 19 − 90` of bottom corner — 32 px on a 103-tall
+  -- window, 100 on a 171-tall one. The crop is capped at the corner's own atlas height (`NineSlice.lua:253`)
+  -- and a corner it cannot shrink renders at full size, which is why `constants.WINDOW_CHROME_HEIGHT` is
+  -- the floor `layout/flow.lua` measures the height against rather than a shorter window with clipped art.
   NineSliceUtil.UpdateCornerCropping(frame, model.height)
-  local chromeFits = model.height >= CHROME_HEIGHT
-  local nine = frame.NineSlice
-  nine.TopLeftCorner:SetShown(chromeFits)
-  nine.TopRightCorner:SetShown(chromeFits)
-  nine.BottomLeftCorner:SetShown(chromeFits)
-  nine.BottomRightCorner:SetShown(chromeFits)
 
   for i = #wf.sections + 1, #model.sections do
     wf.sections[i] = sectionFrames.Acquire()

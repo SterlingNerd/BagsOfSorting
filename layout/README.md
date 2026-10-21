@@ -4,9 +4,10 @@
 content (FR-40). A window that carries a free-slot count gets one more cell at the end of its
 column, and `emptyOffsetY` is where the frames layer draws it (issue #36).
 
-A window with nothing in it is its title band and nothing more (issue #43): no blank cell, no body, no
-grid. It still exists and still takes its slot in the column (#28 decision 2), and it grows back the
-moment a category gives it an item.
+A window with nothing in it draws no body — no blank cell, no grid — and its height is floored at
+`constants.WINDOW_CHROME_HEIGHT`, the 95 px the client's own bag chrome measures end to end (issue #43).
+It still exists and still takes its slot in the column (#28 decision 2), and it grows the moment a
+category gives it an item.
 
 `anchors.lua` places the windows themselves (FR-41, `docs/07` Q24): a stack that grows upward from
 the client's own bag window and wraps to a new column on the left when the next window will not fit,

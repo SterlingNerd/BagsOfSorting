@@ -43,6 +43,13 @@ constants.WINDOW_TITLE_HEIGHT = 40
 -- and the window's own padding covers 8 of that, so 17 px more is what the last row needs.
 constants.MONEY_BAR_SPACE = 17
 
+-- The bag chrome `HeldBagLayout` draws is 95 px end to end: the portrait ring renders 95x94 with its top
+-- 16 px above a window's top edge and its bottom 79 px below it (`/bos test 43`, 2026-10-21). A window
+-- shorter than this is shorter than its own frame art, and below 72 the client's corner crop fails
+-- outright — it would have to remove more than the whole corner, and a corner it cannot shrink renders
+-- at its full 512 px atlas. It is the floor a window's height is measured against.
+constants.WINDOW_CHROME_HEIGHT = 95
+
 -- docs/03: chunk phases 2-4 across frames above this many items.
 constants.ASYNC_ITEM_THRESHOLD = 60
 constants.ASYNC_ITEMS_PER_FRAME = 40

@@ -587,10 +587,10 @@ local giant = stack({ 2000 }, 1200, 45)
 check('a single window taller than the cap never gets a phantom column',
   giant[1].x .. '/' .. giant[1].y, '0/0')
 
--- Decision 2: an empty window still occupies a slot. 48 is what flow gives a window with no sections
--- once #43 collapses it to its title band.
-local empty = stack({ 40 + 8, 100 }, 1200, 45)
-check('an empty window still consumes its slot in the column', empty[2].y, (40 + 8) + GAP)
+-- Decision 2: an empty window still occupies a slot. 95 is what flow gives a window with no sections —
+-- the chrome floor, not a body cell (#43).
+local empty = stack({ 95, 100 }, 1200, 45)
+check('an empty window still consumes its slot in the column', empty[2].y, 95 + GAP)
 
 
 -- Issue #41's negative half. The shipped rules are disjoint — no item is type "Consumable" *and*
@@ -634,33 +634,37 @@ end
 
 testCategoryEnabled()
 
--- Issue #43: an empty window collapses to its title band and its bag medallion. It still draws and
--- still consumes its slot in the column (#28 decision 2); what it stops drawing is a body cell for a
--- block that holds nothing.
+-- Issue #43: an empty window draws no body — no blank cell, no grid — and its height is floored at the
+-- chrome the client's own bag layout needs (constants.WINDOW_CHROME_HEIGHT, measured 95 px). It still
+-- draws and still consumes its slot in the column (#28 decision 2).
 local function testEmptyWindowCollapses()
   local db = addon.modules['DB']
   local PADDING = 8 -- constants.WINDOW_PADDING
+  local CHROME = 95 -- constants.WINDOW_CHROME_HEIGHT
 
   check('disabling Tools empties its window', db.SetCategoryEnabled('Tools', false), true)
   pipeline.Refresh('empty-tools')
   local collapsed = windowIn(pipeline.Model(), 'Tools')
   check('the empty window is still in the model', collapsed ~= nil, true)
   check('it has no sections', #collapsed.sections, 0)
-  check('it collapses to the title band with no body cell', collapsed.height, TITLE + PADDING)
+  check('it is its chrome height, not chrome plus a body cell', collapsed.height, CHROME)
   check('it keeps its full width', collapsed.width, 5 * CELL + 2 * PADDING)
-  check('and it is not sized for a money band it does not carry', collapsed.showMoney, nil)
+  check('and it draws no cell', collapsed.emptyOffsetY, nil)
 
-  -- The negative half: items are content, and the window is sized for them again.
+  -- The negative half: items are content, and the window is sized for them again, above the floor.
   check('re-enabling Tools is a change', db.SetCategoryEnabled('Tools', true), true)
   pipeline.Refresh('tools-back')
   local full = windowIn(pipeline.Model(), 'Tools')
   check('the window expands back for its two items', full.height, TITLE + (18 + CELL) + 6 + PADDING)
 
-  -- The collapse keeps the bands the window actually carries.
+  -- The floor does not eat the bands a window with content carries.
   local flow = addon.modules['Flow']
-  local bare = flow.Layout({ id = 'w0', name = 'Bare', columns = 5, sections = {}, showMoney = true })
-  check('a collapsed window still reserves the money bar it carries', bare.height, TITLE + PADDING + MONEY)
-  check('and it draws no cell', bare.emptyOffsetY, nil)
+  local one = { { items = { { itemID = 1 } } } }
+  local money = flow.Layout({ id = 'm', name = 'm', columns = 5, showMoney = true, sections = one })
+  local plain = flow.Layout({ id = 'p', name = 'p', columns = 5, sections = one })
+  check('a window with content still reserves the money bar it carries', money.height - plain.height, MONEY)
+  check('and the floor is the chrome, not a row of slots',
+    flow.Layout({ id = 'e', name = 'e', columns = 5, showMoney = true, sections = {} }).height, CHROME)
 end
 
 testEmptyWindowCollapses()

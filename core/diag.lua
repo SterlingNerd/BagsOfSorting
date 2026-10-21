@@ -745,7 +745,7 @@ local tests = {
   },
   [43] = {
     issue = 43,
-    what = 'the collapsed window with its corner art hidden: what it still looks like, and what still overlaps the window below it',
+    what = 'the collapsed window at the 95 px chrome floor: its corners drawn, and how far its arm reaches into the window below',
     needs = 'our windows shown; Mining Pick (2901) and Hearthstone (6948) are the only Tools items and the bank is reachable',
     steps = {
       { text = 'setup: show our windows and report each one\'s size and section count', run = function()

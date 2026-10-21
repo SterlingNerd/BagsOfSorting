@@ -769,28 +769,27 @@ local tests = {
   },
   [38] = {
     issue = 38,
-    what = 'our bags at a vendor and at the bank',
-    needs = 'a vendor you can reach, the bank reachable, our windows closed when you start',
+    what = 'the hide itself: Blizzard bags open before a vendor (round 2)',
+    needs = 'a vendor within reach, our windows closed, Blizzard bag window OPEN (CTRL-B here, not B)',
     steps = {
       { text = 'setup: who is showing bags, then start event logging', run = function()
           probes[22]()
           probes[3]()
         end },
+      { text = 'press CTRL-B to open Blizzard bags' },
+      { text = 'capture: who is showing bags before the vendor', run = probes[22] },
       { text = 'talk to a vendor and open the vendor window' },
       { text = 'capture: who is showing bags at the vendor', run = probes[22] },
-      { text = 'buy one item from the vendor' },
-      { text = 'sell one item out of one of our windows' },
+      { text = 'capture: where our windows sit at the vendor', run = probes[16] },
+      { text = 'press CTRL-B to open Blizzard bags yourself while the vendor is open' },
+      { text = 'capture: who is showing bags after your own open at the vendor', run = probes[22] },
       { text = 'close the vendor window' },
       { text = 'capture: who is showing bags after the vendor', run = probes[22] },
-      { text = 'press B to open the bags yourself' },
-      { text = 'capture: who is showing bags after your own open', run = probes[22] },
-      { text = 'press B again to close them' },
-      { text = 'walk to the bank and open the bank window' },
-      { text = 'capture: who is showing bags at the bank', run = probes[22] },
-      { text = 'deposit one item into the bank grid' },
-      { text = 'withdraw it back into your bags' },
-      { text = 'close the bank window' },
-      { text = 'capture: who is showing bags after the bank, then stop event logging', run = function()
+      { text = 'type /bos hide' },
+      { text = 'open the vendor window again' },
+      { text = 'capture: who is showing bags at a vendor with our windows hidden', run = probes[22] },
+      { text = 'close the vendor window' },
+      { text = 'capture: who is showing bags after it, then stop event logging', run = function()
           probes[22]()
           probes[3]()
         end },

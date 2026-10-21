@@ -197,7 +197,10 @@ loss. A visible stock button is a cosmetic loss; a blocked `UseContainerItem` is
 **Taken on #38:** the hide exists and it is scoped to an interaction — a vendor or the bank open, our
 windows shown, Blizzard's bag windows hidden (`core/interactions.lua`). The bar is untouched. Whether
 the hide survives the live client — taint, a refused `UseContainerItem`, a vendor that still buys and
-sells — is `/bos test 38`.
+sells — measured in-game 2026-10-22 (`/bos test 38`): a vendor and the bank both open our windows and
+keep Blizzard's closed, closing either closes only what it opened, and buy, sell, deposit and withdraw
+all still work. No refused `UseContainerItem`, no blocked call. What the run never saw is Blizzard's
+bag window **open**, so the hide itself is still unobserved — round 2 starts with it open.
 
 **And borrow its position (`FR-41`).** Where the player put the bag bar *is* where they want their
 bags. Our windows anchor off `BagsBar` / `MainMenuBarBackpackButton` by default, so a fresh install

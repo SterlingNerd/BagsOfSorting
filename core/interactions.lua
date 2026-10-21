@@ -8,10 +8,13 @@
 -- interaction window is open" as "the bags are open".
 --
 -- The rule is the narrow one: **while one of those windows is open and our windows are shown,
--- Blizzard's bag windows stay closed and ours are open.** A deliberate open — the B key or a
--- bag-bar click — goes through `ToggleAllBags`, not `OpenAllBags`
--- (`Blizzard_MainMenuBarBagButtons/Shared/MainMenuBarBagButtons.lua:74,168`), so it is left alone
--- and the player can still reach the real bags at any time (FR-51).
+-- Blizzard's bag windows stay closed and ours are open.** Measured on the live client 2026-10-22
+-- (`/bos test 38`): a vendor and the bank both land on `our windows shown 5` with
+-- `ContainerFrameCombinedBags` closed, and closing either lands on ours closed. A deliberate open —
+-- whatever key the player has bound to `OPENALLBAGS` (on the test account that is CTRL-B; plain B is
+-- ours) or a bag-bar click — goes through `ToggleAllBags`, not `OpenAllBags`
+-- (`Blizzard_MainMenuBarBagButtons/Shared/MainMenuBarBagButtons.lua:74,168`), so it is left alone and
+-- the player can still reach the real bags at any time (FR-51).
 --
 -- docs/07 Q4 option B: we never replace Blizzard's bag functions. `hooksecurefunc` observes the
 -- call and never changes what it does.
@@ -67,6 +70,9 @@ local function onOpen(reason)
   local opening = not windowsOpen()
   if opening then db.SetWindowsOpen(true) end
   if not windowsOpen() then return end  -- a profile with no windows: leave Blizzard's bags alone
+  -- shortcut: an interaction opens our windows whenever none are open, so a player who chose
+  -- `/bos hide` gets them back at the next vendor. The answer is FR-51's vanilla/sorting toggle, not
+  -- a second flag (issue #38).
 
   -- Hide before the refresh. The stack anchors off Blizzard's bag window while it is shown, so a
   -- refresh placed before the hide lays the windows out against one corner and the next one against

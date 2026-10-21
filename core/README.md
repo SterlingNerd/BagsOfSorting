@@ -14,4 +14,5 @@ Infrastructure only: no inventory logic, no frames that display items.
 | `async.lua` | chunked work across frames with a per-frame budget (FR-102); stops ticking when idle |
 | `pool.lua` | object pools with double-free detection (FR-42) |
 | `db.lua` | SavedVariables, schema version + `Migrate()`, the Default profile seed (the M1 layout as data) |
+| `interactions.lua` | what our windows do when the client opens a vendor or the bank (issue #38): open ours, keep Blizzard's bag windows closed while that interaction is open, and close only the windows the interaction opened. Observes `OpenAllBags` with `hooksecurefunc`; replaces nothing (docs/07 Q4) |
 | `init.lua` | load/listen/enable wiring, combat deferral, `/bos` |

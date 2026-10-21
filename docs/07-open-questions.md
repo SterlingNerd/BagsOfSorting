@@ -98,6 +98,12 @@ native, and it is the most taint-prone code in either reference repo.
 question: we no longer need Blizzard's open functions to route to us, because we can give the player
 the real bags whenever they want them. Add **C** at M6 only if real conflicts appear. Never A in v1.
 
+**Taken on #38:** the narrow slice of C, observation only. `core/interactions.lua` `hooksecurefunc`s
+`OpenAllBags` — the call `MerchantFrame_OnShow` and `BankFrameBaseMixin:OnShow` both make — and hides
+Blizzard's bag windows while an interaction window is open and our windows are shown. Nothing is
+replaced, so `ToggleAllBags`, which is what the B key and a bag-bar click reach, still opens the real
+bags. A stays out of v1.
+
 **Taint note:** `ForeverPlus/Modules/BagWindow.lua` documents what happens when an addon calls
 `ContainerFrameSettingsManager:GetBagsShown()` on this client — Blizzard's bag code ran tainted until
 `UseContainerItem` was refused. Reading is not free.
@@ -187,6 +193,11 @@ Blizzard's *bag windows* while our windows are shown — hiding windows is a `Se
 are not using, which is a different risk class from reparenting a protected bar. Test at M2; if
 `SetShown` on container frames causes lockdown complaints, leave them visible and accept the cosmetic
 loss. A visible stock button is a cosmetic loss; a blocked `UseContainerItem` is a functional one.
+
+**Taken on #38:** the hide exists and it is scoped to an interaction — a vendor or the bank open, our
+windows shown, Blizzard's bag windows hidden (`core/interactions.lua`). The bar is untouched. Whether
+the hide survives the live client — taint, a refused `UseContainerItem`, a vendor that still buys and
+sells — is `/bos test 38`.
 
 **And borrow its position (`FR-41`).** Where the player put the bag bar *is* where they want their
 bags. Our windows anchor off `BagsBar` / `MainMenuBarBackpackButton` by default, so a fresh install

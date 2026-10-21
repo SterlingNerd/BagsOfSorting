@@ -492,6 +492,80 @@ probes[18] = function()
 end
 
 
+--- portrait — the window chrome issue #34 is about, measured on the client's own bag window and on
+--- ours in the same run. The opacity complaint and the overlap complaint are read off the same
+--- frames: the background pieces' own colour, and where the portrait and the ring actually sit
+--- against the window's top edge. Read-only: every call here reads a frame that already exists.
+local function face(t)
+  if not t then return 'none' end
+  local r, g, b, a = t:GetVertexColor()
+  local what = (t.GetColorTexture and t:GetColorTexture() and 'color') or t:GetAtlas() or t:GetTexture()
+  return string.format('%s rgba %.2f %.2f %.2f %.2f', tostring(what or 'no texture'), r, g, b, a)
+end
+
+local function bounds(f)
+  if not f then return '-' end
+  local left, bottom, width, height = f:GetAbsBounds()
+  return string.format('%dx%d @ %s,%s', tostring(width), tostring(height), tostring(left), tostring(bottom))
+end
+
+---@param label string
+---@param frame Frame?
+local function chrome(label, frame)
+  if not frame then record(label, 'frame: none') return end
+  record(label, bounds(frame), 'level', frame:GetFrameLevel(), 'strata', frame:GetFrameStrata())
+
+  local container = frame.PortraitContainer
+  local portrait = container and container.portrait
+  record('  portrait', bounds(portrait), 'texture', portrait and tostring(portrait:GetTexture()) or '-',
+    'mask', bounds(container and container.CircleMask))
+
+  -- The ring is the nine-slice's top-left corner piece: HeldBagLayout draws the small one, the plain
+  -- PortraitFrameTemplate layout draws the full-size one. Its bottom edge is what content has to clear.
+  local ring = frame.NineSlice and frame.NineSlice.TopLeftCorner
+  record('  ring', ring and tostring(ring:GetAtlas()) or '-', bounds(ring),
+    'ring bottom below frame top', ring and tostring(frame:GetTop() - ring:GetBottom()) or '-')
+
+  local bg = frame.Bg
+  record('  bg', bg and ('level ' .. tostring(bg:GetFrameLevel())) or 'none',
+    'TopSection', face(bg and bg.TopSection), 'BottomEdge', face(bg and bg.BottomEdge),
+    'BottomLeft', face(bg and bg.BottomLeft))
+
+  local title = frame.TitleContainer
+  record('  title', bounds(title), 'text', title and title.TitleText and title.TitleText:GetText() or '-')
+end
+
+probes[19] = function()
+  if not inTest then fresh('portrait') end
+  local constants = addon:GetModule('Constants')
+
+  local bag = _G.ContainerFrameCombinedBags
+  if bag and bag:IsShown() then
+    chrome('client bag window', bag)
+    local top
+    for _, button in ipairs(bag.Items or {}) do
+      if button and button:IsShown() and (not top or button:GetTop() > top) then top = button:GetTop() end
+    end
+    record('  client top gap', top and tostring(bag:GetTop() - top) or 'no visible item buttons')
+  else
+    record('client bag window: closed')
+  end
+
+  local models = addon:GetModule('Pipeline').Model()
+  if not models then record('no refresh has run yet') return end
+  for _, window in ipairs(models) do
+    local frame = _G['BagsOfSortingWindow' .. window.id]
+    chrome('our window ' .. window.id .. ' ' .. window.name, frame)
+    if frame and frame.PortraitContainer then
+      -- The two numbers that decide the overlap: where our content starts, and how far the portrait
+      -- reaches down. Content clears the portrait when the first is the larger.
+      record('  our content top', constants.WINDOW_TITLE_HEIGHT,
+        'portrait bottom below frame top',
+        tostring(frame:GetTop() - frame.PortraitContainer.portrait:GetBottom()))
+    end
+  end
+end
+
 --- Which container index holds this item? Answers "is the base grid a container?" with an item you
 --- can see and place on purpose, rather than with slot arithmetic. Read-only: `GetContainerItemInfo`
 --- reads, it builds nothing (agents.md hard rule 8).
@@ -540,7 +614,7 @@ end
 local HELPERS = {
   dump = probes[2], log = probes[3], keybind = probes[7], newitem = probes[11],
   clock = probes[13], expansion = probes[14], flags = flagsScan, windows = probes[16],
-  freeslots = probes[17], newitems = probes[18],
+  freeslots = probes[17], newitems = probes[18], portrait = probes[19],
 }
 
 -- ---------------------------------------------------------------------------
@@ -566,6 +640,23 @@ local tests = {
       { text = 'open a BetterBags window during combat' },
       { text = 'close that window' },
       { text = 'capture: stop event logging', run = probes[3] },
+    },
+  },
+  [34] = {
+    issue = 34,
+    what = 'window portrait, background and stacking against the client\'s own bag window',
+    needs = 'our three windows shown, and Blizzard\'s bag window open on the same screen',
+    steps = {
+      { text = 'setup: show our windows and report what is on screen', run = function()
+          local windows = addon:GetModule('WindowFrames')
+          windows.ShowPainted()
+          local bag = _G.ContainerFrameCombinedBags
+          record('our windows shown', windows.Count(),
+            'client bag window shown', tostring(bag and bag:IsShown()))
+        end },
+      { text = 'open Blizzard\'s bag window so it sits next to ours' },
+      { text = 'capture: portrait, ring, background and levels on both', run = probes[19] },
+      { text = 'look: does our ring clear the first section title, and is our body as opaque as the client\'s?' },
     },
   },
 }
@@ -676,7 +767,8 @@ function diag.Command(rest)
   for _, t in ipairs(pending) do
     print(string.format('  %d  %s  —  %s', t.id, t.what, t.needs))
   end
-  print('helpers: dump · log · flags · keybind · newitem · newitems · clock · expansion · windows · freeslots')
+  print('helpers: dump · log · flags · keybind · newitem · newitems · clock · expansion · windows · '
+    .. 'freeslots · portrait')
 end
 
 return diag

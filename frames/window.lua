@@ -100,6 +100,16 @@ local BAG_PORTRAIT = 'Interface/Icons/Inv_misc_bag_08'  -- what ContainerFrameCo
 --- is Blizzard's own: background, content, portrait, border, title.
 local CONTENT_BASE = 300
 
+--- Measured 2026-10-21 (`/bos test 43`): the corner art `HeldBagLayout` draws is 95 px end to end — the
+--- ring renders 95x94 with its bottom 79 px below the window's top edge and its top 16 px above it — so a
+--- window shorter than 95 px cannot hold its own frame. The medallion's arm runs out of the bottom of the
+--- window and down into the window below it. `UpdateCornerCropping` cannot help there: its shrink is
+--- capped at the corner's own atlas height (`NineSlice.lua:253`) and a corner cropped to nothing renders
+--- at its full size, 95x512 on the 48 px collapsed window. Below that height the corner art is hidden and
+--- the window keeps its top and bottom edges, the panel's own FlatPanelBackgroundTemplate, and the round
+--- masked bag icon.
+local CHROME_HEIGHT = 95
+
 ---@param frame Frame
 local function bagChrome(frame)
   -- The template's own OnLoad already drew the full-size ring from its `layoutType` KeyValue, so the
@@ -254,10 +264,12 @@ function windows.Render(model)
   -- point the side art is hidden rather than clipped: the panel's own FlatPanelBackgroundTemplate frames
   -- the body, and the top edge, the top corners and the medallion stay.
   NineSliceUtil.UpdateCornerCropping(frame, model.height)
+  local chromeFits = model.height >= CHROME_HEIGHT
   local nine = frame.NineSlice
-  local cornersFit = nine.BottomLeftCorner:GetHeight() <= model.height
-  nine.BottomLeftCorner:SetShown(cornersFit)
-  nine.BottomRightCorner:SetShown(cornersFit)
+  nine.TopLeftCorner:SetShown(chromeFits)
+  nine.TopRightCorner:SetShown(chromeFits)
+  nine.BottomLeftCorner:SetShown(chromeFits)
+  nine.BottomRightCorner:SetShown(chromeFits)
 
   for i = #wf.sections + 1, #model.sections do
     wf.sections[i] = sectionFrames.Acquire()

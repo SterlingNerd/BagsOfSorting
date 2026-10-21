@@ -526,18 +526,19 @@ local function chrome(label, frame)
   -- PortraitFrameTemplate layout draws the full-size one. Its bottom edge is what content has to clear.
   local ring = frame.NineSlice and frame.NineSlice.TopLeftCorner
   record('  ring', ring and tostring(ring:GetAtlas()) or '-', bounds(ring),
-    'ring bottom below frame top', ring and tostring(frame:GetTop() - ring:GetBottom()) or '-')
+    'shown', ring and tostring(ring:IsShown()) or '-',
+    'ring bottom below frame top', ring and ring:IsShown()
+      and tostring(frame:GetTop() - ring:GetBottom()) or '-')
 
-  -- Issue #43: the pieces a short window runs out of room for. The bottom corners hang 3 px below the
-  -- bottom edge and the LeftEdge is anchored between them and the ring, so when the three overlap the
-  -- edge inverts and the corner art reaches up over the medallion. UpdateCornerCropping clips the
-  -- corners; these bounds are what shows whether it did.
+  -- Issue #43: the corner art a short window cannot hold. Region getters return **nil** on a hidden
+  -- texture — the run that first hid the corners died on `GetTop` arithmetic here — so a hidden piece
+  -- reports its shown state and nothing else.
   local nine = frame.NineSlice
-  record('  bottom corner', nine and bounds(nine.BottomLeftCorner),
-    'shown', nine and nine.BottomLeftCorner and tostring(nine.BottomLeftCorner:IsShown()) or '-',
-    'corner top above frame bottom', nine and nine.BottomLeftCorner
-      and tostring(nine.BottomLeftCorner:GetTop() - frame:GetBottom()) or '-',
-    'left edge', nine and bounds(nine.LeftEdge))
+  local corner = nine and nine.BottomLeftCorner
+  record('  bottom corner', bounds(corner), 'shown', corner and tostring(corner:IsShown()) or '-',
+    'corner top above frame bottom', corner and corner:IsShown()
+      and tostring(corner:GetTop() - frame:GetBottom()) or '-',
+    'left edge', bounds(nine and nine.LeftEdge))
 
   local bg = frame.Bg
   record('  bg', bg and ('level ' .. tostring(bg:GetFrameLevel())) or 'none',
@@ -744,7 +745,7 @@ local tests = {
   },
   [43] = {
     issue = 43,
-    what = 'the collapsed window with its bottom corners hidden, and what still overlaps the window below it',
+    what = 'the collapsed window with its corner art hidden: what it still looks like, and what still overlaps the window below it',
     needs = 'our windows shown; Mining Pick (2901) and Hearthstone (6948) are the only Tools items and the bank is reachable',
     steps = {
       { text = 'setup: show our windows and report each one\'s size and section count', run = function()
@@ -762,7 +763,7 @@ local tests = {
       { text = 'screenshot the collapsed window and the window directly below it' },
       { text = 'withdraw 2901 back into a bag' },
       { text = 'capture: chrome geometry on every window, expanded', run = probes[19] },
-      { text = 'screenshot the same two windows now the collapsed one has its grid back' },
+      { text = 'screenshot the same two windows now the collapsed one has its grid and its corners back' },
     },
   },
 

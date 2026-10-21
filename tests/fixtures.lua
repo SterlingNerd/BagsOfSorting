@@ -97,10 +97,10 @@ fixtures.items = {
     type = 'Consumable', subtype = 'Bandages', equipSlot = 'INVTYPE_NON_EQUIP',
     isQuestItem = false, stackCount = 5, bagID = 0, slot = 11, dataReady = true,
   },
-  -- The last five stand in for the subtypes this character carries nothing of. Their names are the
-  -- classic-era subclass names, not measurements — `/bos test 41` dumps the client's own vocabulary
-  -- and corrects them. Only the type/subtype pair is load-bearing here; ilvl is a placeholder that
-  -- deliberately stays below the 20 the sort tests key on.
+  -- The last four stand in for subtypes this character carries nothing of. `/bos test 41` measured
+  -- these names against the client's own subclass table (build 1.60.1 70450). Only the type/subtype
+  -- pair is load-bearing here; ilvl is a placeholder that deliberately stays below the 20 the sort
+  -- tests key on.
   {
     itemID = 2320, name = 'Heavy Leather', quality = 1, ilvl = 1, expansion = 0,
     type = 'Trade Goods', subtype = 'Leather', equipSlot = 'INVTYPE_NON_EQUIP',
@@ -120,11 +120,6 @@ fixtures.items = {
     itemID = 3434, name = 'Strange Dust', quality = 1, ilvl = 1, expansion = 0,
     type = 'Trade Goods', subtype = 'Enchanting', equipSlot = 'INVTYPE_NON_EQUIP',
     isQuestItem = false, stackCount = 20, bagID = 5, slot = 3, dataReady = true,
-  },
-  {
-    itemID = 1210, name = 'Ruby', quality = 1, ilvl = 1, expansion = 0,
-    type = 'Trade Goods', subtype = 'Jewelcrafting', equipSlot = 'INVTYPE_NON_EQUIP',
-    isQuestItem = false, stackCount = 1, bagID = 1, slot = 6, dataReady = true,
   },
   -- 1006 and 26042 above keep retail's "Tradeskill" spelling on purpose: the rule-grammar tests
   -- read those strings. The client's own class name is "Trade Goods".

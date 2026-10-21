@@ -98,13 +98,12 @@ local DEFAULT_PROFILE = {
       compact = false,
       scale = 1.0,
       -- One section per tradeskill (FR-11). flow.Layout drops the sections with nothing in them,
-      -- so a character carrying only herbs gets one header here, not eight.
+      -- so a character carrying only herbs gets one header here, not seven.
       sections = {
         { id = 's7', name = 'Herbs', categories = { 'Tradeskills.Herbs' } },
         { id = 's8', name = 'Ore', categories = { 'Tradeskills.Ore' } },
         { id = 's9', name = 'Leather', categories = { 'Tradeskills.Leather' } },
         { id = 's10', name = 'Cloth', categories = { 'Tradeskills.Cloth' } },
-        { id = 's11', name = 'Gems', categories = { 'Tradeskills.Gems' } },
         { id = 's12', name = 'Elements', categories = { 'Tradeskills.Elements' } },
         { id = 's13', name = 'Engineering', categories = { 'Tradeskills.Parts' } },
         { id = 's14', name = 'Cooking', categories = { 'Tradeskills.Cooking' } },
@@ -163,20 +162,23 @@ local DEFAULT_PROFILE = {
       duplicate = false,
       rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Consumable' } } },
     },
-    -- Herb, Metal & Stone and Cooking are measured off that same cache (Silverleaf 765, Copper Ore
-    -- 2770, Stringy Wolf Meat 2672). Cloth, Leather, Elemental, Enchanting, Parts and
-    -- Jewelcrafting are the classic-era names of the same table, unmeasured on this client until
-    -- `/bos test 41` dumps the client's own class/subclass vocabulary. A name the client does not
-    -- use costs that section its items, not a crash.
+    -- Every subtype here is measured. `/bos test 41` (2026-10-20, build 1.60.1 70450) dumped the
+    -- client's own tables: Trade Goods has subclasses Parts, Cloth, Leather, Metal & Stone, Cooking,
+    -- Herb, Elemental, Other and Enchanting; Consumable has Potions, Elixirs, Flasks, Draughts,
+    -- Scrolls, Food & Drink, Bandages, Explosives, Devices, Permanent and Other — so the one
+    -- `type = "Consumable"` rule above covers every consumable the issue names.
     --
-    -- No Alchemy or Inscription category: on this client alchemy reagents *are* the Herb and
-    -- Elemental subtypes, and Inscription is not in the classic-era subclass table at all. Both
-    -- are the probe's to disprove, not the profile's to guess at.
+    -- No Gems category: subclass 4 (Jewelcrafting) is **absent** from this client's Trade Goods
+    -- table and class 3 is `Jewelry(OBSOLETE)`, so there is nothing to match. Where gems actually
+    -- live is `/bos test owners`'s to say the moment one is in a bag.
+    --
+    -- No Alchemy or Inscription category either. Alchemy reagents *are* the Herb and Elemental
+    -- subtypes here, and Inscription has no subclass at all — "Alchemy" exists only as a **Recipe**
+    -- subtype (class 9), which is the book, not the reagents.
     ['Tradeskills.Herbs'] = tradeskill({ 'Herb' }),
     ['Tradeskills.Ore'] = tradeskill({ 'Metal & Stone' }),
     ['Tradeskills.Leather'] = tradeskill({ 'Leather' }),
     ['Tradeskills.Cloth'] = tradeskill({ 'Cloth' }),
-    ['Tradeskills.Gems'] = tradeskill({ 'Jewelcrafting' }),
     ['Tradeskills.Elements'] = tradeskill({ 'Elemental', 'Enchanting' }),
     ['Tradeskills.Parts'] = tradeskill({ 'Parts' }),
     ['Tradeskills.Cooking'] = tradeskill({ 'Cooking' }),

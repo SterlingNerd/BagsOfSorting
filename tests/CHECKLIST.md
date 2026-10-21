@@ -88,9 +88,11 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 3. Find the potion (118), the water (159) and the bandage (1251): all three in **Consumables**, none in a tradeskill section.
 4. Find a cloth or leather **armour**: it stays in Backpack's Armor section, not in the Cloth or Leather section.
 5. Run `/bos find 765` and `/bos find 118` and confirm the window agrees with the container.
-6. Run `/bos test 41` and follow its run sheet: the two captured steps print the client's own class/subclass vocabulary and every placement the pipeline made, with the `type / subtype` pair that decided each one.
+6. Optional, for the raw data behind it: `/bos test subclasses` prints the client's own class and subclass vocabulary; `/bos test owners` prints every placement with the `type / subtype` pair that decided it.
 
-**Expected:** a tradeskill section is drawn only when it holds something, so the Tradeskills window shows headers for what you actually carry and nothing else. Consumables (priority 12) outranks every tradeskill category (15), so nothing consumable reaches a materials section. The tradeskill rules match `type = "Trade Goods"` **and** a subtype, so a subtype armour shares (`Cloth`, `Leather`) does not pull gear into the materials window. Sorting never consults the container: the reagent pouch, an equipped bag and the backpack all feed the same section. Step 6 is the half that decides whether the shipped subtype names are the names this client uses — `/bos test subclasses` and `/bos test owners` run the same two captures on their own.
+**Expected:** a tradeskill section is drawn only when it holds something, so the Tradeskills window shows headers for what you actually carry and nothing else. Consumables (priority 12) outranks every tradeskill category (15), so nothing consumable reaches a materials section. The tradeskill rules match `type = "Trade Goods"` **and** a subtype, so a subtype armour shares (`Cloth`, `Leather`) does not pull gear into the materials window. Sorting never consults the container: the reagent pouch, an equipped bag and the backpack all feed the same section.
+
+**Measured 2026-10-20 (build 1.60.1 70450):** every shipped subtype name is one this client uses. Its Trade Goods subclasses are Parts, Cloth, Leather, Metal & Stone, Cooking, Herb, Elemental, Other and Enchanting — **no Jewelcrafting**, which is why there is no Gems section; and its Consumable class covers Potions, Elixirs, Flasks, Draughts, Scrolls, Food & Drink and Bandages in one rule. A gem in a bag plus `/bos test owners` is what would settle where gems live.
 
 ### Manual test: the stack starts at the client's bag window (FR-41, issue #28)
 

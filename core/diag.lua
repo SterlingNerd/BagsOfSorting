@@ -714,19 +714,6 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
-  [41] = {
-    issue = 41,
-    what = 'The Tradeskills and Consumables categories against the client\'s own item vocabulary',
-    needs = 'our windows open, and herbs, ore, cloth, leather, a gem, an enchanting reagent, a '
-      .. 'potion, food and a bandage in your bags (the reagent pouch counts — sorting ignores it)',
-    steps = {
-      { text = 'look at the Tradeskills window: does every material you carry sit under a header '
-        .. 'that names it, and is every header named for something you carry?' },
-      { text = 'capture: the client\'s own class and subclass names', run = probes[20] },
-      { text = 'capture: where the pipeline put every item, and the type/subtype that decided it',
-        run = probes[21] },
-    },
-  },
   [22] = {
     issue = 22,
     what = "BetterBags' combat behaviour (input to the Q23 decision)",

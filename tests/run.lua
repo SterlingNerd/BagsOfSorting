@@ -92,7 +92,7 @@ for _, item in ipairs(fixtures.items) do byID[item.itemID] = item end
 local contents = {
   [-1] = { 1005 },
   [0] = { 1001, 1002, 1003, 1004, 5411, 2901, 2770, 2672, 118, 159, 1251 },
-  [1] = { 26042, 1006, 6948, 2320, 2578, 1210 },
+  [1] = { 26042, 1006, 6948, 2320, 2578 },
   [5] = { 765, 3355, 3434 },
 }
 
@@ -159,7 +159,7 @@ local containers = harvest.Discover()
 check('containers discovered (keyring, backpack, one bag, the reagent pouch)', #containers, 4)
 
 local items = harvest.Items()
-check('harvested slot count', #items, 21)
+check('harvested slot count', #items, 20)
 
 pipeline.Refresh('smoke')
 local model = pipeline.Model()
@@ -227,13 +227,13 @@ check('windows are sized independently', quests.height ~= backpack.height, true)
 
 -- Issue #36: the free-slot indicator. One slot at the end of the default backpack window carrying
 -- the number of slots the player's bags still have open, and nothing at all when they have none.
-check('the backpack family has 9 free slots', harvest.FreeSlots('backpack'), 9)
+check('the backpack family has 10 free slots', harvest.FreeSlots('backpack'), 10)
 check('the keyring is counted apart from the bags', harvest.FreeSlots('keyring'), 31)
 check('the reagent pouch is its own family, 1 free slot', harvest.FreeSlots('reagent'), 1)
-check('and its free space is not in the number the window shows', backpack.emptySlots, 9)
+check('and its free space is not in the number the window shows', backpack.emptySlots, 10)
 check('the indicator points at a real empty slot, and not the keyring slot before it',
   harvest.FirstFreeSlot().bagID .. ':' .. harvest.FirstFreeSlot().slot, '0:12')
-check('the default backpack window carries the count', backpack.emptySlots, 9)
+check('the default backpack window carries the count', backpack.emptySlots, 10)
 check('the slot it points at travels with the count',
   backpack.emptySlot.bagID .. ':' .. backpack.emptySlot.slot, '0:12')
 check('the other backpack windows do not repeat the same number', quests.emptySlots, nil)
@@ -268,7 +268,7 @@ local tradeskills = windowIn(model, 'Tradeskills')
 check('Consumables binds its one category', binds(consumables), 'Consumables')
 check('Tradeskills binds one category per section, Engineering dropped while it is empty',
   binds(tradeskills), 'Tradeskills.Herbs,Tradeskills.Ore,Tradeskills.Leather,Tradeskills.Cloth,'
-    .. 'Tradeskills.Gems,Tradeskills.Elements,Tradeskills.Cooking')
+    .. 'Tradeskills.Elements,Tradeskills.Cooking')
 check('Consumables holds the potion, the water and the bandage',
   countSection(consumables, 'Consumables'), 3)
 check('Herbs holds one and Elements holds two',
@@ -282,7 +282,6 @@ check('enchanting reagents share Elements with elemental ones (3434)', placeOf(3
 check('ore (2770)', placeOf(2770), 'Tradeskills/Ore')
 check('leather (2320)', placeOf(2320), 'Tradeskills/Leather')
 check('cloth (2578)', placeOf(2578), 'Tradeskills/Cloth')
-check('a gem (1210)', placeOf(1210), 'Tradeskills/Gems')
 check('a cooking ingredient (2672)', placeOf(2672), 'Tradeskills/Cooking')
 check('nothing matches the Engineering section, so it is not drawn',
   sectionIn(tradeskills, 'Engineering'), nil)
@@ -297,8 +296,8 @@ check('bandages (1251)', placeOf(1251), 'Consumables/Consumables')
 
 check('Consumables is sized to its one 3-item section',
   consumables.height, TITLE + (18 + CELL) + 6 + 8 + MONEY)
-check('Tradeskills is sized to its seven non-empty sections',
-  tradeskills.height, TITLE + 7 * (18 + CELL) + 7 * 6 + 8 + MONEY)
+check('Tradeskills is sized to its six non-empty sections',
+  tradeskills.height, TITLE + 6 * (18 + CELL) + 6 * 6 + 8 + MONEY)
 check('neither new window repeats the free-slot count',
   tostring(consumables.emptySlots) .. '/' .. tostring(tradeskills.emptySlots), 'nil/nil')
 

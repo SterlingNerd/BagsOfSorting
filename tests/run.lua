@@ -213,10 +213,11 @@ check('catch-all needs one row', catchall and catchall.rows, 1)
 -- Each window is sized by flow from its own content, not from a shared template.
 local CELL = 38
 local MONEY = 17 -- constants.MONEY_BAR_SPACE: the band the money bar claims (issue #32)
+local TITLE = 40 -- constants.WINDOW_TITLE_HEIGHT: the band that clears the window portrait (issue #34)
 check('window is never narrower than its column budget', backpack.width, 5 * CELL + 16)
-check('Quests is sized to its one 2-item section', quests.height, 26 + (18 + CELL) + 6 + 8 + MONEY)
+check('Quests is sized to its one 2-item section', quests.height, TITLE + (18 + CELL) + 6 + 8 + MONEY)
 check('Backpack is sized to its three sections and its free-slot cell',
-  backpack.height, 26 + 3 * (18 + CELL) + 3 * 6 + CELL + 8 + MONEY)
+  backpack.height, TITLE + 3 * (18 + CELL) + 3 * 6 + CELL + 8 + MONEY)
 check('windows are sized independently', quests.height ~= backpack.height, true)
 
 -- Issue #36: the free-slot indicator. One slot at the end of the default backpack window carrying
@@ -234,7 +235,7 @@ check('the other backpack windows do not repeat the same number', quests.emptySl
 check('the indicator gets its own cell after the last section',
   backpack.emptyOffsetY, 3 * (18 + CELL + 6))
 check('Quests is not sized for a cell it does not draw',
-  quests.height, 26 + (18 + CELL) + 6 + 8 + MONEY)
+  quests.height, TITLE + (18 + CELL) + 6 + 8 + MONEY)
 
 -- Priority ladder, measured against the real item that motivated it: Winterhoof Cleansing Totem is
 -- type Armor *and* a quest item. Junk (10) also matches nothing here, Armor (20) does. The ladder is
@@ -414,7 +415,7 @@ local function testFullBags()
   check('the window carries no count', full.emptySlots, nil)
   check('the window carries no slot', full.emptySlot, nil)
   check('no cell, so the window is the size it was before the indicator existed',
-    full.height, 26 + 3 * (18 + CELL) + 3 * 6 + 8 + MONEY)
+    full.height, TITLE + 3 * (18 + CELL) + 3 * 6 + 8 + MONEY)
   slotCounts = saved
   harvest.Invalidate()
   pipeline.Refresh('free-space')

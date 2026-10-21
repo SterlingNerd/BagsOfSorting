@@ -31,7 +31,11 @@ constants.BUTTON_SIZE = 37
 constants.BUTTON_GAP = 1
 constants.SECTION_TITLE_HEIGHT = 18
 constants.WINDOW_PADDING = 8
-constants.WINDOW_TITLE_HEIGHT = 26
+-- The band between the window's top edge and its first section. It has to clear the portrait: the
+-- client's bag portrait is 36 px at (-4, +1), so its bottom edge sits 35 px below the top edge, and
+-- content starting any higher draws section titles underneath it (issue #34). Blizzard's own bag
+-- window budgets 48 px for its titlebar and attic (`ContainerFrameMixin:GetPaddingHeight`).
+constants.WINDOW_TITLE_HEIGHT = 40
 
 -- The money bar is SmallMoneyFrameTemplate: 13 px tall, inset 8 px from the window's bottom edge,
 -- with a 17 px coin-box border and Blizzard's own 4 px clearance above it (ContainerFrame.xml,

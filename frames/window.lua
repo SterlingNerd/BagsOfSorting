@@ -84,10 +84,41 @@ local function restorePosition(frame, model)
   end
 end
 
+--- The client's own bag chrome (issue #34). `ContainerFrame_OnLoad` applies exactly these to the same
+--- template our shell inherits: the small portrait ring (`HeldBagLayout`'s
+--- `ui-frame-portraitmetal-cornertopleftsmall`, not the full-size `UI-Frame-PortraitMetal-CornerTopLeft`
+--- the plain template picks), a 36x36 icon at (-4, +1), and the title band starting at x=35 so the
+--- name clears the portrait instead of sitting under it.
+local BAG_PORTRAIT = 'Interface/Icons/Inv_misc_bag_08'  -- what ContainerFrameCombinedBags draws
+
+---@param frame Frame
+local function bagChrome(frame)
+  -- The template's own OnLoad already drew the full-size ring from its `layoutType` KeyValue, so the
+  -- field and the art both have to change.
+  frame.layoutType = 'HeldBagLayout'
+  frame:SetBorder('HeldBagLayout')
+  frame:SetPortraitTextureSizeAndOffset(36, -4, 1)
+  frame:SetTitleOffsets(35)
+  -- Camelot's `ContainerFrame_UpdatePortraitPosition`: the template's CircleMask is cut for the
+  -- 62x62 portrait, so on the 36 one it has to sit flush or it clips the icon.
+  local portrait = frame.PortraitContainer.portrait
+  local mask = frame.PortraitContainer.CircleMask
+  mask:ClearAllPoints()
+  mask:SetPoint('TOPLEFT', portrait, 'TOPLEFT', 0, 0)
+  mask:SetPoint('BOTTOMRIGHT', portrait, 'BOTTOMRIGHT', 0, 0)
+  frame:SetPortraitToAsset(BAG_PORTRAIT)
+  -- The flat panel's TopSection and BottomEdge carry no texture of their own; Blizzard's held-bag
+  -- windows hand them PANEL_BACKGROUND_COLOR in `ContainerFrameMixin:UpdateBackground`. Whether the
+  -- template's own XML colour is enough for us is what `/bos test 34` reads — issue #34's "too
+  -- transparent" is reported against the client's own bag window in the same capture.
+  frame:SetBackgroundColor()
+end
+
 ---@param config any
 ---@return BoSWindowFrame
 local function create(config)
   local frame = CreateFrame('Frame', 'BagsOfSortingWindow' .. config.id, UIParent, 'PortraitFrameFlatTemplate')
+  bagChrome(frame)
   frame:SetMovable(true)
   frame:EnableMouse(true)
   frame:RegisterForDrag('LeftButton')

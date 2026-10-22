@@ -25,6 +25,9 @@ local SECTION_GAP = 6
 ---@field width number
 ---@field height number
 ---@field offsetY number
+---@field emptySlots number?   -- free slots in this section's own tradeskill bag (issue #44)
+---@field emptySlot BoSFreeSlot?  -- a real empty slot in that bag
+---@field emptyOffsetY number?    -- where flow put the cell inside the block
 
 ---@class BoSWindowModel
 ---@field id string
@@ -58,6 +61,13 @@ function flow.Layout(window)
       section.width = section.cols * CELL
       section.height = constants.SECTION_TITLE_HEIGHT + section.rows * CELL
       section.offsetY = contentHeight
+      -- Issue #44: a section's own free-slot cell is one more row at the bottom of its block, so
+      -- the block it belongs to is what grows, not the window around it.
+      section.emptyOffsetY = nil
+      if (section.emptySlots or 0) > 0 then
+        section.emptyOffsetY = section.height
+        section.height = section.height + CELL
+      end
       contentHeight = contentHeight + section.height + SECTION_GAP
       widest = math.max(widest, section.width)
     end

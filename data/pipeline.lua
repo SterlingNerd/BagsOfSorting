@@ -60,6 +60,26 @@ function pipeline.ResolveBindings(bindings)
   return out
 end
 
+--- The free-slot count a section claims from the specialty bags its categories pair with
+--- (issue #44). Two categories on one family count that bag once, and a family with no bag
+--- equipped counts nothing — the AC's "hidden when no corresponding tradeskill bag is equipped".
+---@param names string[]
+---@return number free
+---@return BoSFreeSlot? slot
+local function sectionFreeSlots(names)
+  local categories, seen = db.Categories(), {}
+  local total, first = 0, nil
+  for _, name in ipairs(names) do
+    local family = categories[name] and categories[name].bagFamily
+    if family and not seen[family] then
+      seen[family] = true
+      total = total + harvest.FreeSlotsForFamily(family)
+      first = first or harvest.FirstFreeSlotForFamily(family)
+    end
+  end
+  return total, first
+end
+
 --- Phase 4: category -> section -> window, applying the duplicate policy (FR-15).
 --- An item is drawn once unless its owning category opted into duplication.
 ---@param placements table<string, BoSItem[]>
@@ -100,12 +120,20 @@ function pipeline.Assign(placements)
             end
           end
           if #items > 0 then
-            window.sections[#window.sections + 1] = {
+            local section = {
               id = sectionConfig.id,
               name = sectionConfig.name,
               categories = names,
               items = items,
             }
+            -- Issue #44: the section's own count comes from the bag its category pairs with. The
+            -- whole-bag-set number stays on the default backpack window (#36).
+            local free, slot = sectionFreeSlots(names)
+            if free > 0 then
+              section.emptySlots = free
+              section.emptySlot = slot
+            end
+            window.sections[#window.sections + 1] = section
           end
         end
       end

@@ -16,6 +16,7 @@ local CELL = constants.BUTTON_SIZE + constants.BUTTON_GAP
 ---@field frame Frame
 ---@field title FontString
 ---@field items BoSItemEntry[]
+---@field empty BoSItemEntry?  -- the section's own free-slot cell (issue #44)
 
 local function create()
   local frame = CreateFrame('Frame')
@@ -34,6 +35,11 @@ local function clearItems(section)
   for i = #section.items, 1, -1 do
     itemFrames.Release(section.items[i])
     section.items[i] = nil
+  end
+  if section.empty then
+    itemFrames.Release(section.empty)
+    section.empty = nil
+    section.frame.EmptySlot = nil
   end
 end
 
@@ -89,6 +95,18 @@ function sectionFrames.Render(section, model, parent, offsetY)
     local row = math.floor((i - 1) / model.cols)
     entry.parent:ClearAllPoints()
     entry.parent:SetPoint('TOPLEFT', section.frame, 'TOPLEFT', col * CELL, -(constants.SECTION_TITLE_HEIGHT + row * CELL))
+  end
+
+  -- The section's own free-slot cell (issue #44): the same empty slot the window-level indicator
+  -- draws (#36), placed after this block's last row and pointing at a real free slot in the bag
+  -- this section's category pairs with. It sits on the section frame the way the window's indicator
+  -- sits on the window shell, so /bos test reads the drawn state, not the model's claim about it.
+  if model.emptyOffsetY then
+    section.empty = itemFrames.Acquire()
+    itemFrames.PaintEmpty(section.empty, model.emptySlot, model.emptySlots, section.frame)
+    section.empty.parent:ClearAllPoints()
+    section.empty.parent:SetPoint('TOPLEFT', section.frame, 'TOPLEFT', 0, -model.emptyOffsetY)
+    section.frame.EmptySlot = section.empty.button
   end
 
   return section

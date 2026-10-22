@@ -28,6 +28,7 @@ local constants = addon:GetModule('Constants')
 ---@field name string
 ---@field slots number
 ---@field kind string   -- 'backpack' | 'reagent' | 'keyring'
+---@field family number  -- the client's specialty-bag bit for this container (constants.BAG_FAMILY)
 
 ---@class BoSFreeSlot
 ---@field bagID number
@@ -64,13 +65,24 @@ local discovered
 local freeSlots
 ---@type BoSFreeSlot?
 local firstFree
+---@type table<number, number>?
+local freeSlotsByFamily
+---@type table<number, BoSFreeSlot>?
+local firstFreeByFamily
 
 local function probe(index, kind)
   if index == nil then return nil end
   local okSlots, slots = pcall(C_Container.GetContainerNumSlots, index)
   if not okSlots or type(slots) ~= 'number' or slots <= 0 then return nil end
   local okName, name = pcall(C_Container.GetBagName, index)
-  return { index = index, slots = slots, kind = kind, name = (okName and name) or '' }
+  -- The client's own specialty bit for this container (issue #44). Read-only, and the client uses
+  -- it the same way: EquipmentManager.lua:22 and Blizzard_CatalogShop.lua:827 both compare the
+  -- second return against 0 to mean "a normal bag". One that answers nothing is a plain bag.
+  local okFamily, _, family = pcall(C_Container.GetContainerNumFreeSlots, index)
+  return {
+    index = index, slots = slots, kind = kind, name = (okName and name) or '',
+    family = (okFamily and family) or 0,
+  }
 end
 
 --- Build the container list. Called at login and whenever a bag is equipped or removed.
@@ -115,6 +127,7 @@ end
 function harvest.Items()
   local items = {}
   local free, freeFirst = {}, nil
+  local byFamily, firstByFamily = {}, {}
   for _, container in ipairs(harvest.Containers()) do
     for slot = 1, container.slots do
       local ok, info = pcall(C_Container.GetContainerItemInfo, container.index, slot)
@@ -141,6 +154,12 @@ function harvest.Items()
         -- A slot the client reports no item for is a free slot: ContainerItemInfo.itemID is
         -- documented non-nullable, so an occupied slot always answers one.
         free[container.kind] = (free[container.kind] or 0) + 1
+        -- The same slots, grouped by the specialty family the client reported for the container
+        -- (issue #44): an herb bag's free space is the Herbs section's number.
+        byFamily[container.family] = (byFamily[container.family] or 0) + 1
+        if not firstByFamily[container.family] then
+          firstByFamily[container.family] = { bagID = container.index, slot = slot }
+        end
         -- The first one is the slot the free-slot indicator points at (issue #36): a real empty
         -- slot, so the client's own click and drop handlers work on it. Backpack family only —
         -- the keyring sorts first and is not the player's bags.
@@ -151,6 +170,7 @@ function harvest.Items()
     end
   end
   freeSlots, firstFree = free, freeFirst
+  freeSlotsByFamily, firstFreeByFamily = byFamily, firstByFamily
   return items
 end
 
@@ -159,6 +179,21 @@ end
 ---@return number
 function harvest.FreeSlots(kind)
   return (freeSlots or {})[kind] or 0
+end
+
+--- Free slots in the containers the client reports as one specialty-bag family (issue #44): the
+--- herb bag's space is the Herbs section's number, the mining bag's is Ore's. Family 0 is every
+--- plain bag in the set.
+---@param family number
+---@return number
+function harvest.FreeSlotsForFamily(family)
+  return (freeSlotsByFamily or {})[family] or 0
+end
+
+---@param family number
+---@return BoSFreeSlot?
+function harvest.FirstFreeSlotForFamily(family)
+  return (firstFreeByFamily or {})[family]
 end
 
 ---@return BoSFreeSlot?
@@ -185,6 +220,7 @@ end
 
 function harvest.Invalidate()
   discovered = nil
+  freeSlotsByFamily, firstFreeByFamily = nil, nil
 end
 
 return harvest

@@ -46,6 +46,8 @@ local SECTION_GAP = 6
 
 --- Empty sections are skipped: a header for a block with nothing in it is noise, and the
 --- catch-all still appears whenever it has items (AC-16).
+--- A section whose tradeskill bag still has free slots is the exception: the cell is drawn with
+--- nothing in the category (issue #44).
 ---@param window BoSWindowModel
 ---@return BoSWindowModel
 function flow.Layout(window)
@@ -55,8 +57,12 @@ function flow.Layout(window)
 
   for _, section in ipairs(window.sections) do
     local count = #section.items
-    if count > 0 then
-      section.cols = math.min(maxColumns, count)
+    -- An empty section is noise and the catch-all still appears only when it has items (AC-16) —
+    -- except the one a tradeskill bag keeps alive (issue #44): its free-slot cell is the thing you
+    -- drop the item into. With no items the block takes the window's column budget as its width, so
+    -- its title reads like the others instead of squeezing into one cell.
+    if count > 0 or (section.emptySlots or 0) > 0 then
+      section.cols = count > 0 and math.min(maxColumns, count) or maxColumns
       section.rows = math.ceil(count / section.cols)
       section.width = section.cols * CELL
       section.height = constants.SECTION_TITLE_HEIGHT + section.rows * CELL

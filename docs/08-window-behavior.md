@@ -62,12 +62,31 @@ others are 17 px shorter. The template keeps itself current; we add no refresh. 
 
 Our count covers containers **0..4** — the backpack plus the four bag slots — the same set the client's
 own `C_Container.CalculateTotalNumberOfFreeBagSlots()` sums (`containers-and-bags.md`). The reagent pouch
-is harvested and drawn, but its free slots are counted apart and shown nowhere until `FR-44`'s
-per-family design decides how an empty reagent pouch reads (issue #36). The indicator hides when the bag
+is harvested and drawn, but its free slots are counted apart from that number (issue #36). They reach a
+window only through a specialty family the client reports for the pouch itself, in which case they
+belong to the section that pairs with it (issue #44 — `/bos test 44` records what this client answers
+for index 5). The indicator hides when the bag
 set is full, and it never sees the bank: harvest drops the bank containers on `BANKFRAME_CLOSED`.
 
 Our indicator's count button sets `minDisplayCount = 0` so a count of 1 draws; the pool clears it on
 release so item buttons keep Blizzard's behaviour (a stack of 1 shows no number).
+Our indicator's count button sets `minDisplayCount = 0` so a count of 1 draws; the pool clears it on
+release so item buttons keep Blizzard's behaviour (a stack of 1 shows no number).
+
+A **tradeskill section** carries a count of its own (`FR-44` compact, issue #44): the empty slots of
+the specialty bag its category pairs with, not the whole bag set. The pairing is data —
+`category.bagFamily`, a preset value on the tradeskill categories (Herbs ↔ herb bag 32, Ore ↔ mining
+bag 1024, Leather ↔ leatherworking bag 8, Elements ↔ enchanting bag 64, Engineering ↔ engineering
+bag 128) — and the bag is whichever container the client reports that family bit for. No bag of that
+family equipped, or one with nothing open in it, leaves the section with no count and no cell; a
+section with no items is not drawn at all, so it has no cell either.
+
+The cell is one more row at the bottom of that section's block and draws through the same
+`PaintEmpty` path as the window-level indicator: the client's own empty slot with the client's own
+count text, pointing at a real free slot in that bag, so dropping an item on it puts the item in that
+bag. Two numbers on screen at once is intended — the window's is the bag set (0..4, specialty bags
+included, the client's own total) and the section's is one bag. `FR-44`'s user-selectable half,
+compact count versus individual slots, arrives with the settings pane (docs/05).
 
 ## Item state we borrow rather than own
 

@@ -2,7 +2,9 @@
 
 `flow.lua` packs section blocks into a window's column budget and sizes the window to its
 content (FR-40). A window that carries a free-slot count gets one more cell at the end of its
-column, and `emptyOffsetY` is where the frames layer draws it (issue #36).
+column, and `emptyOffsetY` is where the frames layer draws it (issue #36). A tradeskill section with
+a count of its own gets that cell inside its own block instead, one row below its last item row
+(issue #44).
 
 A window with nothing in it draws no body — no blank cell, no grid — and its height is floored at
 `constants.WINDOW_CHROME_HEIGHT`, the 95 px the client's own bag chrome measures end to end (issue #43).

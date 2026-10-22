@@ -132,14 +132,16 @@ for _, item in ipairs(fixtures.items) do byID[item.itemID] = item end
 -- hold things; the remaining probed indices are empty, which is a result harvest must tolerate.
 -- Issue #41 spreads its materials across three of those containers on purpose: where an item sits
 -- is not what decides its section.
--- Issue #44 adds index 2: a 6-slot herb bag holding the fixture's one herb. The client names a
--- specialty bag by the family bit C_Container.GetContainerNumFreeSlots answers with (32 is an herb
--- bag, 0 a plain one), so `families` below is this stub's answer to that call.
+-- Issue #44 adds index 2: a 6-slot herb bag holding the fixture's one herb, and index 3: an empty
+-- 6-slot engineering bag. The client names a specialty bag by the family bit
+-- C_Container.GetContainerNumFreeSlots answers with (32 herb, 128 engineering, 0 a plain one), so
+-- `families` below is this stub's answer to that call.
 local contents = {
   [-1] = { 1005 },
   [0] = { 1001, 1002, 1003, 1004, 5411, 2901, 2770, 2672, 118, 159, 1251 },
   [1] = { 26042, 1006, 6948, 2320, 2578 },
   [2] = { 765 },
+  [3] = {},
   [5] = { 3355, 3434 },
 }
 
@@ -147,11 +149,11 @@ local contents = {
 -- storage shape): a 20-slot
 -- backpack, a 6-slot bag, a 4-slot reagent pouch, the 32-slot keyring. Real bags have free space,
 -- and issue #36 is about what the addon does with it, so the fixture has some.
--- index -> the specialty family bit the client would report for it. Only the herb bag is a
--- specialty bag here; the rest of the set is plain.
-local families = { [2] = 32 }
+-- index -> the specialty family bit the client would report for it. The herb bag and the
+-- engineering bag are specialty bags; the rest of the set is plain.
+local families = { [2] = 32, [3] = 128 }
 
-local slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [2] = 6, [5] = 4 }
+local slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [2] = 6, [3] = 6, [5] = 4 }
 
 -- 1005 is the item the client has never seen: container info knows its name and quality,
 -- GetItemInfo knows nothing (FR-103).
@@ -216,7 +218,7 @@ local pipeline = addon.modules['Pipeline']
 
 harvest.Invalidate()
 local containers = harvest.Discover()
-check('containers discovered (keyring, backpack, two bags, the reagent pouch)', #containers, 5)
+check('containers discovered (keyring, backpack, three bags, the reagent pouch)', #containers, 6)
 
 local items = harvest.Items()
 check('harvested slot count', #items, 20)
@@ -247,6 +249,13 @@ local function binds(window)
   local out = {}
   for _, section in ipairs(window.sections) do out[#out + 1] = table.concat(section.categories, '+') end
   return table.concat(out, ',')
+end
+
+---@return BoSContainer?
+local function containerAt(index)
+  for _, container in ipairs(harvest.Containers()) do
+    if container.index == index then return container end
+  end
 end
 
 check('five windows in the model', #model, 5)
@@ -288,13 +297,13 @@ check('windows are sized independently', quests.height ~= backpack.height, true)
 
 -- Issue #36: the free-slot indicator. One slot at the end of the default backpack window carrying
 -- the number of slots the player's bags still have open, and nothing at all when they have none.
-check('the backpack family has 15 free slots', harvest.FreeSlots('backpack'), 15)
+check('the backpack family has 21 free slots', harvest.FreeSlots('backpack'), 21)
 check('the keyring is counted apart from the bags', harvest.FreeSlots('keyring'), 31)
 check('the reagent pouch is its own family, 2 free slots', harvest.FreeSlots('reagent'), 2)
-check('and its free space is not in the number the window shows', backpack.emptySlots, 15)
+check('and its free space is not in the number the window shows', backpack.emptySlots, 21)
 check('the indicator points at a real empty slot, and not the keyring slot before it',
   harvest.FirstFreeSlot().bagID .. ':' .. harvest.FirstFreeSlot().slot, '0:12')
-check('the default backpack window carries the count', backpack.emptySlots, 15)
+check('the default backpack window carries the count', backpack.emptySlots, 21)
 check('the slot it points at travels with the count',
   backpack.emptySlot.bagID .. ':' .. backpack.emptySlot.slot, '0:12')
 check('the other backpack windows do not repeat the same number', quests.emptySlots, nil)
@@ -327,9 +336,9 @@ local consumables = windowIn(model, 'Consumables')
 local tradeskills = windowIn(model, 'Tradeskills')
 
 check('Consumables binds its one category', binds(consumables), 'Consumables')
-check('Tradeskills binds one category per section, Engineering dropped while it is empty',
-  binds(tradeskills), 'Tradeskills.Herbs,Tradeskills.Ore,Tradeskills.Leather,Tradeskills.Cloth,'
-    .. 'Tradeskills.Elements,Tradeskills.Cooking')
+check('Tradeskills binds one category per section', binds(tradeskills),
+  'Tradeskills.Herbs,Tradeskills.Ore,Tradeskills.Leather,Tradeskills.Cloth,'
+    .. 'Tradeskills.Elements,Tradeskills.Parts,Tradeskills.Cooking')
 check('Consumables holds the potion, the water and the bandage',
   countSection(consumables, 'Consumables'), 3)
 check('Herbs holds one and Elements holds two',
@@ -344,8 +353,22 @@ check('ore (2770)', placeOf(2770), 'Tradeskills/Ore')
 check('leather (2320)', placeOf(2320), 'Tradeskills/Leather')
 check('cloth (2578)', placeOf(2578), 'Tradeskills/Cloth')
 check('a cooking ingredient (2672)', placeOf(2672), 'Tradeskills/Cooking')
-check('nothing matches the Engineering section, so it is not drawn',
-  sectionIn(tradeskills, 'Engineering'), nil)
+check('nothing matches the Engineering section, so only its bag draws it',
+  countSection(tradeskills, 'Engineering'), 0)
+-- The Engineering section is the empty-category case: the fixture's engineering bag (family 128)
+-- holds nothing, and its six free slots are what keeps the section on screen — the cell is where
+-- the item goes, so hiding the category would hide the drop target.
+local engineering = sectionIn(tradeskills, 'Engineering')
+check('the engineering bag carries the client engineering family bit', containerAt(3).family, 128)
+check('the empty Engineering section is drawn because its bag has free slots',
+  engineering ~= nil, true)
+check('its own count is the bag\'s 6 free slots', engineering.emptySlots, 6)
+check('and its cell points at that bag\'s first free slot',
+  engineering.emptySlot.bagID .. ':' .. engineering.emptySlot.slot, '3:1')
+check('the cell is the whole block: a title band and one row', engineering.height, 18 + CELL)
+check('the cell sits directly under the title', engineering.emptyOffsetY, 18)
+check('an empty section takes the window column budget as its width, so its title reads like the others',
+  engineering.width, 5 * CELL)
 -- The tradeskill rules pin `type` as well as `subtype`: 'Cloth' is an Armor subtype too, and a
 -- cloth shirt is not tailoring material.
 check('cloth armour stays Armor, not cloth material (1003)', placeOf(1003), 'Backpack/Armor')
@@ -357,8 +380,8 @@ check('bandages (1251)', placeOf(1251), 'Consumables/Consumables')
 
 check('Consumables is sized to its one 3-item section and no money band',
   consumables.height, TITLE + (18 + CELL) + 6 + 8)
-check('Tradeskills is sized to its six sections, their gap, the herb-bag cell and no money band',
-  tradeskills.height, TITLE + 6 * (18 + CELL) + 6 * 6 + CELL + 8)
+check('Tradeskills is sized to its seven sections, their gaps and the herb-bag cell',
+  tradeskills.height, TITLE + 7 * (18 + CELL) + 7 * 6 + CELL + 8)
 check('neither new window repeats the free-slot count',
   tostring(consumables.emptySlots) .. '/' .. tostring(tradeskills.emptySlots), 'nil/nil')
 
@@ -367,11 +390,6 @@ check('neither new window repeats the free-slot count',
 -- so Herbs has a count of its own and every other tradeskill section has none: no bag of that
 -- family is equipped.
 local herbs = sectionIn(tradeskills, 'Herbs')
-local function containerAt(index)
-  for _, container in ipairs(harvest.Containers()) do
-    if container.index == index then return container end
-  end
-end
 check('the herb bag carries the client\'s herb family bit', containerAt(2).family, 32)
 check('a plain bag carries none', containerAt(0).family, 0)
 check('the herb family has 5 free slots', harvest.FreeSlotsForFamily(32), 5)
@@ -387,8 +405,8 @@ check('the sections with no bag of their own carry no count',
   'nil/nil/nil/nil/nil')
 check('the cell is one more row inside the section block', herbs.height, 18 + 2 * CELL)
 check('the cell sits after the section\'s one item row', herbs.emptyOffsetY, 18 + CELL)
-check('the window-level count is still the whole bag set, herb bag included',
-  windowIn(model, 'Backpack').emptySlots, 15)
+check('the window-level count is still the whole bag set, specialty bags included',
+  windowIn(model, 'Backpack').emptySlots, 21)
 
 -- Issue #42: the money bar belongs to the default backpack window alone. The other windows are
 -- views over the same bags, so a coin row on each would read as five separate purses.
@@ -604,9 +622,11 @@ local function testNoSpecialtyBag()
   check('and no slot to point at', plain.emptySlot, nil)
   check('and no cell', plain.emptyOffsetY, nil)
   check('the section is the height it was before the count existed', plain.height, 18 + CELL)
+  check('a section with no items and no bag of its own is still not drawn',
+    sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Engineering'), nil)
 
   families = savedFamilies
-  slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [2] = 1, [5] = 4 }
+  slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [2] = 1, [3] = 6, [5] = 4 }
   harvest.Invalidate()
   pipeline.Refresh('full-herb-bag')
   local full = sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Herbs')
@@ -748,6 +768,8 @@ local function testCategoryEnabled()
   pipeline.Refresh('disable-herbs')
   local models = pipeline.Model()
   check('the Herbs section is gone', sectionIn(windowIn(models, 'Tradeskills'), 'Herbs'), nil)
+  check('a disabled category does not keep its section alive through its bag',
+    harvest.FreeSlotsForFamily(32) > 0, true)
   check('its herb falls to the catch-all', placeIn(models, 765), 'Backpack/Everything else')
   check('re-enabling is a change', db.SetCategoryEnabled('Tradeskills.Herbs', true), true)
   pipeline.Refresh('enable-herbs')

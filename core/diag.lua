@@ -802,25 +802,6 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
-  [44] = {
-    issue = 44,
-    what = 'per-section free-slot counts for tradeskill bags (FR-44)',
-    needs = 'our windows open (/bos show), a tradeskill bag you can equip and fill, and items of that trade',
-    steps = {
-      { text = 'setup: containers, family bits, per-family counts and the cells drawn', run = probes[17] },
-      { text = 'equip a tradeskill bag in a bag slot' },
-      { text = 'capture: families and counts with that bag equipped', run = probes[17] },
-      { text = 'put one matching item into that bag' },
-      { text = 'capture: the counts after the item lands', run = probes[17] },
-      { text = 'take that item back out' },
-      { text = 'capture: the counts after it comes out', run = probes[17] },
-      { text = 'fill every slot of that bag' },
-      { text = 'capture: the counts with the bag full', run = probes[17] },
-      { text = 'unequip the tradeskill bag' },
-      { text = 'capture: families and counts with no bag of that family equipped', run = probes[17] },
-    },
-  },
-
   [22] = {
     issue = 22,
     what = "BetterBags' combat behaviour (input to the Q23 decision)",

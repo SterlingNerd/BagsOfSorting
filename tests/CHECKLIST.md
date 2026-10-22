@@ -179,6 +179,9 @@ than the sections either side of it. Step 5 lowers it by one. Step 8 leaves `emp
 `cell=nil` and no slot drawn while the section keeps its items and its height drops back. Step 10
 leaves no section with a count at all. The **Backpack** window's own number still covers the whole
 bag set, this bag included — the two numbers are different questions, not a disagreement.
+ Step 6 is the empty-category half: with the last item of that trade out of the bag, the section header
+and its cell stay on screen — the bag's free slots are what keep the section drawn, and the cell is
+where the next one goes. A category with no items *and* no bag of its own stays hidden.
 
 ### Manual test: the money bar is on the default backpack window only (FR-48, issue #42)
 

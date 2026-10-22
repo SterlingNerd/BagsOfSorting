@@ -26,7 +26,7 @@ constants.NUM_CHARACTER_BANK_SLOTS = NUM_CHARACTER_BANK_SLOTS
 -- The values are shared with retail, and the client compares them itself: EquipmentManager.lua:22
 -- and Blizzard_CatalogShop.lua:827 both test that return against 0 for "a normal bag".
 constants.BAG_FAMILY = {
-  Quiver = 1, AmmoPouch = 2, SoulBag = 4, Leatherworking = 8, Inscription = 16,
+  Plain = 0, Quiver = 1, AmmoPouch = 2, SoulBag = 4, Leatherworking = 8, Inscription = 16,
   Herb = 32, Enchanting = 64, Engineering = 128, Keyring = 256, Gem = 512, Mining = 1024,
 }
 

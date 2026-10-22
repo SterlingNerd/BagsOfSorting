@@ -158,6 +158,28 @@ open `/console` if an error appeared and read the script errors there; `/bos` pr
 
 **Expected:** step 3 matches exactly — the number is the `free=` sum of indices 0..4 (issue #36 measured 22 = 5+6+5+6 on 2026-10-20, with the pouch's 3 printed apart and excluded). At step 6 the slot is **gone** and the window is one cell shorter: `emptySlots=nil`, `cell=nil`, `indicator: none drawn`, even while the pouch still has free slots — **measured on the client 2026-10-20**. Step 7 brings it back reading 1 — Blizzard's own count setter hides a count of 1 unless the button lowers `minDisplayCount`, so a bare `1` is the thing to look for. The slot must read as the game's own empty bag slot: same background, same number style as a stack count — the half of this story a capture cannot record.
 
+### Manual test: a tradeskill section counts its own bag (FR-44 compact, issue #44)
+
+**Precondition:** our windows open (`/bos show`), one tradeskill bag equipped in a bag slot (herb bag,
+mining bag, leatherworking bag…) with at least one matching item in it and at least one slot free.
+
+1. Run `/bos test freeslots`.
+2. Read the `family=` value on each container line and the `family N free=…` lines under them.
+3. Look at the row below the last item in the matching **Tradeskills** section: one empty slot with a number in it.
+4. Put one matching item into that bag.
+5. Run `/bos test freeslots` again.
+6. Take that item back out.
+7. Fill every slot of that bag.
+8. Run `/bos test freeslots` again.
+9. Unequip the tradeskill bag.
+10. Run `/bos test freeslots` once more.
+
+**Expected:** step 3's number equals that bag's `free=` at step 2, and the section is one cell taller
+than the sections either side of it. Step 5 lowers it by one. Step 8 leaves `emptySlots=nil`,
+`cell=nil` and no slot drawn while the section keeps its items and its height drops back. Step 10
+leaves no section with a count at all. The **Backpack** window's own number still covers the whole
+bag set, this bag included — the two numbers are different questions, not a disagreement.
+
 ### Manual test: the money bar is on the default backpack window only (FR-48, issue #42)
 
 **Precondition:** a fresh login with the default profile and money in the purse, our windows open (`/bos show`), Blizzard's bag window closed.

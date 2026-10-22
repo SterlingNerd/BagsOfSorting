@@ -425,6 +425,7 @@ end
 --- separable in the capture. Read-only.
 probes[17] = function()
   if not inTest then fresh('freeslots') end
+  local constants = addon:GetModule('Constants')
   local harvest = addon:GetModule('Harvest')
   local pipeline = addon:GetModule('Pipeline')
 
@@ -440,8 +441,27 @@ probes[17] = function()
       local infoOK, info = pcall(C_Container.GetContainerItemInfo, container.index, slot)
       if infoOK and info and info.itemID then filled = filled + 1 end
     end
-    record(string.format('  [%d] %s slots=%d filled=%d free=%d kind=%s',
-      container.index, container.name, container.slots, filled, container.slots - filled, container.kind))
+    record(string.format('  [%d] %s slots=%d filled=%d free=%d kind=%s family=%s',
+      container.index, container.name, container.slots, filled, container.slots - filled,
+      container.kind, tostring(container.family)))
+  end
+
+  -- The family bits themselves (issue #44): what the client answered per container, and what our
+  -- own per-family count made of it. Every container answering 0 is the result this probe exists to
+  -- find — it means a tradeskill section has no bag to count.
+  local named, present = {}, {}
+  for name, bit in pairs(constants.BAG_FAMILY) do named[bit] = name end
+  for _, container in ipairs(harvest.Containers()) do
+    present[container.family or 0] = true
+  end
+  local bits = {}
+  for family in pairs(present) do bits[#bits + 1] = family end
+  table.sort(bits)
+  for _, family in ipairs(bits) do
+    local slot = harvest.FirstFreeSlotForFamily(family)
+    record(string.format('  family %s (%s) free=%d first=%s', tostring(family),
+      named[family] or 'unknown', harvest.FreeSlotsForFamily(family),
+      slot and (slot.bagID .. ':' .. slot.slot) or 'none'))
   end
 
   local first = harvest.FirstFreeSlot()
@@ -455,7 +475,8 @@ probes[17] = function()
   for _, window in ipairs(models) do
     record(string.format('  [%s] %s emptySlots=%s cell=%s', window.id, window.name,
       tostring(window.emptySlots), tostring(window.emptyOffsetY)))
-    local button = _G['BagsOfSortingWindow' .. window.id] and _G['BagsOfSortingWindow' .. window.id].EmptySlot
+    local shell = _G['BagsOfSortingWindow' .. window.id]
+    local button = shell and shell.EmptySlot
     if not button then
       record('    indicator: none drawn')
     else
@@ -463,6 +484,26 @@ probes[17] = function()
       record('    indicator', 'shown', tostring(button:IsShown()),
         'bag', tostring(button:GetParent():GetID()), 'slot', tostring(button:GetID()),
         'count shown', tostring(count and count:IsShown()), 'text', count and count:GetText() or '-')
+    end
+    -- The per-section half (issue #44): the model's number, then the cell the section frame drew.
+    -- Section frames are children of the window shell, and one that drew a cell carries it as
+    -- frame.EmptySlot, the way the window's own indicator sits on the shell.
+    for _, section in ipairs(window.sections) do
+      if section.emptySlots or section.emptyOffsetY then
+        record(string.format('    [%s] %s emptySlots=%s cell=%s', section.id, section.name,
+          tostring(section.emptySlots), tostring(section.emptyOffsetY)))
+      end
+    end
+    if shell then
+      for _, child in ipairs(shell:GetChildren()) do
+        local cell = child.EmptySlot
+        if cell then
+          local count = cell.Count
+          record('    section cell drawn', 'shown', tostring(cell:IsShown()),
+            'bag', tostring(cell:GetParent():GetID()), 'slot', tostring(cell:GetID()),
+            'count text', count and count:GetText() or '-')
+        end
+      end
     end
   end
 end
@@ -761,6 +802,25 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
+  [44] = {
+    issue = 44,
+    what = 'per-section free-slot counts for tradeskill bags (FR-44)',
+    needs = 'our windows open (/bos show), a tradeskill bag you can equip and fill, and items of that trade',
+    steps = {
+      { text = 'setup: containers, family bits, per-family counts and the cells drawn', run = probes[17] },
+      { text = 'equip a tradeskill bag in a bag slot' },
+      { text = 'capture: families and counts with that bag equipped', run = probes[17] },
+      { text = 'put one matching item into that bag' },
+      { text = 'capture: the counts after the item lands', run = probes[17] },
+      { text = 'take that item back out' },
+      { text = 'capture: the counts after it comes out', run = probes[17] },
+      { text = 'fill every slot of that bag' },
+      { text = 'capture: the counts with the bag full', run = probes[17] },
+      { text = 'unequip the tradeskill bag' },
+      { text = 'capture: families and counts with no bag of that family equipped', run = probes[17] },
+    },
+  },
+
   [22] = {
     issue = 22,
     what = "BetterBags' combat behaviour (input to the Q23 decision)",

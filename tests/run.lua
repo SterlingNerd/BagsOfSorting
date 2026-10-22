@@ -132,18 +132,26 @@ for _, item in ipairs(fixtures.items) do byID[item.itemID] = item end
 -- hold things; the remaining probed indices are empty, which is a result harvest must tolerate.
 -- Issue #41 spreads its materials across three of those containers on purpose: where an item sits
 -- is not what decides its section.
+-- Issue #44 adds index 2: a 6-slot herb bag holding the fixture's one herb. The client names a
+-- specialty bag by the family bit C_Container.GetContainerNumFreeSlots answers with (32 is an herb
+-- bag, 0 a plain one), so `families` below is this stub's answer to that call.
 local contents = {
   [-1] = { 1005 },
   [0] = { 1001, 1002, 1003, 1004, 5411, 2901, 2770, 2672, 118, 159, 1251 },
   [1] = { 26042, 1006, 6948, 2320, 2578 },
-  [5] = { 765, 3355, 3434 },
+  [2] = { 765 },
+  [5] = { 3355, 3434 },
 }
 
 -- index -> total slots, at the sizes the live client reports (references/containers-and-bags.md
 -- storage shape): a 20-slot
 -- backpack, a 6-slot bag, a 4-slot reagent pouch, the 32-slot keyring. Real bags have free space,
 -- and issue #36 is about what the addon does with it, so the fixture has some.
-local slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [5] = 4 }
+-- index -> the specialty family bit the client would report for it. Only the herb bag is a
+-- specialty bag here; the rest of the set is plain.
+local families = { [2] = 32 }
+
+local slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [2] = 6, [5] = 4 }
 
 -- 1005 is the item the client has never seen: container info knows its name and quality,
 -- GetItemInfo knows nothing (FR-103).
@@ -152,6 +160,14 @@ local NEVER_SEEN = 1005
 _G.C_Container = {
   GetContainerNumSlots = function(index)
     return slotCounts[index] or (contents[index] and #contents[index] or 0)
+  end,
+  GetContainerNumFreeSlots = function(index)
+    local slots = slotCounts[index] or (contents[index] and #contents[index] or 0)
+    local filled = 0
+    for slot = 1, slots do
+      if contents[index] and contents[index][slot] then filled = filled + 1 end
+    end
+    return slots - filled, families[index] or 0
   end,
   GetBagName = function(index)
     return contents[index] and ('Bag ' .. index) or ''
@@ -200,7 +216,7 @@ local pipeline = addon.modules['Pipeline']
 
 harvest.Invalidate()
 local containers = harvest.Discover()
-check('containers discovered (keyring, backpack, one bag, the reagent pouch)', #containers, 4)
+check('containers discovered (keyring, backpack, two bags, the reagent pouch)', #containers, 5)
 
 local items = harvest.Items()
 check('harvested slot count', #items, 20)
@@ -272,13 +288,13 @@ check('windows are sized independently', quests.height ~= backpack.height, true)
 
 -- Issue #36: the free-slot indicator. One slot at the end of the default backpack window carrying
 -- the number of slots the player's bags still have open, and nothing at all when they have none.
-check('the backpack family has 10 free slots', harvest.FreeSlots('backpack'), 10)
+check('the backpack family has 15 free slots', harvest.FreeSlots('backpack'), 15)
 check('the keyring is counted apart from the bags', harvest.FreeSlots('keyring'), 31)
-check('the reagent pouch is its own family, 1 free slot', harvest.FreeSlots('reagent'), 1)
-check('and its free space is not in the number the window shows', backpack.emptySlots, 10)
+check('the reagent pouch is its own family, 2 free slots', harvest.FreeSlots('reagent'), 2)
+check('and its free space is not in the number the window shows', backpack.emptySlots, 15)
 check('the indicator points at a real empty slot, and not the keyring slot before it',
   harvest.FirstFreeSlot().bagID .. ':' .. harvest.FirstFreeSlot().slot, '0:12')
-check('the default backpack window carries the count', backpack.emptySlots, 10)
+check('the default backpack window carries the count', backpack.emptySlots, 15)
 check('the slot it points at travels with the count',
   backpack.emptySlot.bagID .. ':' .. backpack.emptySlot.slot, '0:12')
 check('the other backpack windows do not repeat the same number', quests.emptySlots, nil)
@@ -341,10 +357,38 @@ check('bandages (1251)', placeOf(1251), 'Consumables/Consumables')
 
 check('Consumables is sized to its one 3-item section and no money band',
   consumables.height, TITLE + (18 + CELL) + 6 + 8)
-check('Tradeskills is sized to its six non-empty sections and no money band',
-  tradeskills.height, TITLE + 6 * (18 + CELL) + 6 * 6 + 8)
+check('Tradeskills is sized to its six sections, their gap, the herb-bag cell and no money band',
+  tradeskills.height, TITLE + 6 * (18 + CELL) + 6 * 6 + CELL + 8)
 check('neither new window repeats the free-slot count',
   tostring(consumables.emptySlots) .. '/' .. tostring(tradeskills.emptySlots), 'nil/nil')
+
+-- Issue #44: a tradeskill section counts the free slots of the specialty bag its category pairs
+-- with, not the whole bag set. The fixture equips one 6-slot herb bag (family 32) holding one herb,
+-- so Herbs has a count of its own and every other tradeskill section has none: no bag of that
+-- family is equipped.
+local herbs = sectionIn(tradeskills, 'Herbs')
+local function containerAt(index)
+  for _, container in ipairs(harvest.Containers()) do
+    if container.index == index then return container end
+  end
+end
+check('the herb bag carries the client\'s herb family bit', containerAt(2).family, 32)
+check('a plain bag carries none', containerAt(0).family, 0)
+check('the herb family has 5 free slots', harvest.FreeSlotsForFamily(32), 5)
+check('the Herbs section carries its own count', herbs.emptySlots, 5)
+check('and points at a real free slot in that bag, not the first free slot anywhere',
+  herbs.emptySlot.bagID .. ':' .. herbs.emptySlot.slot, '2:2')
+check('the sections with no bag of their own carry no count',
+  tostring(sectionIn(tradeskills, 'Ore').emptySlots) .. '/'
+    .. tostring(sectionIn(tradeskills, 'Leather').emptySlots) .. '/'
+    .. tostring(sectionIn(tradeskills, 'Cloth').emptySlots) .. '/'
+    .. tostring(sectionIn(tradeskills, 'Elements').emptySlots) .. '/'
+    .. tostring(sectionIn(tradeskills, 'Cooking').emptySlots),
+  'nil/nil/nil/nil/nil')
+check('the cell is one more row inside the section block', herbs.height, 18 + 2 * CELL)
+check('the cell sits after the section\'s one item row', herbs.emptyOffsetY, 18 + CELL)
+check('the window-level count is still the whole bag set, herb bag included',
+  windowIn(model, 'Backpack').emptySlots, 15)
 
 -- Issue #42: the money bar belongs to the default backpack window alone. The other windows are
 -- views over the same bags, so a coin row on each would read as five separate purses.
@@ -526,7 +570,7 @@ testDuplicateBinding()
 -- than next to the free-space assertions above.
 local function testFullBags()
   local saved = slotCounts
-  slotCounts = { [-1] = 1, [0] = 6, [1] = 3, [5] = 4 }
+  slotCounts = { [-1] = 1, [0] = 6, [1] = 3, [2] = 1, [5] = 3 }
   harvest.Invalidate()
   pipeline.Refresh('full-bags')
   local full = windowIn(pipeline.Model(), 'Backpack')
@@ -545,6 +589,40 @@ local function testFullBags()
 end
 
 testFullBags()
+
+-- Issue #44, the negative half. The count belongs to the bag, so a bag set with no specialty bag
+-- in it, and a specialty bag with nothing open in it, both leave the section with no count and no
+-- cell — the AC's "hidden when no corresponding tradeskill bag is equipped".
+local function testNoSpecialtyBag()
+  local savedFamilies, savedSlots = families, slotCounts
+
+  families = {}
+  harvest.Invalidate()
+  pipeline.Refresh('no-specialty-bags')
+  local plain = sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Herbs')
+  check('no specialty bag means no count for the section it would belong to', plain.emptySlots, nil)
+  check('and no slot to point at', plain.emptySlot, nil)
+  check('and no cell', plain.emptyOffsetY, nil)
+  check('the section is the height it was before the count existed', plain.height, 18 + CELL)
+
+  families = savedFamilies
+  slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [2] = 1, [5] = 4 }
+  harvest.Invalidate()
+  pipeline.Refresh('full-herb-bag')
+  local full = sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Herbs')
+  check('a full tradeskill bag has no free slot to count', harvest.FreeSlotsForFamily(32), 0)
+  check('so the section carries no count', full.emptySlots, nil)
+  check('and the section is not sized for a cell it does not draw', full.height, 18 + CELL)
+
+  slotCounts = savedSlots
+  harvest.Invalidate()
+  pipeline.Refresh('herb-bag-open')
+  local back = sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Herbs')
+  check('free space in the bag puts the count and the cell back',
+    back.emptySlots .. '/' .. tostring(back.emptyOffsetY), '5/56')
+end
+
+testNoSpecialtyBag()
 
 -- Bank windows are M5: the gate in pipeline.Assign is what keeps them out of the frames layer.
 local function testBankWindow()
@@ -677,6 +755,26 @@ local function testCategoryEnabled()
 end
 
 testCategoryEnabled()
+
+-- Issue #44's schema half. The pairing lives in the saved profile, so a profile written before it
+-- existed gets it from migration 2 — otherwise the per-section count is silently off for anyone
+-- already playing.
+local function testBagFamilyMigration()
+  local db = addon.modules['DB']
+  db.sv.version = 1
+  db.Profile().categories['Tradeskills.Herbs'].bagFamily = nil
+  db.Migrate()
+  check('a version-1 profile is migrated to the current schema', db.sv.version, 2)
+  check('the preset pairing arrives on the category that has one',
+    db.Profile().categories['Tradeskills.Herbs'].bagFamily, 32)
+  check('and nothing is invented for the category that has none',
+    db.Profile().categories['Tradeskills.Cloth'].bagFamily, nil)
+  pipeline.Refresh('migrated')
+  check('the migrated profile drives the same count',
+    sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Herbs').emptySlots, 5)
+end
+
+testBagFamilyMigration()
 
 -- Issue #43: an empty window draws no body — no blank cell, no grid — and its height is floored at the
 -- chrome the client's own bag layout needs (constants.WINDOW_CHROME_HEIGHT, measured 95 px). It still

@@ -21,6 +21,15 @@ constants.REAGENTBAG_INDEX = constants.BACKPACK + constants.NUM_BAG_SLOTS + 1
 constants.ITEM_INVENTORY_BANK_BAG_OFFSET = ITEM_INVENTORY_BANK_BAG_OFFSET
 constants.NUM_CHARACTER_BANK_SLOTS = NUM_CHARACTER_BANK_SLOTS
 
+-- Specialty-bag family bits: the second return of C_Container.GetContainerNumFreeSlots, which is
+-- how the client says what a bag is for (references/containers-and-bags.md). 0 is a plain bag.
+-- The values are shared with retail, and the client compares them itself: EquipmentManager.lua:22
+-- and Blizzard_CatalogShop.lua:827 both test that return against 0 for "a normal bag".
+constants.BAG_FAMILY = {
+  Quiver = 1, AmmoPouch = 2, SoulBag = 4, Leatherworking = 8, Inscription = 16,
+  Herb = 32, Enchanting = 64, Engineering = 128, Keyring = 256, Gem = 512, Mining = 1024,
+}
+
 -- Keys /bos prints so the client facts land in one place (docs/06 M0, issue #2).
 constants.ProbeKeys = {
   'NUM_BAG_SLOTS', 'NUM_REAGENTBAG_SLOTS', 'NUM_TOTAL_EQUIPPED_BAG_SLOTS',

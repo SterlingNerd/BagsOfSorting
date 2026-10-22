@@ -75,6 +75,10 @@ BagsOfSortingDB = {
       enabled  = true,
       affinity = nil,                 -- "herbalism"|"mining"|"engineering"|"soul"|"quiver"|… →
                                       -- preferred physical container for compaction (FR-66)
+      bagFamily = nil,                -- the client's specialty-bag family bit this category's own
+                                      -- free-slot count reads (FR-44, issue #44): 32 herb bag, 1024
+                                      -- mining bag. Not `affinity`: that is a compaction label, this
+                                      -- is the value C_Container.GetContainerNumFreeSlots answers.
       color    = nil,                 -- optional section title color
     },
     ["Recent Items"] = { priority = 1, kind = "rules",
@@ -244,13 +248,15 @@ BOS1.<base64( json-ish serialize({windows, categories}) )>
 is a pure function over the profile table. No migration ever runs inside `OnEnable` business
 logic (Baggins' `hideduplicates` boolean→string coercion in `OnEnable` is the anti-pattern).
 
-**Migrations during the prototype: there are none.** Migrations exist for users we do not have yet.
-While one user owns every deployed file, `CURRENT_VERSION` stays at **1**, the schema changes
-**breakingly**, and the game-side file is deleted or replaced out-of-band (`tests/CHECKLIST.md`
-setup — the file is `WTF/Account/<account>/SavedVariables/BagsOfSorting.lua`, and the client must be
-closed or it rewrites the edit at logout). `db.Migrate()` and the version loop stay: they are the
-machinery M3 needs, they just hold no migrations now. Migrations return at **M3**, where
-import/export and per-character profiles first make a stale file reachable.
+**A preset field added to the schema is backfilled by a migration.** While one user owns every
+deployed file, `CURRENT_VERSION` would otherwise stay at **1**, the schema changes **breakingly**, and
+the game-side file is deleted or replaced out-of-band (`tests/CHECKLIST.md` setup — the file is
+`WTF/Account/<account>/SavedVariables/BagsOfSorting.lua`, and the client must be closed or it rewrites
+the edit at logout). That works until a preset field feeds a feature: a profile written before the
+field exists would leave the feature silently off for the one player who has a file, so issue #44
+bumped `CURRENT_VERSION` to **2** with one additive migration that puts `bagFamily` on the tradeskill
+presets. `db.Migrate()` and the version loop are the machinery M3 needs; migration **2** is the first
+one it holds.
 
 **Importing from other addons is deferred** (`docs/07` Q5, `FR-94` = Won't for v1): ship two
 sensible default profiles instead. The table below stays in the spec as the answer to "if we ever

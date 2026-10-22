@@ -13,8 +13,11 @@ local _, addon = ...
 local db = addon:NewModule('DB')
 
 local log = addon:GetModule('Log')
+local constants = addon:GetModule('Constants')
 
-db.CURRENT_VERSION = 1
+local BAG = constants.BAG_FAMILY
+
+db.CURRENT_VERSION = 2
 
 ---@class BoSSettings
 -- Only settings something actually reads are present (FR-80: a setting with no UI home is
@@ -30,13 +33,18 @@ local DEFAULT_SETTINGS = {
 --- share priority 15 because each accepts a disjoint set of subtypes, so no item can reach a
 --- second one. `type` is pinned on purpose — 'Cloth' and 'Leather' are Armor subtypes too, and
 --- without it a cloth shirt sorts as tailoring material.
-local function tradeskill(subtypes)
+---
+--- `bagFamily` (issue #44) is the specialty bag the category pairs with for its own free-slot
+--- count: the Herbs section counts the herb bag's empty slots. It is left off where the client has
+--- no bag of that trade to count — Cloth and Cooking have a subtype each and no bag of their own.
+local function tradeskill(subtypes, bagFamily)
   local anySubtype = { op = 'any', children = {} }
   for _, subtype in ipairs(subtypes) do
     anySubtype.children[#anySubtype.children + 1] = { field = 'subtype', cmp = '=', value = subtype }
   end
   return {
     priority = 15, kind = 'rules', enabled = true, duplicate = false,
+    bagFamily = bagFamily,
     rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Trade Goods' }, anySubtype } },
   }
 end
@@ -175,12 +183,12 @@ local DEFAULT_PROFILE = {
     -- No Alchemy or Inscription category either. Alchemy reagents *are* the Herb and Elemental
     -- subtypes here, and Inscription has no subclass at all — "Alchemy" exists only as a **Recipe**
     -- subtype (class 9), which is the book, not the reagents.
-    ['Tradeskills.Herbs'] = tradeskill({ 'Herb' }),
-    ['Tradeskills.Ore'] = tradeskill({ 'Metal & Stone' }),
-    ['Tradeskills.Leather'] = tradeskill({ 'Leather' }),
+    ['Tradeskills.Herbs'] = tradeskill({ 'Herb' }, BAG.Herb),
+    ['Tradeskills.Ore'] = tradeskill({ 'Metal & Stone' }, BAG.Mining),
+    ['Tradeskills.Leather'] = tradeskill({ 'Leather' }, BAG.Leatherworking),
     ['Tradeskills.Cloth'] = tradeskill({ 'Cloth' }),
-    ['Tradeskills.Elements'] = tradeskill({ 'Elemental', 'Enchanting' }),
-    ['Tradeskills.Parts'] = tradeskill({ 'Parts' }),
+    ['Tradeskills.Elements'] = tradeskill({ 'Elemental', 'Enchanting' }, BAG.Enchanting),
+    ['Tradeskills.Parts'] = tradeskill({ 'Parts' }, BAG.Engineering),
     ['Tradeskills.Cooking'] = tradeskill({ 'Cooking' }),
     ['Armor'] = {
       priority = 20,
@@ -208,10 +216,25 @@ local function deepCopy(value)
   return copy
 end
 
---- Migrations are numbered, additive, pure functions over the profile table (docs/04). There are
---- none: while one user owns every deployed file the schema changes breakingly and the game-side
---- file is deleted out-of-band. Migrations return at M3 (docs/04 §Migration).
-local MIGRATIONS = {}
+--- Migrations are numbered, additive, pure functions over the profile table (docs/04). A preset
+--- field added to the schema is backfilled here: a profile written before it existed would leave
+--- the feature that reads it silently off for anyone already playing.
+local MIGRATIONS = {
+  -- Issue #44: the tradeskill presets pair with a specialty bag.
+  [2] = function(profile)
+    local presetFamilies = {
+      ['Tradeskills.Herbs'] = BAG.Herb,
+      ['Tradeskills.Ore'] = BAG.Mining,
+      ['Tradeskills.Leather'] = BAG.Leatherworking,
+      ['Tradeskills.Elements'] = BAG.Enchanting,
+      ['Tradeskills.Parts'] = BAG.Engineering,
+    }
+    for name, family in pairs(presetFamilies) do
+      local category = profile.categories and profile.categories[name]
+      if category and category.bagFamily == nil then category.bagFamily = family end
+    end
+  end,
+}
 
 function db.Migrate()
   while db.sv.version < db.CURRENT_VERSION do

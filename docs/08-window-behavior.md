@@ -63,8 +63,8 @@ others are 17 px shorter. The template keeps itself current; we add no refresh. 
 Our count covers containers **0..4** — the backpack plus the four bag slots. The client's own
 `C_Container.CalculateTotalNumberOfFreeBagSlots()` is **not** that set: measured 2026-10-22
 (`/bos test 44`) it answered 67 while every container we can see — backpack, three bags, keyring —
-summed 56 free slots, and it moved independently of anything done to the bags. What it adds is open
-work (`containers-and-bags.md`). The reagent pouch is harvested and drawn, but its free slots are
+summed 56 free slots — the excess is the 48-slot bank grid, which joins the client's number even while
+the bank is closed (`containers-and-bags.md`). The reagent pouch is harvested and drawn, but its free slots are
 counted apart from our number (issue #36); they reach a window through the specialty family the client
 reports for the pouch itself, below. The indicator hides when the bag set is full, and it never sees
 the bank: harvest drops the bank containers on `BANKFRAME_CLOSED`.
@@ -78,7 +78,8 @@ the specialty bag its category pairs with, not the whole bag set. The pairing is
 bag 1024, Leather ↔ leatherworking bag 8, Elements ↔ enchanting bag 64, Engineering ↔ engineering
 bag 128) — and the bag is whichever container the client reports that family bit for. Measured on this
 client (2026-10-22): the reagent pouch (`Apprentice's Herb Pouch`, index 5) answers **32**, so it feeds
-the Herbs section; every plain bag and the keyring answer 0.
+the Herbs section, and a herb bag in a bag slot feeds it the same way; every plain bag and the keyring
+answer 0.
 
 No bag of that family equipped, or one with nothing open in it, leaves the section with no count and no
 cell. The reverse holds too: **a category with nothing in it is still drawn while its tradeskill bag

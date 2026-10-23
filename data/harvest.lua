@@ -65,8 +65,8 @@ local discovered
 
 ---@type table<string, number>?
 local freeSlots
----@type BoSFreeSlot?
-local firstFree
+---@type table<string, BoSFreeSlot>?
+local firstFreeByKind
 ---@type table<number, number>?
 local freeSlotsByFamily
 ---@type table<number, BoSFreeSlot>?
@@ -139,7 +139,7 @@ end
 ---@return BoSItem[]
 function harvest.Items()
   local items = {}
-  local free, freeFirst = {}, nil
+  local free, freeFirst = {}, {}
   local byFamily, firstByFamily = {}, {}
   for _, container in ipairs(harvest.Containers()) do
     -- Which side of the character a container is on (issue #47): a bank bag's free space belongs to
@@ -181,22 +181,22 @@ function harvest.Items()
         if not firsts[container.family] then
           firsts[container.family] = { bagID = container.index, slot = slot }
         end
-        -- The first one is the slot the free-slot indicator points at (issue #36): a real empty
-        -- slot, so the client's own click and drop handlers work on it. Backpack family only —
-        -- the keyring sorts first and is not the player's bags.
-        if not freeFirst and container.kind == 'backpack' then
-          freeFirst = { bagID = container.index, slot = slot }
+        -- The first one per container kind is the slot that kind's free-slot indicator points at
+        -- (issue #36, and #47 for the bank side): a real empty slot, so the client's own click and
+        -- drop handlers work on it.
+        if not freeFirst[container.kind] then
+          freeFirst[container.kind] = { bagID = container.index, slot = slot }
         end
       end
     end
   end
-  freeSlots, firstFree = free, freeFirst
+  freeSlots, firstFreeByKind = free, freeFirst
   freeSlotsByFamily, firstFreeByFamily = byFamily, firstByFamily
   return items
 end
 
 --- Free slots in one container family, counted in the same pass that read the items (issue #36).
----@param kind string  -- 'backpack' | 'keyring'
+---@param kind string  -- 'backpack' | 'keyring' | 'reagent' | 'bank'
 ---@return number
 function harvest.FreeSlots(kind)
   return (freeSlots or {})[kind] or 0
@@ -221,9 +221,11 @@ function harvest.FirstFreeSlotForFamily(family, side)
   return ((firstFreeByFamily or {})[side] or {})[family]
 end
 
+--- The first free slot of one container kind — the slot that kind's free-slot indicator points at.
+---@param kind string  -- 'backpack' | 'bank'
 ---@return BoSFreeSlot?
-function harvest.FirstFreeSlot()
-  return firstFree
+function harvest.FirstFreeSlot(kind)
+  return (firstFreeByKind or {})[kind or 'backpack']
 end
 
 --- AC-14: harvested totals a human can compare against the stock bags.

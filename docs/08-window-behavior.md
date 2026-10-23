@@ -66,8 +66,12 @@ Our count covers containers **0..4** — the backpack plus the four bag slots. T
 summed 56 free slots — the excess is the 48-slot bank grid, which joins the client's number even while
 the bank is closed (`containers-and-bags.md`). The reagent pouch is harvested and drawn, but its free slots are
 counted apart from our number (issue #36); they reach a window through the specialty family the client
-reports for the pouch itself, below. The indicator hides when the bag set is full, and it never sees
-the bank: harvest drops the bank containers on `BANKFRAME_CLOSED`.
+reports for the pouch itself, below. The indicator hides when the bag set is full.
+
+The **bank side has its own indicator**, on the base `Bank` window, over the 48-slot grid and the
+purchased bank bags (issue #47). It is a separate number from the player's, it exists only while the
+bank is open — harvest drops the bank containers on `BANKFRAME_CLOSED` — and it is the same
+`PaintEmpty` cell pointing at a real empty bank slot.
 
 Our indicator's count button sets `minDisplayCount = 0` so a count of 1 draws; the pool clears it on
 release so item buttons keep Blizzard's behaviour (a stack of 1 shows no number).
@@ -114,7 +118,7 @@ and how it looks.
 |---|---|
 | A bank window is in the model only while the bank is open | `harvest.SetBankOpen` puts containers 6..14 in the discovered list on `BANKFRAME_OPENED` and drops them on `BANKFRAME_CLOSED` — opening fires no container event, so nothing else reveals them. A bank window past that is a frame around nothing (FR-13, AC-13) |
 | A window draws only its own side of the character | the harvest is one flat list and the classifier never reads a container, so `item.containerKind` decides the owner in `Pipeline.Assign`. Left out, the default backpack window's catch-all claims the bank's items and the bank windows draw the leftovers (AC-13) |
-| No money bar and no bag-set free-slot count on a bank window | both numbers are the player's, not the bank's (#42, #36). A bank window keeps its per-section tradeskill counts |
+| The bag-set free-slot count is one window **per side** | the base `Bank` window carries the bank's number (grid plus bank bags) the way the default Backpack window carries the player's (#36, #47). Only the backpack side carries the money bar — a bank window is not a purse (#42) |
 | A section counts the bag of its family **on its own side** | an equipped herb bag feeds the backpack Herbs section and a herb bag in a bank slot feeds the bank one; the two never sum into one number (#44, #47) |
 | Blue panel and border, treasure-chest corner | the bank windows are otherwise the same panels as the backpack windows, so they have to be told apart at a glance. The corner is the icon the client itself reports for the bank's tab — `C_Bank.FetchPurchasedBankTabData` answers `Tab 1, icon 134400` (`containers-and-bags.md`, docs/07 Q10) |
 | The bank half is a literal copy of the preset | `window.copy` (FR-10b) and linked windows (FR-10c) are what copy a **user's** windows and keep them in step; until those land a bank window diverges by hand, and migration 3 copies the preset into a profile that has no bank windows |

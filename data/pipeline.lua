@@ -92,7 +92,7 @@ function pipeline.Assign(placements)
   local models = {}
   local shown = {}
   local placed = {}
-  local counted = false
+  local counted = {}
 
   for _, config in ipairs(db.Windows()) do
     -- config.hidden is the window's own X: closed windows are not in the model at all, which
@@ -151,20 +151,21 @@ function pipeline.Assign(placements)
         end
       end
 
-      -- Issue #36 and #42: the bag-level chrome — the free-slot count and the money bar — belongs
-      -- to one window: the first **backpack** window in screen order, which is the default Backpack
-      -- window. The same number on all five would read as five sets of bags, and a coin row on
-      -- each as five purses; on a bank window both numbers are the wrong player's (issue #47). When
-      -- that window is closed the chrome travels with it.
+      -- Issue #36, #42 and #47: the bag-level chrome belongs to one window **per side** — the first
+      -- window of that kind in screen order, which is the default Backpack window and the base Bank
+      -- window. The same number on all five would read as five sets of bags. The money bar is the
+      -- backpack side's alone: a bank window is not a purse. When a side's window is closed the
+      -- chrome travels with it.
       -- shortcut: which window carries it is a rule, not a setting. The setting is docs/04's
       -- `showEmptySlots`, and it arrives with the pane that edits it (docs/05).
-      if not counted and not isBank then
-        counted = true
-        window.showMoney = true
-        local free = harvest.FreeSlots('backpack')
+      local side = isBank and 'bank' or 'backpack'
+      if not counted[side] then
+        counted[side] = true
+        if not isBank then window.showMoney = true end
+        local free = harvest.FreeSlots(side)
         if free > 0 then
           window.emptySlots = free
-          window.emptySlot = harvest.FirstFreeSlot()
+          window.emptySlot = harvest.FirstFreeSlot(side)
         end
       end
 

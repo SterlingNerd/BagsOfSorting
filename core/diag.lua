@@ -469,12 +469,16 @@ probes[17] = function()
       named[family] or 'unknown', sideText('backpack'), sideText('bank')))
   end
 
-  local first = harvest.FirstFreeSlot()
+  local function firstText(kind)
+    local slot = harvest.FirstFreeSlot(kind)
+    return slot and (slot.bagID .. ':' .. slot.slot) or 'none'
+  end
   record('our counts', 'backpack', harvest.FreeSlots('backpack'),
+    'first', firstText('backpack'),
     'reagent', harvest.FreeSlots('reagent'),
     'keyring', harvest.FreeSlots('keyring'),
     'bank', harvest.FreeSlots('bank'),
-    'first free slot', first and (first.bagID .. ':' .. first.slot) or 'none')
+    'bank first', firstText('bank'))
 
   local models = pipeline.Model()
   if not models then record('no refresh has run yet') return end

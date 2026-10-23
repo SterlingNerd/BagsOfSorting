@@ -313,7 +313,7 @@ check('the keyring is counted apart from the bags', harvest.FreeSlots('keyring')
 check('the reagent pouch is its own family, 2 free slots', harvest.FreeSlots('reagent'), 2)
 check('and its free space is not in the number the window shows', backpack.emptySlots, 21)
 check('the indicator points at a real empty slot, and not the keyring slot before it',
-  harvest.FirstFreeSlot().bagID .. ':' .. harvest.FirstFreeSlot().slot, '0:12')
+  harvest.FirstFreeSlot('backpack').bagID .. ':' .. harvest.FirstFreeSlot('backpack').slot, '0:12')
 check('the default backpack window carries the count', backpack.emptySlots, 21)
 check('the slot it points at travels with the count',
   backpack.emptySlot.bagID .. ':' .. backpack.emptySlot.slot, '0:12')
@@ -604,7 +604,7 @@ local function testFullBags()
   local full = windowIn(pipeline.Model(), 'Backpack')
   check('a full inventory has no free slots', harvest.FreeSlots('backpack'), 0)
   check('even with one reagent pouch slot still open', harvest.FreeSlots('reagent'), 1)
-  check('and no empty slot to point at', harvest.FirstFreeSlot(), nil)
+  check('and no empty slot to point at', harvest.FirstFreeSlot('backpack'), nil)
   check('the window carries no count', full.emptySlots, nil)
   check('the window carries no slot', full.emptySlot, nil)
   check('no cell, so the window is the size it was before the indicator existed',
@@ -998,20 +998,29 @@ local function testBankWindows()
   check('opening the bank leaves the backpack windows the size they were',
     windowIn(models, 'Backpack').height, TITLE + 3 * (18 + CELL) + 3 * 6 + CELL + 8 + MONEY)
 
-  -- The bag-level chrome (#42, #36) stays on the backpack side: a coin row on a bank window reads
-  -- as a second purse, and the free-slot count is the player's bags, not the bank's.
+  -- The bag-level chrome (#42, #36, #47): one window per side carries the free-slot count, and only
+  -- the backpack side carries the money bar — a coin row on a bank window reads as a second purse.
   local carriers = {}
   for _, window in ipairs(models) do
     if window.showMoney then carriers[#carriers + 1] = window.name end
   end
   check('exactly one window carries the money bar, and no bank window does',
     table.concat(carriers, ','), 'Backpack')
-  check('a bank window carries no bag-set count', bank.emptySlots, nil)
   check('the bag-set count still covers only the player bags',
     windowIn(models, 'Backpack').emptySlots, 21)
   check('and its cell still points at a slot in the player bags',
-    harvest.FirstFreeSlot().bagID .. ':' .. harvest.FirstFreeSlot().slot, '0:12')
-  check('a bank window is sized without the money band', bank.height, TITLE + 2 * (18 + CELL) + 2 * 6 + 8)
+    harvest.FirstFreeSlot('backpack').bagID .. ':' .. harvest.FirstFreeSlot('backpack').slot, '0:12')
+
+  -- The bank side has its own number on its own base window: the 45 free grid slots plus the two
+  -- bank bags (10 and 9 open).
+  check('the base bank window carries the bank free-slot count', bank.emptySlots, 64)
+  check('and its cell points at a real empty slot in the bank grid',
+    bank.emptySlot.bagID .. ':' .. bank.emptySlot.slot, '6:4')
+  check('no other bank window repeats it',
+    tostring(windowIn(models, 'Bank Quests').emptySlots) .. '/'
+      .. tostring(windowIn(models, 'Bank Tradeskills').emptySlots), 'nil/nil')
+  check('a bank window is sized for its cell and not for a money band',
+    bank.height, TITLE + 2 * (18 + CELL) + 2 * 6 + CELL + 8)
 
   -- Issue #44's count on the bank side: a section counts the bag of its family **on its own side**,
   -- so the two herb bags never add up into one number.
@@ -1031,6 +1040,24 @@ local function testBankWindows()
   -- #43 in the bank: a bank window with nothing in it still draws, at its chrome floor.
   check('an empty bank window collapses to its chrome',
     windowIn(models, 'Bank Consumables').height, 95)
+
+  -- The negative half (#36, bank side): a bank with nothing open in it gets no count, no slot and no
+  -- cell. Index 7 answering 0 slots is an unpurchased bank bag slot rather than an empty bag.
+  local savedSlots = slotCounts
+  slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [2] = 6, [3] = 6, [5] = 4, [6] = 3, [7] = 0, [8] = 1 }
+  harvest.Invalidate()
+  pipeline.Refresh('47-full-bank')
+  local full = windowIn(pipeline.Model(), 'Bank')
+  check('a full bank has no free slot to count', harvest.FreeSlots('bank'), 0)
+  check('and no slot to point at', harvest.FirstFreeSlot('bank'), nil)
+  check('so its base window carries no count', full.emptySlots, nil)
+  check('and is the size it was without the cell',
+    full.height, TITLE + 2 * (18 + CELL) + 2 * 6 + 8)
+  slotCounts = savedSlots
+  harvest.Invalidate()
+  pipeline.Refresh('47-bank-open-again')
+  check('free space in the bank puts the cell back',
+    windowIn(pipeline.Model(), 'Bank').emptySlots, 64)
 
   eventsMod.Emit('BANKFRAME_CLOSED')
   check('closing the bank drops the bank containers', containerAt(6), nil)

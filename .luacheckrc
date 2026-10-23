@@ -57,6 +57,8 @@ globals = {
     "NineSliceUtil",
     "IsUsingCombinedBags",
     "C_Bank",
+    "CreateColor",
+    "PANEL_BACKGROUND_COLOR",
 
     "GetTime",
     "GetBuildInfo",

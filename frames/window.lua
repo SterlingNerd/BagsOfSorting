@@ -91,6 +91,19 @@ end
 --- name clears the portrait instead of sitting under it.
 local BAG_PORTRAIT = 'Interface/Icons/Inv_misc_bag_08'  -- what ContainerFrameCombinedBags draws
 
+-- The bank windows' corner icon (issue #47): the icon the client itself reports for the bank's own
+-- tab. `C_Bank.FetchPurchasedBankTabData` answers `Tab 1, icon 134400` on this client (docs/07 Q10,
+-- `/bos test dump` 2026-10-18), so the corner is the same chest the bank's Page 1 tab draws.
+local BANK_PORTRAIT = 134400
+
+-- The bank windows' blue tint (issue #47). The panel background is the client's own panel colour
+-- pushed toward blue — red and green scaled down, blue lifted — so a bank window keeps the darkness
+-- every other panel has and differs only in hue. The border art (the held-bag ring is its top-left
+-- corner piece) takes a multiplier instead: Blizzard's metal is already bright, and the panel colour
+-- would only dim it. The blue is a look, not a measurement — `/bos test 47` is the look check.
+local BANK_BG_BLUE = 0.16
+local BANK_BORDER = { 0.60, 0.75, 1.0 }
+
 --- Everything a window draws sits on this level (issue #34). The shell had no level of its own, so its
 --- whole subtree sat at the bottom of the band: Blizzard's action bar (`MainActionBar` frameLevel 50,
 --- its EndCaps 100) and bag bar (`BagsBar` 52) drew over our panel background and money bar, Blizzard's
@@ -101,7 +114,8 @@ local BAG_PORTRAIT = 'Interface/Icons/Inv_misc_bag_08'  -- what ContainerFrameCo
 local CONTENT_BASE = 300
 
 ---@param frame Frame
-local function bagChrome(frame)
+---@param kind string  -- 'backpack' | 'bank' (issue #47)
+local function bagChrome(frame, kind)
   -- The template's own OnLoad already drew the full-size ring from its `layoutType` KeyValue, so the
   -- field and the art both have to change.
   frame.layoutType = 'HeldBagLayout'
@@ -115,7 +129,7 @@ local function bagChrome(frame)
   mask:ClearAllPoints()
   mask:SetPoint('TOPLEFT', portrait, 'TOPLEFT', 0, 0)
   mask:SetPoint('BOTTOMRIGHT', portrait, 'BOTTOMRIGHT', 0, 0)
-  frame:SetPortraitToAsset(BAG_PORTRAIT)
+  frame:SetPortraitToAsset(kind == 'bank' and BANK_PORTRAIT or BAG_PORTRAIT)
   -- Shell and background share the base level; content sits above it (frames/section.lua) and the
   -- template's chrome already sits above that. `toplevel` is what Blizzard's own bag window carries
   -- (`ContainerFrame.xml:308`) and what BetterBags' backpack window carries on this client.
@@ -126,14 +140,21 @@ local function bagChrome(frame)
   -- windows hand them PANEL_BACKGROUND_COLOR in `ContainerFrameMixin:UpdateBackground`. Whether the
   -- template's own XML colour is enough for us is what `/bos test 34` reads — issue #34's "too
   -- transparent" is reported against the client's own bag window in the same capture.
-  frame:SetBackgroundColor()
+  if kind == 'bank' then
+    local r, g, b, a = 0.11, 0.10, 0.09, 1
+    if PANEL_BACKGROUND_COLOR then r, g, b, a = PANEL_BACKGROUND_COLOR:GetRGBA() end
+    frame:SetBackgroundColor(CreateColor(r * 0.55, g * 0.8, math.min(1, b + BANK_BG_BLUE), a))
+    frame.NineSlice:SetBorderColor(BANK_BORDER[1], BANK_BORDER[2], BANK_BORDER[3])
+  else
+    frame:SetBackgroundColor()
+  end
 end
 
 ---@param config any
 ---@return BoSWindowFrame
 local function create(config)
   local frame = CreateFrame('Frame', 'BagsOfSortingWindow' .. config.id, UIParent, 'PortraitFrameFlatTemplate')
-  bagChrome(frame)
+  bagChrome(frame, config.kind)
   frame:SetMovable(true)
   frame:EnableMouse(true)
   frame:RegisterForDrag('LeftButton')

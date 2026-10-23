@@ -104,6 +104,22 @@ compact count versus individual slots, arrives with the settings pane (docs/05).
 | Count text | Blizzard's own `Count` fontstring on the button |
 | Money | `ContainerMoneyFrameTemplate` |
 
+## Bank windows
+
+The default profile mirrors every preset backpack window as a `kind = "bank"` window: same sections,
+same category bindings, same order (issue #47). What differs is which half of the character it draws
+and how it looks.
+
+| Rule | Why |
+|---|---|
+| A bank window is in the model only while the bank is open | `harvest.SetBankOpen` puts containers 6..14 in the discovered list on `BANKFRAME_OPENED` and drops them on `BANKFRAME_CLOSED` — opening fires no container event, so nothing else reveals them. A bank window past that is a frame around nothing (FR-13, AC-13) |
+| A window draws only its own side of the character | the harvest is one flat list and the classifier never reads a container, so `item.containerKind` decides the owner in `Pipeline.Assign`. Left out, the default backpack window's catch-all claims the bank's items and the bank windows draw the leftovers (AC-13) |
+| No money bar and no bag-set free-slot count on a bank window | both numbers are the player's, not the bank's (#42, #36). A bank window keeps its per-section tradeskill counts |
+| A section counts the bag of its family **on its own side** | an equipped herb bag feeds the backpack Herbs section and a herb bag in a bank slot feeds the bank one; the two never sum into one number (#44, #47) |
+| Blue panel and border, treasure-chest corner | the bank windows are otherwise the same panels as the backpack windows, so they have to be told apart at a glance. The corner is the icon the client itself reports for the bank's tab — `C_Bank.FetchPurchasedBankTabData` answers `Tab 1, icon 134400` (`containers-and-bags.md`, docs/07 Q10) |
+| The bank half is a literal copy of the preset | `window.copy` (FR-10b) and linked windows (FR-10c) are what copy a **user's** windows and keep them in step; until those land a bank window diverges by hand, and migration 3 copies the preset into a profile that has no bank windows |
+| Search is not there yet | our windows have no search box at all (#33). When it arrives it has to reach the bank windows too, and only while the bank is open — a closed bank has no data to search (`FR-109`) |
+
 ## Harvest consequences that show up in the UI
 
 - **Nothing per-bag is keyed on a bag slot index.** The client re-slots equipped bags, and an empty middle

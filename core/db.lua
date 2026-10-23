@@ -17,7 +17,7 @@ local constants = addon:GetModule('Constants')
 
 local BAG = constants.BAG_FAMILY
 
-db.CURRENT_VERSION = 2
+db.CURRENT_VERSION = 3
 
 ---@class BoSSettings
 -- Only settings something actually reads are present (FR-80: a setting with no UI home is
@@ -130,6 +130,85 @@ local DEFAULT_PROFILE = {
         { id = 's5', name = 'Tools', categories = { 'Tools' } },
       },
     },
+    -- Issue #47: the bank half, a copy of the five windows above with `kind = "bank"` — same
+    -- sections, same bindings, same order. They only reach the screen while the bank is open
+    -- (FR-13, AC-13; data/pipeline.lua is the gate).
+    -- shortcut: a literal copy rather than a copy command. `window.copy` (FR-10b) and linked windows
+    -- (FR-10c) are what make a user's own windows copy and stay in step; until then a bank window
+    -- diverges by hand.
+    {
+      id = 'w6',
+      name = 'Bank',
+      kind = 'bank',
+      priority = 6,
+      openWithAll = true,
+      columns = 5,
+      compact = false,
+      scale = 1.0,
+      sections = {
+        { id = 's16', name = 'Junk', categories = { 'Junk' } },
+        { id = 's17', name = 'Armor', categories = { 'Armor' } },
+        { id = 's18', name = 'Everything else', categories = { '__catchall' } },
+      },
+    },
+    {
+      id = 'w7',
+      name = 'Bank Quests',
+      kind = 'bank',
+      priority = 7,
+      openWithAll = true,
+      columns = 5,
+      compact = false,
+      scale = 1.0,
+      sections = {
+        { id = 's19', name = 'Quest Items', categories = { 'Quest Items' } },
+      },
+    },
+    {
+      id = 'w8',
+      name = 'Bank Consumables',
+      kind = 'bank',
+      priority = 8,
+      openWithAll = true,
+      columns = 5,
+      compact = false,
+      scale = 1.0,
+      sections = {
+        { id = 's20', name = 'Consumables', categories = { 'Consumables' } },
+      },
+    },
+    {
+      id = 'w9',
+      name = 'Bank Tradeskills',
+      kind = 'bank',
+      priority = 9,
+      openWithAll = true,
+      columns = 5,
+      compact = false,
+      scale = 1.0,
+      sections = {
+        { id = 's21', name = 'Herbs', categories = { 'Tradeskills.Herbs' } },
+        { id = 's22', name = 'Ore', categories = { 'Tradeskills.Ore' } },
+        { id = 's23', name = 'Leather', categories = { 'Tradeskills.Leather' } },
+        { id = 's24', name = 'Cloth', categories = { 'Tradeskills.Cloth' } },
+        { id = 's25', name = 'Elements', categories = { 'Tradeskills.Elements' } },
+        { id = 's26', name = 'Engineering', categories = { 'Tradeskills.Parts' } },
+        { id = 's27', name = 'Cooking', categories = { 'Tradeskills.Cooking' } },
+      },
+    },
+    {
+      id = 'w10',
+      name = 'Bank Tools',
+      kind = 'bank',
+      priority = 10,
+      openWithAll = true,
+      columns = 5,
+      compact = false,
+      scale = 1.0,
+      sections = {
+        { id = 's28', name = 'Tools', categories = { 'Tools' } },
+      },
+    },
   },
   categories = {
     -- Priority is the ladder the classifier walks, ascending (docs/04 §Precedence 1). A quest item
@@ -232,6 +311,23 @@ local MIGRATIONS = {
     for name, family in pairs(presetFamilies) do
       local category = profile.categories and profile.categories[name]
       if category and category.bagFamily == nil then category.bagFamily = family end
+    end
+  end,
+
+  -- Issue #47: a profile written before the bank windows existed gets the preset bank half. The
+  -- guard is what keeps a deliberate deletion from coming back: migrations run once per profile.
+  -- shortcut: the preset is copied in rather than derived from the profile's own windows, so a
+  -- profile whose backpack windows are not the preset gets preset twins. FR-10b's `window.copy`
+  -- (M5 configure mode) is the thing that copies a user's own windows.
+  [3] = function(profile)
+    profile.windows = profile.windows or {}
+    for _, window in ipairs(profile.windows) do
+      if window.kind == 'bank' then return end
+    end
+    for _, preset in ipairs(DEFAULT_PROFILE.windows) do
+      if preset.kind == 'bank' then
+        profile.windows[#profile.windows + 1] = deepCopy(preset)
+      end
     end
   end,
 }

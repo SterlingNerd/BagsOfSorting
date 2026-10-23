@@ -63,12 +63,12 @@ end
 --- The free-slot count a section claims from the specialty bags its categories pair with
 --- (issue #44). Two categories on one family count that bag once, and a family with no bag
 --- equipped counts nothing — the AC's "hidden when no corresponding tradeskill bag is equipped".
---- equipped counts nothing — the AC's "hidden when no corresponding tradeskill bag is equipped".
 --- A disabled category contributes nothing here either, exactly as it owns no items.
 ---@param names string[]
+---@param side string  -- which half of the character the window draws: 'backpack' | 'bank'
 ---@return number free
 ---@return BoSFreeSlot? slot
-local function sectionFreeSlots(names)
+local function sectionFreeSlots(names, side)
   local categories, seen = db.Categories(), {}
   local total, first = 0, nil
   for _, name in ipairs(names) do
@@ -76,8 +76,8 @@ local function sectionFreeSlots(names)
     local family = category and category.enabled ~= false and category.bagFamily
     if family and not seen[family] then
       seen[family] = true
-      total = total + harvest.FreeSlotsForFamily(family)
-      first = first or harvest.FirstFreeSlotForFamily(family)
+      total = total + harvest.FreeSlotsForFamily(family, side)
+      first = first or harvest.FirstFreeSlotForFamily(family, side)
     end
   end
   return total, first
@@ -95,10 +95,13 @@ function pipeline.Assign(placements)
   local counted = false
 
   for _, config in ipairs(db.Windows()) do
-    -- Bank windows are M5: the bank container index space is issue #9's answer, not ours.
     -- config.hidden is the window's own X: closed windows are not in the model at all, which
     -- is what keeps windows.Prune from reopening them on the next refresh.
-    if config.kind == 'backpack' and not config.hidden then
+    -- A bank window is in the model only while the bank is open (issue #47, AC-13): the harvest
+    -- drops containers 6..14 on BANKFRAME_CLOSED, so past that a bank window is a frame around
+    -- nothing.
+    local isBank = config.kind == 'bank'
+    if not config.hidden and (not isBank or harvest.BankOpen()) then
       local window = {
         id = config.id,
         name = config.name,
@@ -113,10 +116,15 @@ function pipeline.Assign(placements)
         if not sectionConfig.hidden then
           local names = pipeline.ResolveBindings(sectionConfig.categories)
           local items = {}
+          -- Issue #47: a window draws its own side of the character. The harvest is one flat list and
+          -- the classifier does not know about containers, so without this the default backpack
+          -- window's catch-all claims the bank's items and the bank windows draw the leftovers
+          -- (AC-13: "no backpack window leaks bank contents").
           for _, categoryName in ipairs(names) do
             local category = db.Categories()[categoryName]
             for _, item in ipairs(placements[categoryName] or {}) do
-              if not placed[item] or (category and category.duplicate) then
+              if (item.containerKind == 'bank') == isBank
+                and (not placed[item] or (category and category.duplicate)) then
                 placed[item] = true
                 items[#items + 1] = item
               end
@@ -126,7 +134,7 @@ function pipeline.Assign(placements)
           -- bag with free slots keeps its section on screen even when the category holds nothing —
           -- the cell is the drop target, and a hidden section hides it (`/bos test 44d`). The
           -- whole-bag-set number stays on the default backpack window (#36).
-          local free, slot = sectionFreeSlots(names)
+          local free, slot = sectionFreeSlots(names, config.kind)
           if #items > 0 or free > 0 then
             local section = {
               id = sectionConfig.id,
@@ -144,12 +152,13 @@ function pipeline.Assign(placements)
       end
 
       -- Issue #36 and #42: the bag-level chrome — the free-slot count and the money bar — belongs
-      -- to one window: the first backpack window in screen order, which is the default Backpack
+      -- to one window: the first **backpack** window in screen order, which is the default Backpack
       -- window. The same number on all five would read as five sets of bags, and a coin row on
-      -- each as five purses. When that window is closed the chrome travels with it.
+      -- each as five purses; on a bank window both numbers are the wrong player's (issue #47). When
+      -- that window is closed the chrome travels with it.
       -- shortcut: which window carries it is a rule, not a setting. The setting is docs/04's
       -- `showEmptySlots`, and it arrives with the pane that edits it (docs/05).
-      if not counted then
+      if not counted and not isBank then
         counted = true
         window.showMoney = true
         local free = harvest.FreeSlots('backpack')

@@ -11,6 +11,10 @@ _G.NUM_BAG_SLOTS = 4
 _G.NUM_REAGENTBAG_SLOTS = 1
 _G.NUM_TOTAL_EQUIPPED_BAG_SLOTS = 5
 _G.KEYRING_CONTAINER = -1
+-- The bank arithmetic core/constants.lua reads at load (issue #9): offset 5, nine bank bag slots,
+-- so the bank containers are indices 6..14.
+_G.ITEM_INVENTORY_BANK_BAG_OFFSET = 5
+_G.NUM_CHARACTER_BANK_SLOTS = 9
 
 -- Minimal stand-ins for the two things the pure modules touch at load time: a frame object
 -- for core/events + core/async, and Enum.ItemQuality for filters/fields.
@@ -136,6 +140,10 @@ for _, item in ipairs(fixtures.items) do byID[item.itemID] = item end
 -- 6-slot engineering bag. The client names a specialty bag by the family bit
 -- C_Container.GetContainerNumFreeSlots answers with (32 herb, 128 engineering, 0 a plain one), so
 -- `families` below is this stub's answer to that call.
+--
+-- Issue #47 adds the bank side, at the shape issues #9 and #25 measured: the 48-slot grid at index 6,
+-- a purchased 10-slot bank bag at 7, and a 10-slot herb-family bag at 8. Harvest only probes them
+-- while the bank is open, so their contents are invisible until a test opens it.
 local contents = {
   [-1] = { 1005 },
   [0] = { 1001, 1002, 1003, 1004, 5411, 2901, 2770, 2672, 118, 159, 1251 },
@@ -143,6 +151,9 @@ local contents = {
   [2] = { 765 },
   [3] = {},
   [5] = { 3355, 3434 },
+  [6] = { 1007, 1009, 1008 },
+  [7] = {},
+  [8] = { 1010 },
 }
 
 -- index -> total slots, at the sizes the live client reports (references/containers-and-bags.md
@@ -151,9 +162,9 @@ local contents = {
 -- and issue #36 is about what the addon does with it, so the fixture has some.
 -- index -> the specialty family bit the client would report for it. The herb bag and the
 -- engineering bag are specialty bags; the rest of the set is plain.
-local families = { [2] = 32, [3] = 128 }
+local families = { [2] = 32, [3] = 128, [8] = 32 }
 
-local slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [2] = 6, [3] = 6, [5] = 4 }
+local slotCounts = { [-1] = 32, [0] = 20, [1] = 6, [2] = 6, [3] = 6, [5] = 4, [6] = 48, [7] = 10, [8] = 10 }
 
 -- 1005 is the item the client has never seen: container info knows its name and quality,
 -- GetItemInfo knows nothing (FR-103).
@@ -392,7 +403,7 @@ check('neither new window repeats the free-slot count',
 local herbs = sectionIn(tradeskills, 'Herbs')
 check('the herb bag carries the client\'s herb family bit', containerAt(2).family, 32)
 check('a plain bag carries none', containerAt(0).family, 0)
-check('the herb family has 5 free slots', harvest.FreeSlotsForFamily(32), 5)
+check('the herb family has 5 free slots', harvest.FreeSlotsForFamily(32, 'backpack'), 5)
 check('the Herbs section carries its own count', herbs.emptySlots, 5)
 check('and points at a real free slot in that bag, not the first free slot anywhere',
   herbs.emptySlot.bagID .. ':' .. herbs.emptySlot.slot, '2:2')
@@ -446,10 +457,9 @@ check('find reports nothing for an absent item', addon.modules['Diag'].Find(9999
 -- /bos test 3: the PLAYERBANKSLOTS_CHANGED payload is a **bank bag slot 1..9**, not a container
 -- index (measured 2026-10-19), so the probe converts it the way Camelot does.
 local diag = addon.modules['Diag']
-_G.ITEM_INVENTORY_BANK_BAG_OFFSET = 5
 contents[7] = {}
 check('bank bag slot payload converts to its container index',
-  diag.ExplainBankSlot(2), 'bank bag slot 2 -> container [7] Bag 7 0 slots')
+  diag.ExplainBankSlot(2), 'bank bag slot 2 -> container [7] Bag 7 10 slots')
 check('bank slot payload ignores a non-number', diag.ExplainBankSlot(nil), nil)
 
 -- /bos test: pending list, run sheet, and captured steps lettered a, b, c… A fixture stands in for
@@ -630,7 +640,7 @@ local function testNoSpecialtyBag()
   harvest.Invalidate()
   pipeline.Refresh('full-herb-bag')
   local full = sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Herbs')
-  check('a full tradeskill bag has no free slot to count', harvest.FreeSlotsForFamily(32), 0)
+  check('a full tradeskill bag has no free slot to count', harvest.FreeSlotsForFamily(32, 'backpack'), 0)
   check('so the section carries no count', full.emptySlots, nil)
   check('and the section is not sized for a cell it does not draw', full.height, 18 + CELL)
 
@@ -643,27 +653,6 @@ local function testNoSpecialtyBag()
 end
 
 testNoSpecialtyBag()
-
--- Bank windows are M5: the gate in pipeline.Assign is what keeps them out of the frames layer.
-local function testBankWindow()
-  local db = addon.modules['DB']
-  table.insert(db.Windows(), {
-    id = 'w9', name = 'Bank', kind = 'bank', columns = 5,
-    sections = { { id = 's9', name = 'Everything else', categories = { '__catchall' } } },
-  })
-  pipeline.Refresh('bank-window')
-  local models = pipeline.Model()
-  check('a bank window stays out of the model', #models, 5)
-  local bank = false
-  for _, window in ipairs(models) do
-    if window.kind == 'bank' then bank = true end
-  end
-  check('no bank window reaches the frames layer', bank, false)
-  table.remove(db.Windows())
-  pipeline.Refresh('unbank')
-end
-
-testBankWindow()
 
 -- /bos unplace: a saved drag point is the only thing that overrides the layout rule, and the
 -- placement tests need the default placement (FR-41).
@@ -769,7 +758,7 @@ local function testCategoryEnabled()
   local models = pipeline.Model()
   check('the Herbs section is gone', sectionIn(windowIn(models, 'Tradeskills'), 'Herbs'), nil)
   check('a disabled category does not keep its section alive through its bag',
-    harvest.FreeSlotsForFamily(32) > 0, true)
+    harvest.FreeSlotsForFamily(32, 'backpack') > 0, true)
   check('its herb falls to the catch-all', placeIn(models, 765), 'Backpack/Everything else')
   check('re-enabling is a change', db.SetCategoryEnabled('Tradeskills.Herbs', true), true)
   pipeline.Refresh('enable-herbs')
@@ -786,7 +775,7 @@ local function testBagFamilyMigration()
   db.sv.version = 1
   db.Profile().categories['Tradeskills.Herbs'].bagFamily = nil
   db.Migrate()
-  check('a version-1 profile is migrated to the current schema', db.sv.version, 2)
+  check('a version-1 profile is migrated to the current schema', db.sv.version, 3)
   check('the preset pairing arrives on the category that has one',
     db.Profile().categories['Tradeskills.Herbs'].bagFamily, 32)
   check('and nothing is invented for the category that has none',
@@ -904,7 +893,7 @@ local function testBankOpensOurBags()
   eventsMod.Emit('BANKFRAME_CLOSED')
   check('the stray BANKFRAME_CLOSED before an opening opens nothing', #pipeline.Model(), 0)
   eventsMod.Emit('BANKFRAME_OPENED')
-  check('the bank opens our windows', #pipeline.Model(), 5)
+  check('the bank opens our windows, backpack mirrors included', #pipeline.Model(), 10)
   check('and hides Blizzard bag window', combined.shown, false)
   eventsMod.Emit('BANKFRAME_CLOSED')
   check('closing the bank hides the windows it opened', windowFramesStub.hides, 2)
@@ -923,7 +912,7 @@ local function testNoHidingInCombat()
   blizzardOpensBags()
   _G.InCombatLockdown = function() return true end
   eventsMod.Emit('BANKFRAME_OPENED')
-  check('a bank opened in combat still opens our windows', #pipeline.Model(), 5)
+  check('a bank opened in combat still opens our windows', #pipeline.Model(), 10)
   check('and leaves Blizzard bag window shown', combined.shown, true)
   blizzardOpensBags()
   check('the OpenAllBags hook hides nothing during lockdown either', combined.shown, true)
@@ -932,6 +921,125 @@ local function testNoHidingInCombat()
 end
 
 testNoHidingInCombat()
+
+-- Issue #47: the bank half of the window set. Every preset backpack window has a bank twin with the
+-- same sections and the same category bindings, and the twins exist only while the bank is open:
+-- harvest drops containers 6..14 on BANKFRAME_CLOSED, so a bank window after that frames nothing
+-- (AC-13).
+local function countKind(windows, kind)
+  local n = 0
+  for _, window in ipairs(windows) do
+    if window.kind == kind then n = n + 1 end
+  end
+  return n
+end
+
+--- A saved window config's section list as `categories,categories,...` — the copy half of #47,
+--- read off the profile rather than off a model that has already dropped the empty sections.
+local function configBinds(windows, name)
+  for _, window in ipairs(windows) do
+    if window.name == name then
+      local out = {}
+      for _, section in ipairs(window.sections or {}) do
+        out[#out + 1] = table.concat(section.categories, '+')
+      end
+      return table.concat(out, ',')
+    end
+  end
+  return 'no such window'
+end
+
+--- How many of a window's drawn items came out of a bank container (index 6 and up).
+local function bankItemsIn(window)
+  local n = 0
+  for _, section in ipairs(window.sections) do
+    for _, item in ipairs(section.items) do
+      if item.bagID >= 6 then n = n + 1 end
+    end
+  end
+  return n
+end
+
+local function testBankWindows()
+  local db = addon.modules['DB']
+  db.SetWindowsOpen(true)
+  pipeline.Refresh('47-bank-closed')
+
+  check('the preset carries a bank twin for every backpack window',
+    countKind(db.Windows(), 'bank') .. '/' .. countKind(db.Windows(), 'backpack'), '5/5')
+  check('a closed bank harvests no bank container', containerAt(6), nil)
+  check('and the model holds the five backpack windows only', #pipeline.Model(), 5)
+
+  eventsMod.Emit('BANKFRAME_OPENED')
+  check('the bank open puts the 48-slot grid in the harvest', containerAt(6) and containerAt(6).slots, 48)
+  check('and the bank bag slots with it',
+    tostring(containerAt(7) and containerAt(7).kind or 'none') .. '/'
+      .. tostring(containerAt(14) or 'none'),
+    'bank/none')
+  local models = pipeline.Model()
+  check('and the five bank twins in the model', #models, 10)
+
+  local bank = windowIn(models, 'Bank')
+  check('the mirror of the default backpack is a bank window', bank.kind, 'bank')
+  -- The copy is a config fact: same sections, same bindings, same order. Which of them get drawn is
+  -- a content fact, and the bank holds different content.
+  check('it copies the default backpack sections and bindings',
+    configBinds(db.Windows(), 'Bank'), configBinds(db.Windows(), 'Backpack'))
+  check('the bank Tradeskills window copies the backpack one',
+    configBinds(db.Windows(), 'Bank Tradeskills'), configBinds(db.Windows(), 'Tradeskills'))
+  check('and draws only the sections the bank has content for', binds(bank), 'Junk,__catchall')
+
+  check('bank junk lands in the bank window', placeIn(models, 1007), 'Bank/Junk')
+  check('a bank weapon falls to the bank window catch-all', placeIn(models, 1009), 'Bank/Everything else')
+  check('bank ore lands in the bank Tradeskills window', placeIn(models, 1008), 'Bank Tradeskills/Ore')
+  check('a bank herb lands in the bank Herbs section', placeIn(models, 1010), 'Bank Tradeskills/Herbs')
+  check('no backpack window leaks a bank item',
+    bankItemsIn(windowIn(models, 'Backpack')) + bankItemsIn(windowIn(models, 'Tradeskills')), 0)
+  check('opening the bank leaves the backpack windows the size they were',
+    windowIn(models, 'Backpack').height, TITLE + 3 * (18 + CELL) + 3 * 6 + CELL + 8 + MONEY)
+
+  -- The bag-level chrome (#42, #36) stays on the backpack side: a coin row on a bank window reads
+  -- as a second purse, and the free-slot count is the player's bags, not the bank's.
+  local carriers = {}
+  for _, window in ipairs(models) do
+    if window.showMoney then carriers[#carriers + 1] = window.name end
+  end
+  check('exactly one window carries the money bar, and no bank window does',
+    table.concat(carriers, ','), 'Backpack')
+  check('a bank window carries no bag-set count', bank.emptySlots, nil)
+  check('the bag-set count still covers only the player bags',
+    windowIn(models, 'Backpack').emptySlots, 21)
+  check('and its cell still points at a slot in the player bags',
+    harvest.FirstFreeSlot().bagID .. ':' .. harvest.FirstFreeSlot().slot, '0:12')
+  check('a bank window is sized without the money band', bank.height, TITLE + 2 * (18 + CELL) + 2 * 6 + 8)
+
+  -- Issue #44's count on the bank side: a section counts the bag of its family **on its own side**,
+  -- so the two herb bags never add up into one number.
+  local bankHerbs = sectionIn(windowIn(models, 'Bank Tradeskills'), 'Herbs')
+  local backpackHerbs = sectionIn(windowIn(models, 'Tradeskills'), 'Herbs')
+  check('the bank herb bag feeds the bank side', harvest.FreeSlotsForFamily(32, 'bank'), 9)
+  check('the equipped herb bag feeds the backpack side alone',
+    harvest.FreeSlotsForFamily(32, 'backpack'), 5)
+  check('the bank Herbs section carries its own count', bankHerbs.emptySlots, 9)
+  check('the backpack Herbs section carries 5, not the 14 both bags together make',
+    backpackHerbs.emptySlots, 5)
+  check('the bank cell points in the bank bag, not the equipped one',
+    bankHerbs.emptySlot.bagID .. ':' .. bankHerbs.emptySlot.slot, '8:2')
+  check('the backpack cell still points in the equipped bag',
+    backpackHerbs.emptySlot.bagID .. ':' .. backpackHerbs.emptySlot.slot, '2:2')
+
+  -- #43 in the bank: a bank window with nothing in it still draws, at its chrome floor.
+  check('an empty bank window collapses to its chrome',
+    windowIn(models, 'Bank Consumables').height, 95)
+
+  eventsMod.Emit('BANKFRAME_CLOSED')
+  check('closing the bank drops the bank containers', containerAt(6), nil)
+  check('and every bank window leaves the model', #pipeline.Model(), 5)
+  check('the backpack windows are back where they were',
+    windowIn(pipeline.Model(), 'Backpack').emptySlots, 21)
+end
+
+testBankWindows()
 
 for _, failure in ipairs(failures) do
   print('FAIL ' .. failure)

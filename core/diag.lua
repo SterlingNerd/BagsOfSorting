@@ -448,7 +448,9 @@ probes[17] = function()
 
   -- The family bits themselves (issue #44): what the client answered per container, and what our
   -- own per-family count made of it. Every container answering 0 is the result this probe exists to
-  -- find — it means a tradeskill section has no bag to count.
+  -- find — it means a tradeskill section has no bag to count. Issue #47 split the count per side, so
+  -- the two halves print apart: an equipped herb bag feeds the backpack windows and a bank herb bag
+  -- feeds the bank ones, never one shared number.
   local named, present = {}, {}
   for name, bit in pairs(constants.BAG_FAMILY) do named[bit] = name end
   for _, container in ipairs(harvest.Containers()) do
@@ -458,16 +460,20 @@ probes[17] = function()
   for family in pairs(present) do bits[#bits + 1] = family end
   table.sort(bits)
   for _, family in ipairs(bits) do
-    local slot = harvest.FirstFreeSlotForFamily(family)
-    record(string.format('  family %s (%s) free=%d first=%s', tostring(family),
-      named[family] or 'unknown', harvest.FreeSlotsForFamily(family),
-      slot and (slot.bagID .. ':' .. slot.slot) or 'none'))
+    local function sideText(side)
+      local slot = harvest.FirstFreeSlotForFamily(family, side)
+      return string.format('free=%d first=%s', harvest.FreeSlotsForFamily(family, side),
+        slot and (slot.bagID .. ':' .. slot.slot) or 'none')
+    end
+    record(string.format('  family %s (%s) | backpack %s | bank %s', tostring(family),
+      named[family] or 'unknown', sideText('backpack'), sideText('bank')))
   end
 
   local first = harvest.FirstFreeSlot()
   record('our counts', 'backpack', harvest.FreeSlots('backpack'),
     'reagent', harvest.FreeSlots('reagent'),
     'keyring', harvest.FreeSlots('keyring'),
+    'bank', harvest.FreeSlots('bank'),
     'first free slot', first and (first.bagID .. ':' .. first.slot) or 'none')
 
   local models = pipeline.Model()
@@ -802,6 +808,35 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
+  [47] = {
+    issue = 47,
+    what = 'bank windows: the mirror, the blue tint, the chest icon, and the bank-side counts',
+    needs = 'a bank you can open, and one item in the bank you do not mind moving',
+    steps = {
+      { text = 'setup: containers, windows and counts with the bank closed', run = function()
+          probes[2]()
+          probes[16]()
+          probes[17]()
+        end },
+      { text = 'click the bank tab button on the bag bar to open the bank' },
+      { text = 'capture: containers, windows and counts with the bank open', run = function()
+          probes[2]()
+          probes[16]()
+          probes[17]()
+        end },
+      { text = 'read the corner icon and the background colour of one bank window' },
+      { text = 'capture: the chrome our windows drew, against the client bag window', run = probes[19] },
+      { text = 'drag one item out of a bank window into a backpack window' },
+      { text = 'capture: which section holds which item now', run = probes[16] },
+      { text = 'drag that item back into the bank' },
+      { text = 'capture: and which section holds it after', run = probes[16] },
+      { text = 'close the bank' },
+      { text = 'capture: windows and containers after the close', run = function()
+          probes[16]()
+          probes[2]()
+        end },
+    },
+  },
   [22] = {
     issue = 22,
     what = "BetterBags' combat behaviour (input to the Q23 decision)",

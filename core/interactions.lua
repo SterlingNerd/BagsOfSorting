@@ -28,6 +28,7 @@ local db = addon:GetModule('DB')
 local events = addon:GetModule('Events')
 local constants = addon:GetModule('Constants')
 local log = addon:GetModule('Log')
+local harvest = addon:GetModule('Harvest')
 local pipeline = addon:GetModule('Pipeline')
 local windows = addon:GetModule('WindowFrames')
 
@@ -70,7 +71,7 @@ local function windowsOpen()
   return false
 end
 
-local function onOpen(reason)
+local function onOpen()
   local opening = not windowsOpen()
   if opening then db.SetWindowsOpen(true) end
   if not windowsOpen() then return end  -- a profile with no windows: leave Blizzard's bags alone
@@ -78,15 +79,12 @@ local function onOpen(reason)
   -- `/bos hide` gets them back at the next vendor. The answer is FR-51's vanilla/sorting toggle, not
   -- a second flag (issue #38).
 
-  -- Hide before the refresh. The stack anchors off Blizzard's bag window while it is shown, so a
-  -- refresh placed before the hide lays the windows out against one corner and the next one against
-  -- another.
+  -- Hide before the caller refreshes. The stack anchors off Blizzard's bag window while it is shown,
+  -- so a refresh placed before the hide lays the windows out against one corner and the next one
+  -- against another.
   suppressing = true
   hideBlizzardBags()
-  if opening then
-    openedForInteraction = true
-    pipeline.Refresh(reason)
-  end
+  if opening then openedForInteraction = true end
 end
 
 local function onClose(reason)
@@ -100,10 +98,25 @@ local function onClose(reason)
   log.Debug('interaction closed: ' .. reason)
 end
 
-events.On('MERCHANT_SHOW', function() onOpen('merchant') end)
+events.On('MERCHANT_SHOW', function()
+  onOpen()
+  pipeline.Refresh('merchant')
+end)
 events.On('MERCHANT_CLOSED', function() onClose('merchant') end)
-events.On('BANKFRAME_OPENED', function() onOpen('bank') end)
-events.On('BANKFRAME_CLOSED', function() onClose('bank') end)
+
+-- The bank is the one interaction that also changes the container set (issue #47): containers 6..14
+-- exist only while it is open, so every open/close pair re-runs the pipeline whether or not the bank
+-- is what opened our windows. That refresh is what takes the bank windows back off the screen (AC-13).
+events.On('BANKFRAME_OPENED', function()
+  harvest.SetBankOpen(true)
+  onOpen()
+  pipeline.Refresh('bank-open')
+end)
+events.On('BANKFRAME_CLOSED', function()
+  harvest.SetBankOpen(false)
+  onClose('bank')
+  pipeline.Refresh('bank-close')
+end)
 
 -- Blizzard opens its bags from inside the frame's own OnShow, which lands after the open event we
 -- react to, so the suppression is re-applied on the way out of Blizzard's call.

@@ -124,6 +124,30 @@ fixtures.items = {
   -- 1006 and 26042 above keep retail's "Tradeskill" spelling on purpose: the rule-grammar tests
   -- read those strings. The client's own class name is "Trade Goods".
 
+  -- Issue #47: four items that exist **only in the bank**, so "no backpack window leaks bank
+  -- contents" has an unambiguous answer. One each for the sections the bank mirror has to fill:
+  -- junk, the catch-all, ore, and a herb in a herb-family bag sitting in a bank slot.
+  {
+    itemID = 1007, name = 'Cracked Greaves', quality = 0, ilvl = 1, expansion = 0,
+    type = 'Armor', subtype = 'Mail', equipSlot = 'INVTYPE_CHEST', classID = 4, subClassID = 6,
+    isQuestItem = false, stackCount = 1, bagID = 6, slot = 1, dataReady = true,
+  },
+  {
+    itemID = 1008, name = 'Iron Ore', quality = 1, ilvl = 15, expansion = 0,
+    type = 'Trade Goods', subtype = 'Metal & Stone', equipSlot = 'INVTYPE_NON_EQUIP',
+    classID = 7, subClassID = 7, isQuestItem = false, stackCount = 5, bagID = 6, slot = 3, dataReady = true,
+  },
+  {
+    itemID = 1009, name = 'Notched Blade', quality = 1, ilvl = 15, expansion = 0,
+    type = 'Weapon', subtype = 'Sword', equipSlot = 'INVTYPE_WEAPON', classID = 2, subClassID = 1,
+    isQuestItem = false, stackCount = 1, bagID = 6, slot = 2, dataReady = true,
+  },
+  {
+    itemID = 1010, name = 'Khadgar Pine', quality = 1, ilvl = 10, expansion = 0,
+    type = 'Trade Goods', subtype = 'Herb', equipSlot = 'INVTYPE_NON_EQUIP',
+    classID = 7, subClassID = 9, isQuestItem = false, stackCount = 8, bagID = 8, slot = 1, dataReady = true,
+  },
+
 }
 
 ---@return BoSItem[]

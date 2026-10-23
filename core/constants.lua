@@ -19,7 +19,9 @@ constants.NUM_TOTAL_EQUIPPED_BAG_SLOTS = NUM_TOTAL_EQUIPPED_BAG_SLOTS
   or (constants.NUM_BAG_SLOTS + constants.NUM_REAGENTBAG_SLOTS)
 constants.REAGENTBAG_INDEX = constants.BACKPACK + constants.NUM_BAG_SLOTS + 1
 constants.ITEM_INVENTORY_BANK_BAG_OFFSET = ITEM_INVENTORY_BANK_BAG_OFFSET
-constants.NUM_CHARACTER_BANK_SLOTS = NUM_CHARACTER_BANK_SLOTS
+-- Measured 2026-10-18 (`/bos test dump`, docs/07 Q10): nine bank bag slots, the first of them the
+-- free 48-slot grid. So the bank container indices are 6..14.
+constants.NUM_CHARACTER_BANK_SLOTS = NUM_CHARACTER_BANK_SLOTS or 9
 
 -- Specialty-bag family bits: the second return of C_Container.GetContainerNumFreeSlots, which is
 -- how the client says what a bag is for (references/containers-and-bags.md). 0 is a plain bag.

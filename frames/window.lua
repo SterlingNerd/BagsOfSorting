@@ -91,10 +91,11 @@ end
 --- name clears the portrait instead of sitting under it.
 local BAG_PORTRAIT = 'Interface/Icons/Inv_misc_bag_08'  -- what ContainerFrameCombinedBags draws
 
--- The bank windows' corner icon (issue #47): the icon the client itself reports for the bank's own
--- tab. `C_Bank.FetchPurchasedBankTabData` answers `Tab 1, icon 134400` on this client (docs/07 Q10,
--- `/bos test dump` 2026-10-18), so the corner is the same chest the bank's Page 1 tab draws.
-local BANK_PORTRAIT = 134400
+-- The bank windows' corner icon (issue #47): the icon the client's own bank Page tab draws.
+-- `BankPageTabTemplate` carries it as a KeyValue (`Camelot/BankFrame.xml:41`), because the tab *data*
+-- is no help: `C_Bank.FetchPurchasedBankTabData` answers `icon 134400` for every character-bank tab,
+-- and 134400 is the question mark — measured on the live client 2026-10-22 (`/bos test 47c` drew it).
+local BANK_PORTRAIT = 'Interface/ICONS/INV_SideTab_Bank_c60'
 
 -- The bank windows' blue tint (issue #47). The panel background is the client's own panel colour
 -- pushed toward blue — red and green scaled down, blue lifted — so a bank window keeps the darkness

@@ -812,35 +812,6 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {
-  [47] = {
-    issue = 47,
-    what = 'bank windows: the mirror, the blue tint, the chest icon, and the bank-side counts',
-    needs = 'a bank you can open, and one item in the bank you do not mind moving',
-    steps = {
-      { text = 'setup: containers, windows and counts with the bank closed', run = function()
-          probes[2]()
-          probes[16]()
-          probes[17]()
-        end },
-      { text = 'click the bank tab button on the bag bar to open the bank' },
-      { text = 'capture: containers, windows and counts with the bank open', run = function()
-          probes[2]()
-          probes[16]()
-          probes[17]()
-        end },
-      { text = 'read the corner icon and the background colour of one bank window' },
-      { text = 'capture: the chrome our windows drew, against the client bag window', run = probes[19] },
-      { text = 'drag one item out of a bank window into a backpack window' },
-      { text = 'capture: which section holds which item now', run = probes[16] },
-      { text = 'drag that item back into the bank' },
-      { text = 'capture: and which section holds it after', run = probes[16] },
-      { text = 'close the bank' },
-      { text = 'capture: windows and containers after the close', run = function()
-          probes[16]()
-          probes[2]()
-        end },
-    },
-  },
   [22] = {
     issue = 22,
     what = "BetterBags' combat behaviour (input to the Q23 decision)",

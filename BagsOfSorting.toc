@@ -48,6 +48,8 @@ data\pipeline.lua
 layout\flow.lua
 layout\anchors.lua
 
+frames\dropdown.lua
+frames\editmodals.lua
 frames\item.lua
 frames\section.lua
 frames\money.lua

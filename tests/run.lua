@@ -775,7 +775,7 @@ local function testBagFamilyMigration()
   db.sv.version = 1
   db.Profile().categories['Tradeskills.Herbs'].bagFamily = nil
   db.Migrate()
-  check('a version-1 profile is migrated to the current schema', db.sv.version, 3)
+  check('a version-1 profile is migrated to the current schema', db.sv.version, 4)
   check('the preset pairing arrives on the category that has one',
     db.Profile().categories['Tradeskills.Herbs'].bagFamily, 32)
   check('and nothing is invented for the category that has none',

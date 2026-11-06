@@ -14,6 +14,7 @@ local itemFrames = addon:NewModule('ItemFrames')
 
 local constants = addon:GetModule('Constants')
 local pool = addon:GetModule('Pool')
+local dropdown = addon:GetModule('Dropdown')
 
 local SIZE = constants.BUTTON_SIZE
 
@@ -37,6 +38,18 @@ local function create()
 
   local button = CreateFrame('ItemButton', name, parent, 'ContainerFrameItemButtonTemplate')
   button:SetAllPoints(parent)
+  -- Register for all click types so modifier clicks (Alt, Shift, Ctrl) work
+  button:RegisterForClicks('AnyUp')
+  button:RegisterForDrag('LeftButton')
+  -- Ctrl+Right-click for item menu (wow-forever-api: free modifier for addon menus on items)
+  button:SetScript('OnClick', function(self, buttonName)
+    if buttonName == 'RightButton' and IsControlKeyDown() then
+      local entry = self:GetParent()._entry
+      if entry and entry.item then
+        ShowItemMenu(self, entry.item)
+      end
+    end
+  end)
 
   return { parent = parent, button = button }
 end
@@ -85,6 +98,8 @@ function itemFrames.Paint(entry, item, parent)
   entry.parent:SetID(item.bagID)
   entry.button:SetID(item.slot)
   entry.button:SetItemLocation(ItemLocation:CreateFromBagAndSlot(item.bagID, item.slot))
+  -- Store reference for the Ctrl+Right-click handler
+  entry.parent._entry = entry
 
   SetItemButtonTexture(entry.button, entry.item.icon or 0)
   SetItemButtonQuality(entry.button, item.quality, item.link, false, item.isBound)
@@ -153,6 +168,49 @@ function itemFrames.Warm(count)
   for i = count, 1, -1 do
     itemFrames.Release(held[i])
   end
+end
+
+-- Show item menu on Ctrl+Right-click
+function ShowItemMenu(anchorFrame, item)
+  local entries = {
+    {
+      text = item.link or ('Item ' .. item.itemID),
+      isTitle = true,
+      notCheckable = true,
+    },
+    { text = ' ', isTitle = true, notCheckable = true },
+    {
+      text = 'Category: ' .. (item.category or 'Unknown'),
+      notCheckable = true,
+      disabled = true,
+    },
+    {
+      text = 'Bag: ' .. item.bagID .. ', Slot: ' .. item.slot,
+      notCheckable = true,
+      disabled = true,
+    },
+    { text = ' ', isTitle = true, notCheckable = true },
+    -- Placeholder entries for future functionality
+    {
+      text = 'Move to section…',
+      value = 'move_section',
+      notCheckable = true,
+      disabled = true,  -- TODO: implement
+    },
+    {
+      text = 'Ignore this item',
+      value = 'ignore_item',
+      notCheckable = true,
+      disabled = true,  -- TODO: implement
+    },
+    {
+      text = 'Clear ignore',
+      value = 'clear_ignore',
+      notCheckable = true,
+      disabled = true,  -- TODO: implement
+    },
+  }
+  dropdown.Show(anchorFrame, entries)
 end
 
 return itemFrames

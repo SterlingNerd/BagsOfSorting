@@ -17,7 +17,7 @@ local constants = addon:GetModule('Constants')
 
 local BAG = constants.BAG_FAMILY
 
-db.CURRENT_VERSION = 3
+db.CURRENT_VERSION = 4
 
 ---@class BoSSettings
 -- Only settings something actually reads are present (FR-80: a setting with no UI home is
@@ -327,6 +327,17 @@ local MIGRATIONS = {
     for _, preset in ipairs(DEFAULT_PROFILE.windows) do
       if preset.kind == 'bank' then
         profile.windows[#profile.windows + 1] = deepCopy(preset)
+      end
+    end
+  end,
+
+  -- Issue #52: backfill collapsed = false for all existing sections.
+  [4] = function(profile)
+    for _, window in ipairs(profile.windows or {}) do
+      for _, section in ipairs(window.sections or {}) do
+        if section.collapsed == nil then
+          section.collapsed = false
+        end
       end
     end
   end,

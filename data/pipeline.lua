@@ -141,6 +141,7 @@ function pipeline.Assign(placements)
               name = sectionConfig.name,
               categories = names,
               items = items,
+              collapsed = sectionConfig.collapsed or false,
             }
             if free > 0 then
               section.emptySlots = free

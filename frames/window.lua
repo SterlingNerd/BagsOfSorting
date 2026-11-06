@@ -16,6 +16,8 @@ local moneyFrames = addon:GetModule('MoneyFrames')
 local itemFrames = addon:GetModule('ItemFrames')
 local constants = addon:GetModule('Constants')
 local log = addon:GetModule('Log')
+local dropdown = addon:GetModule('Dropdown')
+local editModals = addon:GetModule('EditModals')
 
 ---@class BoSWindowFrame
 ---@field frame Frame
@@ -180,6 +182,30 @@ local function create(config)
     log.Debug('saved position for window', self.config.id)
   end)
 
+  -- Enable right-click on window title (TitleContainer.TitleText from PortraitFrameFlatTemplate)
+  -- FontStrings can't receive mouse events, so create a transparent button over the title area
+  local titleText = frame.TitleContainer.TitleText
+  local titleButton = CreateFrame('Button', nil, frame.TitleContainer)
+  titleButton:SetAllPoints(titleText)
+  titleButton:SetFrameLevel(frame.TitleContainer:GetFrameLevel() + 2)
+  titleButton:EnableMouse(true)
+  titleButton:SetScript('OnMouseDown', function(self, button)
+    if button == 'RightButton' then
+      ShowWindowMenu(self, config)
+    end
+  end)
+
+  -- Enable right-click on bag icon (portrait) for window-level menu
+  local portrait = frame.PortraitContainer.portrait
+  if portrait then
+    portrait:EnableMouse(true)
+    portrait:SetScript('OnMouseDown', function(self, button)
+      if button == 'RightButton' then
+        ShowWindowMenu(self, config)
+      end
+    end)
+  end
+
   local wf = { frame = frame, sections = {}, config = config }
   frame.config = config
   byId[config.id] = wf
@@ -284,7 +310,7 @@ function windows.Render(model)
   end
 
   for i, sectionModel in ipairs(model.sections) do
-    sectionFrames.Render(wf.sections[i], sectionModel, frame, sectionModel.offsetY)
+    sectionFrames.Render(wf.sections[i], sectionModel, frame, sectionModel.offsetY, model.config)
   end
 
   renderEmptySlot(wf, model)
@@ -329,6 +355,48 @@ function windows.Count()
     if wf.frame:IsShown() then n = n + 1 end
   end
   return n
+end
+
+-- Show the window title context menu
+function ShowWindowMenu(anchorFrame, windowConfig)
+  local entries = {
+    {
+      text = 'Edit Window…',
+      value = 'edit_window',
+      func = function()
+        OpenWindowEditModal(windowConfig)
+      end,
+      notCheckable = true,
+    },
+    {
+      text = 'Add Section',
+      value = 'add_section',
+      func = function()
+        AddSectionToWindow(windowConfig)
+      end,
+      notCheckable = true,
+    },
+    {
+      text = 'Window Settings',
+      value = 'window_settings',
+      func = function()
+        -- TODO: Open addon options panel when it exists
+        print('|cff00ff00BagsOfSorting|r: Window Settings - TODO')
+      end,
+      notCheckable = true,
+    },
+  }
+  dropdown.Show(anchorFrame, entries)
+end
+
+-- Open edit modal for window
+function OpenWindowEditModal(windowConfig)
+  editModals.OpenWindowEdit(windowConfig)
+end
+
+-- Add a new section to the window
+function AddSectionToWindow(windowConfig)
+  editModals.AddSectionToWindow(windowConfig)
 end
 
 return windows

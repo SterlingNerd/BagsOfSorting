@@ -16,6 +16,7 @@ local moneyFrames = addon:GetModule('MoneyFrames')
 local itemFrames = addon:GetModule('ItemFrames')
 local constants = addon:GetModule('Constants')
 local log = addon:GetModule('Log')
+local context = addon:GetModule('Context')
 local dropdown = addon:GetModule('Dropdown')
 local editModals = addon:GetModule('EditModals')
 
@@ -283,7 +284,8 @@ end
 --- Draw one window from the layout model. Frames are reused across refreshes; only the
 --- buttons and section blocks move (AC-42).
 ---@param model BoSWindowModel
-function windows.Render(model)
+---@param combat boolean?  -- if true, render structure only (no item buttons) for combat lockdown
+function windows.Render(model, combat)
   local wf = byId[model.id] or create(model.config)
   wf.config = model.config
 
@@ -301,6 +303,8 @@ function windows.Render(model)
   -- the floor `layout/flow.lua` measures the height against rather than a shorter window with clipped art.
   NineSliceUtil.UpdateCornerCropping(frame, model.height)
 
+  -- In combat, we still acquire section frames for structure (titles, empty slot placeholders)
+  -- but skip itemFrames.Paint which calls SetItemLocation (blocked in lockdown).
   for i = #wf.sections + 1, #model.sections do
     wf.sections[i] = sectionFrames.Acquire()
   end
@@ -310,15 +314,60 @@ function windows.Render(model)
   end
 
   for i, sectionModel in ipairs(model.sections) do
-    sectionFrames.Render(wf.sections[i], sectionModel, frame, sectionModel.offsetY, model.config)
+    if combat then
+      -- Combat render: section frame + title only, no items
+      local section = wf.sections[i]
+      section.frame:SetParent(frame)
+      section.frame:SetFrameLevel(frame:GetFrameLevel() + 1)
+      section.frame:ClearAllPoints()
+      section.frame:SetPoint('TOPLEFT', frame, 'TOPLEFT',
+        constants.WINDOW_PADDING, -(constants.WINDOW_TITLE_HEIGHT + sectionModel.offsetY))
+      section.frame:SetSize(sectionModel.width, sectionModel.height)
+      section.frame:Show()
+      section.title:SetText(sectionModel.name)
+      section.title:SetWidth(sectionModel.width)
+      section.titleButton:SetWidth(sectionModel.width)
+      -- Clear any leftover items from before combat
+      sectionFrames.ClearItems(section)
+    else
+      sectionFrames.Render(wf.sections[i], sectionModel, frame, sectionModel.offsetY, model.config)
+    end
   end
 
-  renderEmptySlot(wf, model)
+  if not combat then
+    renderEmptySlot(wf, model)
+  else
+    -- In combat, hide any existing empty slot button
+    if wf.empty then
+      itemFrames.Release(wf.empty)
+      wf.empty = nil
+      wf.frame.EmptySlot = nil
+    end
+  end
   renderMoney(wf, model)
 
   restorePosition(frame, model)
   frame:Show()
   return wf
+end
+
+--- Combat-aware render used by the refresh pipeline.
+---@param models BoSWindowModel[]
+---@param shown table<string, boolean>
+---@param ctx BoSContext
+function windows.RenderAll(models, shown, ctx)
+  local combat = InCombatLockdown()
+  if combat then
+    log.Debug('combat lockdown: rendering window structure only')
+  end
+  windows.Layout(models)
+  for _, model in ipairs(models) do
+    windows.Render(model, combat)
+  end
+  windows.Prune(shown)
+  context.MarkPhase(ctx, 'render')
+  context.Finish(ctx)
+  if ctx.reason ~= 'bench' then log.Debug(context.Format(ctx)) end
 end
 
 --- Hide windows the model no longer contains (deleted windows, bank windows when closed).

@@ -109,7 +109,6 @@ function pipeline.Assign(placements)
 
       -- Equipment windows (w11 backpack, w12 bank): dynamically create one section per equipment set category
       local isEquipmentWindow = config.id == 'w11' or config.id == 'w12'
-      local sectionConfigs = config.sections or {}
       if isEquipmentWindow then
         local cats = db.Categories()
         local equipmentCats = {}
@@ -178,13 +177,9 @@ function pipeline.Assign(placements)
             end
           end
           local free, slot = sectionFreeSlots(names, config.kind)
-          local hasEmptyCategory = false
-          for _, categoryName in ipairs(names) do
-            local cat = db.Categories()[categoryName]
-            if cat and cat._showEmpty then hasEmptyCategory = true break end
-          end
-          local showSection = isEquipmentWindow and (#items > 0) or (#items > 0 or free > 0 or hasEmptyCategory)
-          if showSection then
+          -- A section with nothing in it and no specialty bag of its own is noise — an empty
+          -- equipment set included, since it is a header with no cells under it.
+          if #items > 0 or free > 0 then
             local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = items, collapsed = sectionConfig.collapsed or false }
             if free > 0 then section.emptySlots = free; section.emptySlot = slot end
             window.sections[#window.sections + 1] = section

@@ -133,8 +133,6 @@ local function upsertCategory(setID, info)
     duplicate = false, -- Handled specially: items in multiple sets added post-classify
     itemIDs = info.itemIDs,
     _equipmentSetID = setID,
-    -- Equipment categories show even when empty so users can see their sets
-    _showEmpty = true,
   }
   dynamicCategories[catName] = category
 

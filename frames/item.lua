@@ -60,7 +60,6 @@ end
 
 local function reset(entry)
   entry.item = nil
-  entry.button:SetItemLocation(nil)
   entry.button:SetID(0)
   entry.button:Hide()
   entry.parent:ClearAllPoints()
@@ -101,7 +100,9 @@ function itemFrames.Paint(entry, item, parent)
   entry.button:SetFrameLevel(entry.parent:GetFrameLevel() + 1)
   entry.parent:SetID(item.bagID)
   entry.button:SetID(item.slot)
-  entry.button:SetItemLocation(ItemLocation:CreateFromBagAndSlot(item.bagID, item.slot))
+  -- Use Initialize (allowed in combat) instead of SetItemLocation (blocked in combat).
+  -- Forever's Initialize takes (holder, bagID, slotID).
+  entry.button:Initialize(entry.parent, item.bagID, item.slot)
   -- Store reference for the Ctrl+Right-click handler
   entry.parent._entry = entry
 
@@ -144,9 +145,9 @@ function itemFrames.PaintEmpty(entry, slot, count, parent)
   entry.button:SetFrameLevel(entry.parent:GetFrameLevel() + 1)
   entry.parent:SetID(slot.bagID)
   entry.button:SetID(slot.slot)
-  -- A real empty slot, not a placeholder: the client's own click and drop handlers work on it, so
-  -- dropping an item here puts it in the bag the way an empty backpack slot does.
-  entry.button:SetItemLocation(ItemLocation:CreateFromBagAndSlot(slot.bagID, slot.slot))
+  -- Use Initialize (allowed in combat) instead of SetItemLocation (blocked in combat).
+  -- Forever's Initialize takes (holder, bagID, slotID).
+  entry.button:Initialize(entry.parent, slot.bagID, slot.slot)
 
   SetItemButtonTexture(entry.button, nil)
   SetItemButtonQuality(entry.button, nil)

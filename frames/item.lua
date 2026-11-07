@@ -42,7 +42,11 @@ local function create()
   button:RegisterForClicks('AnyUp')
   button:RegisterForDrag('LeftButton')
   -- Ctrl+Right-click for item menu (wow-forever-api: free modifier for addon menus on items)
-  button:SetScript('OnClick', function(self, buttonName)
+  -- Preserve the template's OnClick (vendor sell, use item, pickup, stack split) and
+  -- add our Ctrl+Right-click menu on top.
+  local originalOnClick = button:GetScript('OnClick')
+  button:SetScript('OnClick', function(self, buttonName, down)
+    if originalOnClick then originalOnClick(self, buttonName, down) end
     if buttonName == 'RightButton' and IsControlKeyDown() then
       local entry = self:GetParent()._entry
       if entry and entry.item then

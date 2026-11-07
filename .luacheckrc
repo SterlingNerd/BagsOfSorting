@@ -5,6 +5,7 @@ max_line_length = false
 
 exclude_files = {
     "libs",
+    ".deploy",
 }
 
 ignore = {
@@ -80,4 +81,30 @@ globals = {
     "SlashCmdList",
     "BagsOfSorting_OnAddonCompartmentClick",
     "BagsOfSorting_Toggle",
+
+    -- Dropdown/Menu APIs
+    "CloseDropDownMenus",
+    "EasyMenu",
+    "ToggleDropDownMenu",
+    "UIDropDownMenu_Initialize",
+    "UIDropDownMenu_AddButton",
+    "UIDropDownMenu_CreateInfo",
+    "UIDropDownMenu_SetWidth",
+    "UIDropDownMenu_SetSelectedValue",
+
+    -- StaticPopup APIs
+    "StaticPopup_Show",
+    "StaticPopupDialogs",
+
+    -- Input/key APIs
+    "IsControlKeyDown",
+
+    -- Custom globals set by our frames
+    "ShowItemMenu",
+    "ShowSectionMenu",
+    "OpenSectionEditModal",
+    "AddSectionBelow",
+    "ShowWindowMenu",
+    "OpenWindowEditModal",
+    "AddSectionToWindow",
 }

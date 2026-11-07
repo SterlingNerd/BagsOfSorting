@@ -37,7 +37,7 @@ end
 ---@param onSelect fun(value: any, entry: DropdownEntry)?  -- optional callback
 function dropdown.Show(anchorFrame, entries, onSelect)
   ensureFrame()
-  
+
   -- Convert our entry format to EasyMenu format
   local menuList = {}
   for _, entry in ipairs(entries) do
@@ -61,7 +61,7 @@ function dropdown.Show(anchorFrame, entries, onSelect)
         if CloseDropDownMenus then CloseDropDownMenus() end
       end
     elseif onSelect and not entry.hasArrow then
-      info.func = function(self, ...)
+      info.func = function(self)
         onSelect(entry.value, entry)
         if CloseDropDownMenus then CloseDropDownMenus() end
       end

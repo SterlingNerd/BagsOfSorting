@@ -374,7 +374,7 @@ function windows.Count()
 end
 
 -- Show the window title context menu
-function ShowWindowMenu(anchorFrame, windowConfig)
+function ShowWindowMenu(anchor, windowConfig)
   local entries = {
     {
       text = 'Edit Window…',
@@ -402,7 +402,7 @@ function ShowWindowMenu(anchorFrame, windowConfig)
       notCheckable = true,
     },
   }
-  dropdown.Show(anchorFrame, entries)
+  dropdown.Show(anchor, entries)
 end
 
 -- Open edit modal for window

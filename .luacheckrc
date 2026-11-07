@@ -6,12 +6,17 @@ max_line_length = false
 exclude_files = {
     "libs",
     ".deploy",
+    ".luacheckrc",
+    "tests",
 }
 
 ignore = {
     "11/SLASH_.*",              -- slash command name globals
     "1/[A-Z][A-Z][A-Z0-9_]+",   -- FrameXML constants (NUM_BAG_SLOTS, KEYRING_CONTAINER, ...)
     "212/self",                 -- module methods follow the addon:NewModule(name) convention
+    "211",                      -- unused loop variable
+    "212",                      -- unused argument
+    "213",                      -- unused variable
 }
 
 globals = {
@@ -98,6 +103,8 @@ globals = {
 
     -- Input/key APIs
     "IsControlKeyDown",
+    "GetInventoryItemLink",
+    "GetInventoryItemID",
 
     -- Custom globals set by our frames
     "ShowItemMenu",
@@ -107,4 +114,5 @@ globals = {
     "ShowWindowMenu",
     "OpenWindowEditModal",
     "AddSectionToWindow",
+    "C_EquipmentSet",
 }

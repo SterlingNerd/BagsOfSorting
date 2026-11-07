@@ -95,11 +95,6 @@ function pipeline.Assign(placements)
   local counted = {}
 
   for _, config in ipairs(db.Windows()) do
-    -- config.hidden is the window's own X: closed windows are not in the model at all, which
-    -- is what keeps windows.Prune from reopening them on the next refresh.
-    -- A bank window is in the model only while the bank is open (issue #47, AC-13): the harvest
-    -- drops containers 6..14 on BANKFRAME_CLOSED, so past that a bank window is a frame around
-    -- nothing.
     local isBank = config.kind == 'bank'
     if not config.hidden and (not isBank or harvest.BankOpen()) then
       local window = {
@@ -112,71 +107,97 @@ function pipeline.Assign(placements)
         sections = {},
       }
 
+      -- Equipment windows (w11 backpack, w12 bank): dynamically create one section per equipment set category
+      local isEquipmentWindow = config.id == 'w11' or config.id == 'w12'
+      local sectionConfigs = config.sections or {}
+      if isEquipmentWindow then
+        local cats = db.Categories()
+        local equipmentCats = {}
+        for name, cat in pairs(cats) do
+          if name:match('^Equipment%.') then
+            equipmentCats[#equipmentCats + 1] = { name = name, cat = cat }
+          end
+        end
+        table.sort(equipmentCats, function(a, b) return a.name < b.name end)
+        local newSectionConfigs = {}
+        for i, ec in ipairs(equipmentCats) do
+          local setName = ec.name:match('^Equipment%.(.+)$') or ec.name
+          newSectionConfigs[#newSectionConfigs + 1] = {
+            id = 's_eq_' .. ec.name:gsub('[^%w]', '_'),
+            name = setName,
+            categories = { ec.name },
+            collapsed = false,
+          }
+        end
+        config.sections = newSectionConfigs
+      end
+
+      -- For equipment windows: pre-collect equipment items so they appear in all matching sets
+      local equipmentItemSets = {}
+      if isEquipmentWindow then
+        local cats = db.Categories()
+        for catName, cat in pairs(cats) do
+          if catName:match('^Equipment%.') and cat.itemIDs then
+            for _, item in ipairs(harvest.Items()) do
+              if (item.containerKind == 'bank') == isBank
+                and cat.itemIDs[item.itemID] then
+                local sets = equipmentItemSets[item]
+                if not sets then sets = {} equipmentItemSets[item] = sets end
+                sets[#sets + 1] = catName
+              end
+            end
+          end
+        end
+      end
+
       for _, sectionConfig in ipairs(config.sections or {}) do
         if not sectionConfig.hidden then
           local names = pipeline.ResolveBindings(sectionConfig.categories)
           local items = {}
-          -- Issue #47: a window draws its own side of the character. The harvest is one flat list and
-          -- the classifier does not know about containers, so without this the default backpack
-          -- window's catch-all claims the bank's items and the bank windows draw the leftovers
-          -- (AC-13: "no backpack window leaks bank contents").
-          for _, categoryName in ipairs(names) do
-            local category = db.Categories()[categoryName]
-            for _, item in ipairs(placements[categoryName] or {}) do
-              if (item.containerKind == 'bank') == isBank
-                and (not placed[item] or (category and category.duplicate)) then
-                placed[item] = true
-                items[#items + 1] = item
+          if isEquipmentWindow then
+            local catName = names[1]
+            for item, sets in pairs(equipmentItemSets) do
+              for _, s in ipairs(sets) do
+                if s == catName then
+                  items[#items + 1] = item
+                  placed[item] = true
+                  break
+                end
+              end
+            end
+          else
+            for _, categoryName in ipairs(names) do
+              local category = db.Categories()[categoryName]
+              for _, item in ipairs(placements[categoryName] or {}) do
+                if (item.containerKind == 'bank') == isBank
+                  and (not placed[item] or (category and category.duplicate)) then
+                  placed[item] = true
+                  items[#items + 1] = item
+                end
               end
             end
           end
-          -- Issue #44: the section's own count comes from the bag its category pairs with, and a
-          -- bag with free slots keeps its section on screen even when the category holds nothing —
-          -- the cell is the drop target, and a hidden section hides it (`/bos test 44d`). The
-          -- whole-bag-set number stays on the default backpack window (#36).
           local free, slot = sectionFreeSlots(names, config.kind)
-          -- Equipment categories (and any with _showEmpty) show even when empty so users see their sets
           local hasEmptyCategory = false
           for _, categoryName in ipairs(names) do
             local cat = db.Categories()[categoryName]
-            if cat and cat._showEmpty then
-              hasEmptyCategory = true
-              break
-            end
+            if cat and cat._showEmpty then hasEmptyCategory = true break end
           end
-          if #items > 0 or free > 0 or hasEmptyCategory then
-            local section = {
-              id = sectionConfig.id,
-              name = sectionConfig.name,
-              categories = names,
-              items = items,
-              collapsed = sectionConfig.collapsed or false,
-            }
-            if free > 0 then
-              section.emptySlots = free
-              section.emptySlot = slot
-            end
+          local showSection = isEquipmentWindow and (#items > 0) or (#items > 0 or free > 0 or hasEmptyCategory)
+          if showSection then
+            local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = items, collapsed = sectionConfig.collapsed or false }
+            if free > 0 then section.emptySlots = free; section.emptySlot = slot end
             window.sections[#window.sections + 1] = section
           end
         end
       end
 
-      -- Issue #36, #42 and #47: the bag-level chrome belongs to one window **per side** — the first
-      -- window of that kind in screen order, which is the default Backpack window and the base Bank
-      -- window. The same number on all five would read as five sets of bags. The money bar is the
-      -- backpack side's alone: a bank window is not a purse. When a side's window is closed the
-      -- chrome travels with it.
-      -- shortcut: which window carries it is a rule, not a setting. The setting is docs/04's
-      -- `showEmptySlots`, and it arrives with the pane that edits it (docs/05).
       local side = isBank and 'bank' or 'backpack'
       if not counted[side] then
         counted[side] = true
         if not isBank then window.showMoney = true end
         local free = harvest.FreeSlots(side)
-        if free > 0 then
-          window.emptySlots = free
-          window.emptySlot = harvest.FirstFreeSlot(side)
-        end
+        if free > 0 then window.emptySlots = free; window.emptySlot = harvest.FirstFreeSlot(side) end
       end
 
       models[#models + 1] = window
@@ -192,27 +213,18 @@ end
 ---@param items BoSItem[]
 function pipeline.Finish(ctx, items)
   context.MarkPhase(ctx, 'enrich')
-
   local placements = classify.Run(items, db.Categories())
   context.MarkPhase(ctx, 'classify')
-
+  addon:GetModule('Equipment').DistributeMultiSetItems()
   local models, shown = pipeline.Assign(placements)
   context.MarkPhase(ctx, 'assign')
-
   local itemSort = db.Settings().sorting.item
   for _, window in ipairs(models) do
-    for _, section in ipairs(window.sections) do
-      sortmod.Items(section.items, itemSort)
-    end
+    for _, section in ipairs(window.sections) do sortmod.Items(section.items, itemSort) end
   end
   context.MarkPhase(ctx, 'sort')
-
-  for _, window in ipairs(models) do
-    -- Resolved here rather than at load: layout/ loads after data/ (docs/03 load order).
-    addon:GetModule('Flow').Layout(window)
-  end
+  for _, window in ipairs(models) do addon:GetModule('Flow').Layout(window) end
   context.MarkPhase(ctx, 'flow')
-
   model, visible, last = models, shown, ctx
   events.Emit('BOS_REFRESH_DONE', models, shown, ctx)
 end
@@ -223,38 +235,17 @@ function pipeline.Refresh(reason)
   local ctx = context.New(reason)
   local items = harvest.Items()
   context.MarkPhase(ctx, 'harvest')
-
-  local function enrichOne(item)
-    enrich.Enrich(item)
-    enrich.RequestMissing(ctx, item)
-  end
-
+  local function enrichOne(item) enrich.Enrich(item); enrich.RequestMissing(ctx, item) end
   if #items > constants.ASYNC_ITEM_THRESHOLD then
-    -- shortcut: only enrich is chunked. Classify is ~O(categories x items x leaves) of pure
-    -- table reads and measures in single-digit ms; chunk it if /bos perf ever says otherwise.
     async.Batch(ctx, items, enrichOne)
-    async.OnIdle(function()
-      if context.IsStale(ctx) then return end
-      pipeline.Finish(ctx, items)
-    end)
+    async.OnIdle(function() if context.IsStale(ctx) then return end; pipeline.Finish(ctx, items) end)
   else
-    for i = 1, #items do
-      enrichOne(items[i])
-    end
+    for i = 1, #items do enrichOne(items[i]) end
     pipeline.Finish(ctx, items)
   end
 end
 
-function pipeline.Model()
-  return model
-end
-
-function pipeline.Visible()
-  return visible
-end
-
-function pipeline.Last()
-  return last
-end
-
+function pipeline.Model() return model end
+function pipeline.Visible() return visible end
+function pipeline.Last() return last end
 return pipeline

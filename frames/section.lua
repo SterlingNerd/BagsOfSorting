@@ -32,6 +32,7 @@ local function create()
   local title = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
   title:SetPoint('TOPLEFT', 0, 0)
   title:SetJustifyH('LEFT')
+  title:SetWordWrap(true)
   -- Transparent button over the title area to catch right-clicks (FontStrings can't receive mouse events)
   local titleButton = CreateFrame('Button', nil, frame)
   titleButton:SetPoint('TOPLEFT', 0, 0)
@@ -95,6 +96,14 @@ end
 ---@param windowConfig any
 function sectionFrames.Render(section, model, parent, offsetY, windowConfig)
   clearItems(section)
+
+  -- Guard: offsetY can be nil if flow.Layout hasn't run or section was added late
+  offsetY = offsetY or 0
+  -- Defensive defaults if flow.Layout didn't set them (e.g. section added after layout)
+  model.width = model.width or (windowConfig.columns or 5) * (constants.BUTTON_SIZE + constants.BUTTON_GAP)
+  model.height = model.height or constants.SECTION_TITLE_HEIGHT
+  model.cols = model.cols or (windowConfig.columns or 5)
+  model.rows = model.rows or 0
 
   -- Store references for the right-click handler
   section.frame._model = model

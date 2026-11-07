@@ -62,9 +62,11 @@ function equipment.scanTooltipForEquipmentSets(item)
 end
 
 --- Build itemID -> setName map from tooltip scanning (fallback path).
---- Only scans equippable items to avoid tooltiping entire bags.
+--- Scans bag items AND equipped items (since equipment set items are often equipped).
 local function buildTooltipMap()
   setItemMap = {}
+
+  -- Scan bag items
   local items = addon:GetModule('Harvest').Items()
   for _, item in ipairs(items) do
     local sets = equipment.scanTooltipForEquipmentSets(item)
@@ -75,6 +77,23 @@ local function buildTooltipMap()
       end
     end
   end
+
+  -- Scan equipped slots (INVSLOT_* constants)
+  for slot = 1, 19 do
+    local itemLink = GetInventoryItemLink('player', slot)
+    if itemLink then
+      local itemID = GetInventoryItemID('player', slot)
+      local fakeItem = { link = itemLink, equipSlot = 'INVSLOT_' .. slot, itemID = itemID }
+      local sets = equipment.scanTooltipForEquipmentSets(fakeItem)
+      if sets then
+        for setName in pairs(sets) do
+          if not setItemMap[setName] then setItemMap[setName] = {} end
+          setItemMap[setName][itemID] = true
+        end
+      end
+    end
+  end
+
   log.Debug('Equipment tooltip map built, sets:', table.concat((function() local t={} for k in pairs(setItemMap) do t[#t+1]=k end return t end)(), ', '))
 end
 
@@ -88,11 +107,11 @@ local function queryEquipmentSets()
   for _, setID in ipairs(setIDs) do
     local name, icon, _, isEquipped, _, _, _, numLost = C_EquipmentSet.GetEquipmentSetInfo(setID)
     if name then
-      -- Forever client: GetItemIDs may return nil. Use tooltip fallback as primary.
       local itemIDs = C_EquipmentSet.GetItemIDs(setID)
       local idSet = {}
       if itemIDs and type(itemIDs) == 'table' then
-        for _, id in ipairs(itemIDs) do
+        for _, id in pairs(itemIDs) do
+          -- Filter out -1 (empty equipment slot sentinel)
           if id and id > 0 then idSet[id] = true end
         end
       end
@@ -111,7 +130,7 @@ local function upsertCategory(setID, info)
     priority = 14, -- Between Consumables (12) and Tradeskills (15)
     kind = 'manual',
     enabled = true,
-    duplicate = false,
+    duplicate = false, -- Handled specially: items in multiple sets added post-classify
     itemIDs = info.itemIDs,
     _equipmentSetID = setID,
     -- Equipment categories show even when empty so users can see their sets
@@ -136,19 +155,38 @@ local function pruneCategories(currentSetIDs)
   end
 end
 
---- Full rebuild: query API, build tooltip fallback map, create categories.
+--- Full rebuild: query API, build tooltip fallback map only if needed, create categories.
 function equipment.Refresh()
   equipmentSets = queryEquipmentSets()
 
-  -- Always build tooltip map since GetItemIDs returns nil on Forever
-  buildTooltipMap()
-  for setID, info in pairs(equipmentSets) do
-    local tooltipIDs = setItemMap[info.name]
-    if tooltipIDs and next(tooltipIDs) then
-      info.itemIDs = tooltipIDs
-      log.Debug('Equipment set', info.name, 'got', (function() local c=0 for _ in pairs(tooltipIDs) do c=c+1 end return c end)(), 'itemIDs from tooltip')
-    else
-      log.Debug('Equipment set', info.name, 'has no tooltip itemIDs yet')
+  -- Check if any set has empty itemIDs (API returned nil/empty)
+  local needsTooltip = false
+  for _, info in pairs(equipmentSets) do
+    if not next(info.itemIDs) then
+      needsTooltip = true
+      break
+    end
+  end
+
+  -- Only build tooltip map if API data is missing
+  if needsTooltip then
+    buildTooltipMap()
+    for setID, info in pairs(equipmentSets) do
+      if not next(info.itemIDs) then
+        local tooltipIDs = setItemMap[info.name]
+        if tooltipIDs and next(tooltipIDs) then
+          info.itemIDs = tooltipIDs
+          log.Debug('Equipment set', info.name, 'got', (function() local c=0 for _ in pairs(tooltipIDs) do c=c+1 end return c end)(), 'itemIDs from tooltip fallback')
+        else
+          log.Debug('Equipment set', info.name, 'has no tooltip itemIDs yet')
+        end
+      else
+        log.Debug('Equipment set', info.name, 'using API itemIDs (', (function() local c=0 for _ in pairs(info.itemIDs) do c=c+1 end return c end)(), ')')
+      end
+    end
+  else
+    for setID, info in pairs(equipmentSets) do
+      log.Debug('Equipment set', info.name, 'using API itemIDs (', (function() local c=0 for _ in pairs(info.itemIDs) do c=c+1 end return c end)(), ')')
     end
   end
 
@@ -176,6 +214,40 @@ end
 ---@return {name: string, icon: number, itemIDs: table<number, boolean>}?
 function equipment.GetSetInfo(setID)
   return equipmentSets[setID]
+end
+
+--- Distribute items that belong to multiple equipment sets into all matching categories.
+--- Called after classify.Run so items appear in all their sets but not in Armor/catch-all.
+function equipment.DistributeMultiSetItems()
+  local placements = addon:GetModule('Pipeline').Model()
+  if not placements then return end
+  -- Build itemID -> setNames map from equipment categories
+  local itemToSets = {}
+  for catName, cat in pairs(db.Categories()) do
+    if catName:match('^Equipment%.') and cat.itemIDs then
+      local setName = catName:match('^Equipment%.(.+)$')
+      for itemID in pairs(cat.itemIDs) do
+        if not itemToSets[itemID] then itemToSets[itemID] = {} end
+        itemToSets[itemID][#itemToSets[itemID] + 1] = catName
+      end
+    end
+  end
+  -- For items in multiple sets, ensure they appear in all matching equipment categories
+  for _, window in ipairs(placements) do
+    for _, section in ipairs(window.sections) do
+      for _, item in ipairs(section.items) do
+        local sets = itemToSets[item.itemID]
+        if sets and #sets > 1 then
+          for _, catName in ipairs(sets) do
+            local cat = db.Categories()[catName]
+            if cat and cat.itemIDs and not cat.itemIDs[item.itemID] then
+              cat.itemIDs[item.itemID] = true
+            end
+          end
+        end
+      end
+    end
+  end
 end
 
 -- Event handler

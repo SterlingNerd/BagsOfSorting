@@ -17,7 +17,7 @@ local constants = addon:GetModule('Constants')
 
 local BAG = constants.BAG_FAMILY
 
-db.CURRENT_VERSION = 7
+db.CURRENT_VERSION = 5
 
 ---@class BoSSettings
 -- Only settings something actually reads are present (FR-80: a setting with no UI home is
@@ -115,7 +115,6 @@ local DEFAULT_PROFILE = {
         { id = 's12', name = 'Elements', categories = { 'Tradeskills.Elements' } },
         { id = 's13', name = 'Engineering', categories = { 'Tradeskills.Parts' } },
         { id = 's14', name = 'Cooking', categories = { 'Tradeskills.Cooking' } },
-        { id = 's15', name = 'Fishing', categories = { 'Tradeskills.Fishing' } },
       },
     },
     -- Issue #57: Equipment bag between Tradeskills and Tools, one section per equipment set.
@@ -210,7 +209,6 @@ local DEFAULT_PROFILE = {
         { id = 's25', name = 'Elements', categories = { 'Tradeskills.Elements' } },
         { id = 's26', name = 'Engineering', categories = { 'Tradeskills.Parts' } },
         { id = 's27', name = 'Cooking', categories = { 'Tradeskills.Cooking' } },
-        { id = 's28', name = 'Fishing', categories = { 'Tradeskills.Fishing' } },
       },
     },
     -- Issue #57: Bank Equipment bag between Bank Tradeskills and Bank Tools.
@@ -258,7 +256,7 @@ local DEFAULT_PROFILE = {
       kind = 'manual',
       enabled = true,
       duplicate = false,
-      itemIDs = { [2901] = true, [6948] = true },   -- Mining Pick, Hearthstone
+      itemIDs = { [2901] = true, [6948] = true, [6256] = true },   -- Mining Pick, Hearthstone, Fishing Pole
     },
     ['Junk'] = {
       priority = 10,
@@ -300,14 +298,6 @@ local DEFAULT_PROFILE = {
     ['Tradeskills.Elements'] = tradeskill({ 'Elemental', 'Enchanting' }, BAG.Enchanting),
     ['Tradeskills.Parts'] = tradeskill({ 'Parts' }, BAG.Engineering),
     ['Tradeskills.Cooking'] = tradeskill({ 'Cooking' }),
-    ['Tradeskills.Fishing'] = {
-      priority = 9,
-      kind = 'manual',
-      enabled = true,
-      duplicate = false,
-      itemIDs = { [6256] = true, [6529] = true },   -- Fishing Pole, Shiny Bauble
-      _showEmpty = true,
-    },
     ['Armor'] = {
       priority = 20,
       kind = 'rules',
@@ -395,70 +385,6 @@ local MIGRATIONS = {
       for _, preset in ipairs(DEFAULT_PROFILE.windows) do
         if preset.id == 'w11' or preset.id == 'w12' then
           profile.windows[#profile.windows + 1] = deepCopy(preset)
-        end
-      end
-    end
-  end,
-
-  -- Add Tradeskills.Fishing category to profiles created before it existed.
-  [6] = function(profile)
-    profile.categories = profile.categories or {}
-    if not profile.categories['Tradeskills.Fishing'] then
-      profile.categories['Tradeskills.Fishing'] = deepCopy(DEFAULT_PROFILE.categories['Tradeskills.Fishing'])
-    end
-    -- Also ensure the Fishing section exists in Tradeskills windows
-    for _, window in ipairs(profile.windows or {}) do
-      if window.id == 'w5' then -- Tradeskills backpack window
-        local hasFishing = false
-        for _, section in ipairs(window.sections or {}) do
-          if section.id == 's15' then hasFishing = true break end
-        end
-        if not hasFishing then
-          window.sections[#window.sections + 1] = { id = 's15', name = 'Fishing', categories = { 'Tradeskills.Fishing' }, collapsed = false }
-        end
-      end
-      if window.id == 'w9' then -- Bank Tradeskills window
-        local hasFishing = false
-        for _, section in ipairs(window.sections or {}) do
-          if section.id == 's28' then hasFishing = true break end
-        end
-        if not hasFishing then
-          window.sections[#window.sections + 1] = { id = 's28', name = 'Fishing', categories = { 'Tradeskills.Fishing' }, collapsed = false }
-        end
-      end
-    end
-  end,
-
-  -- Fix Fishing section window IDs (migration 6 used wrong IDs: w4/w7 instead of w5/w9)
-  [7] = function(profile)
-    for _, window in ipairs(profile.windows or {}) do
-      -- Remove any Fishing sections from wrong windows
-      if window.id == 'w4' or window.id == 'w7' then
-        local newSections = {}
-        for _, section in ipairs(window.sections or {}) do
-          if section.id ~= 's15' and section.id ~= 's28' then
-            newSections[#newSections + 1] = section
-          end
-        end
-        window.sections = newSections
-      end
-      -- Ensure correct windows have Fishing section
-      if window.id == 'w5' then -- Tradeskills backpack window
-        local hasFishing = false
-        for _, section in ipairs(window.sections or {}) do
-          if section.id == 's15' then hasFishing = true break end
-        end
-        if not hasFishing then
-          window.sections[#window.sections + 1] = { id = 's15', name = 'Fishing', categories = { 'Tradeskills.Fishing' }, collapsed = false }
-        end
-      end
-      if window.id == 'w9' then -- Bank Tradeskills window
-        local hasFishing = false
-        for _, section in ipairs(window.sections or {}) do
-          if section.id == 's28' then hasFishing = true break end
-        end
-        if not hasFishing then
-          window.sections[#window.sections + 1] = { id = 's28', name = 'Fishing', categories = { 'Tradeskills.Fishing' }, collapsed = false }
         end
       end
     end

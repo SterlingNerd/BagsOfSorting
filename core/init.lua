@@ -20,6 +20,7 @@ local itemFrames = addon:GetModule('ItemFrames')
 local pool = addon:GetModule('Pool')
 local diag = addon:GetModule('Diag')
 local keybinds = addon:GetModule('Keybinds')
+local equipment = addon:GetModule('Equipment')
 
 init.started = false
 
@@ -69,6 +70,9 @@ function init.Start()
   -- Pre-warm the button pool from the real inventory so a combat loot event does not have to
   -- create a secure button (agents.md hard rule 3).
   itemFrames.Warm(math.min(200, #harvest.Items() + 20))
+
+  -- Initial equipment set scan
+  equipment.Refresh()
 
   listen()
   pipeline.Refresh('login')

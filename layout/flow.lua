@@ -75,6 +75,7 @@ function flow.Layout(window)
       -- except the one a tradeskill bag keeps alive (issue #44): its free-slot cell is the thing you
       -- drop the item into. With no items the block takes the window's column budget as its width, so
       -- its title reads like the others instead of squeezing into one cell.
+      -- Equipment categories (and any with _showEmpty) also show when empty so users see their sets.
       if count > 0 or (section.emptySlots or 0) > 0 then
         section.cols = count > 0 and math.min(maxColumns, count) or maxColumns
         section.rows = math.ceil(count / section.cols)
@@ -88,6 +89,17 @@ function flow.Layout(window)
           section.emptyOffsetY = section.height
           section.height = section.height + CELL
         end
+        contentHeight = contentHeight + section.height + SECTION_GAP
+        widest = math.max(widest, section.width)
+      else
+        -- Section exists (e.g. _showEmpty) but has no items and no free slots: reserve header space
+        -- so its offsetY is defined for rendering, but it takes no body rows.
+        section.cols = maxColumns
+        section.rows = 0
+        section.width = maxColumns * CELL
+        section.height = constants.SECTION_TITLE_HEIGHT
+        section.offsetY = contentHeight
+        section.emptyOffsetY = nil
         contentHeight = contentHeight + section.height + SECTION_GAP
         widest = math.max(widest, section.width)
       end

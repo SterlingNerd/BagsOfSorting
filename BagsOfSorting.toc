@@ -44,6 +44,7 @@ data\rules.lua
 data\classify.lua
 data\sort.lua
 data\pipeline.lua
+data\equipment.lua
 
 layout\flow.lua
 layout\anchors.lua

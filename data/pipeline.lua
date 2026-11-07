@@ -135,7 +135,16 @@ function pipeline.Assign(placements)
           -- the cell is the drop target, and a hidden section hides it (`/bos test 44d`). The
           -- whole-bag-set number stays on the default backpack window (#36).
           local free, slot = sectionFreeSlots(names, config.kind)
-          if #items > 0 or free > 0 then
+          -- Equipment categories (and any with _showEmpty) show even when empty so users see their sets
+          local hasEmptyCategory = false
+          for _, categoryName in ipairs(names) do
+            local cat = db.Categories()[categoryName]
+            if cat and cat._showEmpty then
+              hasEmptyCategory = true
+              break
+            end
+          end
+          if #items > 0 or free > 0 or hasEmptyCategory then
             local section = {
               id = sectionConfig.id,
               name = sectionConfig.name,

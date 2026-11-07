@@ -95,6 +95,11 @@ function pipeline.Assign(placements)
   local counted = {}
 
   for _, config in ipairs(db.Windows()) do
+    -- config.hidden is the window's own X: closed windows are not in the model at all, which
+    -- is what keeps windows.Prune from reopening them on the next refresh.
+    -- A bank window is in the model only while the bank is open (issue #47, AC-13): the harvest
+    -- drops containers 6..14 on BANKFRAME_CLOSED, so past that a bank window is a frame around
+    -- nothing.
     local isBank = config.kind == 'bank'
     if not config.hidden and (not isBank or harvest.BankOpen()) then
       local window = {

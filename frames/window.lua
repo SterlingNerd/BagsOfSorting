@@ -16,6 +16,7 @@ local moneyFrames = addon:GetModule('MoneyFrames')
 local itemFrames = addon:GetModule('ItemFrames')
 local constants = addon:GetModule('Constants')
 local log = addon:GetModule('Log')
+local context = addon:GetModule('Context')
 local dropdown = addon:GetModule('Dropdown')
 local editModals = addon:GetModule('EditModals')
 
@@ -319,6 +320,21 @@ function windows.Render(model)
   restorePosition(frame, model)
   frame:Show()
   return wf
+end
+
+--- Render used by the refresh pipeline.
+---@param models BoSWindowModel[]
+---@param shown table<string, boolean>
+---@param ctx BoSContext
+function windows.RenderAll(models, shown, ctx)
+  windows.Layout(models)
+  for _, model in ipairs(models) do
+    windows.Render(model)
+  end
+  windows.Prune(shown)
+  context.MarkPhase(ctx, 'render')
+  context.Finish(ctx)
+  if ctx.reason ~= 'bench' then log.Debug(context.Format(ctx)) end
 end
 
 --- Hide windows the model no longer contains (deleted windows, bank windows when closed).

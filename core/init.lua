@@ -30,27 +30,7 @@ end
 ---@param models BoSWindowModel[]
 ---@param shown table<string, boolean>
 ---@param ctx BoSContext
-local function render(models, shown, ctx)
-  if InCombatLockdown() then
-    -- Painting is what the client blocks during lockdown (SetItemLocation on a secure ItemButton),
-    -- so a window keeps whatever it last showed and re-renders on regen (docs/07 Q23).
-    windows.ShowPainted()
-    log.Debug('combat lockdown: render deferred to regen')
-    return
-  end
-  windows.Layout(models)
-  for _, model in ipairs(models) do
-    windows.Render(model)
-  end
-  windows.Prune(shown)
-  context.MarkPhase(ctx, 'render')
-  context.Finish(ctx)
-  -- Bench refreshes are a synthetic loop (probe 13 runs 1000 of them); logging each one buries the
-  -- chat capture in identical lines.
-  if ctx.reason ~= 'bench' then log.Debug(context.Format(ctx)) end
-end
-
-events.On('BOS_REFRESH_DONE', render)
+events.On('BOS_REFRESH_DONE', windows.RenderAll)
 
 local function listen()
   -- A loot burst is one refresh, not twenty (docs/03 §The pipeline).
@@ -116,13 +96,8 @@ end
 
 function init.Show()
   db.SetWindowsOpen(true)
-  if InCombatLockdown() then
-    -- Bags must be reachable in combat; only the painting is blocked (docs/07 Q23).
-    windows.ShowPainted()
-    log.Debug('combat lockdown: showing the last painted windows until regen')
-  else
-    pipeline.Refresh('show')
-  end
+  -- Render pipeline now handles combat internally (renders structure only in lockdown)
+  pipeline.Refresh('show')
 end
 
 function init.Toggle()

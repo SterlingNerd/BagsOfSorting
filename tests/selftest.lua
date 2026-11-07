@@ -222,7 +222,11 @@ local function testFlow(state)
   check(state, '5 items in 2 columns wraps to 3 rows', window.sections[1].rows, 3)
 
   local empty = flow.Layout({ id = 'e', name = 'e', columns = 3, sections = { { items = {} } } })
-  check(state, 'an empty section is not sized', empty.sections[1].cols, nil)
+  -- The one section flow is handed with nothing in it is the one pipeline.Assign kept alive on
+  -- purpose (`_showEmpty`): a title band, the window's column budget wide, no body rows.
+  check(state, 'a kept-but-empty section is a header band',
+    empty.sections[1].cols .. '/' .. empty.sections[1].rows .. '/' .. empty.sections[1].height,
+    '3/0/' .. constants.SECTION_TITLE_HEIGHT)
   check(state, 'an empty window is still its column grid wide', empty.width,
     3 * CELL + constants.WINDOW_PADDING * 2)
   -- Issue #43: with nothing in it a window draws no body, and its height is the chrome floor — the art

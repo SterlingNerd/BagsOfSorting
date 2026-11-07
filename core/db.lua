@@ -17,7 +17,7 @@ local constants = addon:GetModule('Constants')
 
 local BAG = constants.BAG_FAMILY
 
-db.CURRENT_VERSION = 5
+db.CURRENT_VERSION = 7
 
 ---@class BoSSettings
 -- Only settings something actually reads are present (FR-80: a setting with no UI home is
@@ -115,6 +115,7 @@ local DEFAULT_PROFILE = {
         { id = 's12', name = 'Elements', categories = { 'Tradeskills.Elements' } },
         { id = 's13', name = 'Engineering', categories = { 'Tradeskills.Parts' } },
         { id = 's14', name = 'Cooking', categories = { 'Tradeskills.Cooking' } },
+        { id = 's15', name = 'Fishing', categories = { 'Tradeskills.Fishing' } },
       },
     },
     -- Issue #57: Equipment bag between Tradeskills and Tools, one section per equipment set.
@@ -209,6 +210,7 @@ local DEFAULT_PROFILE = {
         { id = 's25', name = 'Elements', categories = { 'Tradeskills.Elements' } },
         { id = 's26', name = 'Engineering', categories = { 'Tradeskills.Parts' } },
         { id = 's27', name = 'Cooking', categories = { 'Tradeskills.Cooking' } },
+        { id = 's28', name = 'Fishing', categories = { 'Tradeskills.Fishing' } },
       },
     },
     -- Issue #57: Bank Equipment bag between Bank Tradeskills and Bank Tools.
@@ -256,7 +258,7 @@ local DEFAULT_PROFILE = {
       kind = 'manual',
       enabled = true,
       duplicate = false,
-      itemIDs = { [2901] = true, [6948] = true, [6256] = true },   -- Mining Pick, Hearthstone, Fishing Pole
+      itemIDs = { [2901] = true, [6948] = true },   -- Mining Pick, Hearthstone
     },
     ['Junk'] = {
       priority = 10,
@@ -298,6 +300,17 @@ local DEFAULT_PROFILE = {
     ['Tradeskills.Elements'] = tradeskill({ 'Elemental', 'Enchanting' }, BAG.Enchanting),
     ['Tradeskills.Parts'] = tradeskill({ 'Parts' }, BAG.Engineering),
     ['Tradeskills.Cooking'] = tradeskill({ 'Cooking' }),
+    -- Fishing has no subtype rule to hang on: the client files the pole and its trinket under
+    -- their own types, so this one is the item list. `_showEmpty` keeps the section drawn while
+    -- the bag holds no tackle -- it is where you drop the next one.
+    ['Tradeskills.Fishing'] = {
+      priority = 9,
+      kind = 'manual',
+      enabled = true,
+      duplicate = false,
+      itemIDs = { [6256] = true, [6529] = true },   -- Fishing Pole, Shiny Bauble
+      _showEmpty = true,
+    },
     ['Armor'] = {
       priority = 20,
       kind = 'rules',
@@ -389,6 +402,45 @@ local MIGRATIONS = {
       end
     end
   end,
+
+  -- Tradeskills.Fishing: the category and its two sections, for a profile written before they
+  -- existed.
+  [6] = function(profile)
+    profile.categories = profile.categories or {}
+    if not profile.categories['Tradeskills.Fishing'] then
+      profile.categories['Tradeskills.Fishing'] = deepCopy(DEFAULT_PROFILE.categories['Tradeskills.Fishing'])
+    end
+    for _, window in ipairs(profile.windows or {}) do
+      if window.id == 'w5' or window.id == 'w9' then
+        local sectionID = window.id == 'w5' and 's15' or 's28'
+        local hasFishing = false
+        for _, section in ipairs(window.sections or {}) do
+          if section.id == sectionID then hasFishing = true break end
+        end
+        if not hasFishing then
+          window.sections[#window.sections + 1] = {
+            id = sectionID, name = 'Fishing', categories = { 'Tradeskills.Fishing' }, collapsed = false,
+          }
+        end
+      end
+    end
+  end,
+
+  -- A first cut of migration 6 wrote the Fishing sections into w4 and w7 (Consumables and Bank
+  -- Quests). A profile that ran it gets them back out; the w5 and w9 sections are the right ones
+  -- and stay. Filtered by id, so a section the player made themselves is never swept up.
+  [7] = function(profile)
+    for _, window in ipairs(profile.windows or {}) do
+      if window.id == 'w4' or window.id == 'w7' then
+        local kept = {}
+        for _, section in ipairs(window.sections or {}) do
+          if section.id ~= 's15' and section.id ~= 's28' then kept[#kept + 1] = section end
+        end
+        window.sections = kept
+      end
+    end
+  end,
+
 }
 
 function db.Migrate()

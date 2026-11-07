@@ -75,8 +75,8 @@ function flow.Layout(window)
       -- except the one a tradeskill bag keeps alive (issue #44): its free-slot cell is the thing you
       -- drop the item into. With no items the block takes the window's column budget as its width, so
       -- its title reads like the others instead of squeezing into one cell.
-      -- pipeline.Assign only hands us a section with items or with free slots of its own; a section
-      -- with neither is dropped here, unsized, because its title is the noise AC-16 is about.
+      -- A category whose section pipeline.Assign keeps alive with nothing in it (`_showEmpty`, the
+      -- Fishing section) still gets a title band: it is a drop target, not noise.
       if count > 0 or (section.emptySlots or 0) > 0 then
         section.cols = count > 0 and math.min(maxColumns, count) or maxColumns
         section.rows = math.ceil(count / section.cols)
@@ -90,6 +90,17 @@ function flow.Layout(window)
           section.emptyOffsetY = section.height
           section.height = section.height + CELL
         end
+        contentHeight = contentHeight + section.height + SECTION_GAP
+        widest = math.max(widest, section.width)
+      else
+        -- No items and no free slots: header only, so the block stays placed and its offsetY is
+        -- defined for the render pass instead of falling through to section.lua's defaults.
+        section.cols = maxColumns
+        section.rows = 0
+        section.width = maxColumns * CELL
+        section.height = constants.SECTION_TITLE_HEIGHT
+        section.offsetY = contentHeight
+        section.emptyOffsetY = nil
         contentHeight = contentHeight + section.height + SECTION_GAP
         widest = math.max(widest, section.width)
       end

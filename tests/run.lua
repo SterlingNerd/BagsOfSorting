@@ -351,7 +351,7 @@ local tradeskills = windowIn(model, 'Tradeskills')
 check('Consumables binds its one category', binds(consumables), 'Consumables')
 check('Tradeskills binds one category per section', binds(tradeskills),
   'Tradeskills.Herbs,Tradeskills.Ore,Tradeskills.Leather,Tradeskills.Cloth,'
-    .. 'Tradeskills.Elements,Tradeskills.Parts,Tradeskills.Cooking')
+    .. 'Tradeskills.Elements,Tradeskills.Parts,Tradeskills.Cooking,Tradeskills.Fishing')
 check('Consumables holds the potion, the water and the bandage',
   countSection(consumables, 'Consumables'), 3)
 check('Herbs holds one and Elements holds two',
@@ -393,8 +393,8 @@ check('bandages (1251)', placeOf(1251), 'Consumables/Consumables')
 
 check('Consumables is sized to its one 3-item section and no money band',
   consumables.height, TITLE + (18 + CELL) + 6 + 8)
-check('Tradeskills is sized to its seven sections, their gaps and the herb-bag cell',
-  tradeskills.height, TITLE + 7 * (18 + CELL) + 7 * 6 + CELL + 8)
+check('Tradeskills is sized to its seven sections, their gaps, the herb-bag cell and the show-empty Fishing band',
+  tradeskills.height, TITLE + 7 * (18 + CELL) + 7 * 6 + CELL + 8 + (18 + 6))
 check('neither new window repeats the free-slot count',
   tostring(consumables.emptySlots) .. '/' .. tostring(tradeskills.emptySlots), 'nil/nil')
 
@@ -774,10 +774,15 @@ testCategoryEnabled()
 -- already playing.
 local function testBagFamilyMigration()
   local db = addon.modules['DB']
+  local function windowConfig(id)
+    for _, window in ipairs(db.Windows()) do
+      if window.id == id then return window end
+    end
+  end
   db.sv.version = 1
   db.Profile().categories['Tradeskills.Herbs'].bagFamily = nil
   db.Migrate()
-  check('a version-1 profile is migrated to the current schema', db.sv.version, 5)
+  check('a version-1 profile is migrated to the current schema', db.sv.version, db.CURRENT_VERSION)
   check('the preset pairing arrives on the category that has one',
     db.Profile().categories['Tradeskills.Herbs'].bagFamily, 32)
   check('and nothing is invented for the category that has none',
@@ -785,6 +790,27 @@ local function testBagFamilyMigration()
   pipeline.Refresh('migrated')
   check('the migrated profile drives the same count',
     sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Herbs').emptySlots, 5)
+
+  -- Issue #56's reason for existing: a profile written before Fishing had a category must get the
+  -- category and its two sections back, not lose the section silently.
+  db.Profile().categories['Tradeskills.Fishing'] = nil
+  for _, id in ipairs({ 'w5', 'w9' }) do
+    local kept = {}
+    for _, section in ipairs(windowConfig(id).sections) do
+      if section.id ~= 's15' and section.id ~= 's28' then kept[#kept + 1] = section end
+    end
+    windowConfig(id).sections = kept
+  end
+  db.sv.version = 5
+  db.Migrate()
+  check('the Fishing category comes back', db.Profile().categories['Tradeskills.Fishing'] ~= nil, true)
+  check('and its section lands in the backpack Tradeskills window',
+    sectionIn(windowConfig('w5'), 'Fishing') and sectionIn(windowConfig('w5'), 'Fishing').id or 'missing', 's15')
+  check('and in the bank one',
+    sectionIn(windowConfig('w9'), 'Fishing') and sectionIn(windowConfig('w9'), 'Fishing').id or 'missing', 's28')
+  pipeline.Refresh('migrated-fishing')
+  check('the restored section is drawn even with no tackle in the bag',
+    sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Fishing') ~= nil, true)
 end
 
 testBagFamilyMigration()

@@ -109,6 +109,9 @@ function pipeline.Assign(placements)
 
       -- Equipment windows (w11 backpack, w12 bank): dynamically create one section per equipment set category
       local isEquipmentWindow = config.id == 'w11' or config.id == 'w12'
+      -- The per-set sections are built fresh every refresh and live only in this pass. Writing them
+      -- back into config.sections would overwrite the window's own saved section list in the profile.
+      local sectionConfigs = config.sections or {}
       if isEquipmentWindow then
         local cats = db.Categories()
         local equipmentCats = {}
@@ -118,17 +121,16 @@ function pipeline.Assign(placements)
           end
         end
         table.sort(equipmentCats, function(a, b) return a.name < b.name end)
-        local newSectionConfigs = {}
+        sectionConfigs = {}
         for i, ec in ipairs(equipmentCats) do
           local setName = ec.name:match('^Equipment%.(.+)$') or ec.name
-          newSectionConfigs[#newSectionConfigs + 1] = {
+          sectionConfigs[#sectionConfigs + 1] = {
             id = 's_eq_' .. ec.name:gsub('[^%w]', '_'),
             name = setName,
             categories = { ec.name },
             collapsed = false,
           }
         end
-        config.sections = newSectionConfigs
       end
 
       -- For equipment windows: pre-collect equipment items so they appear in all matching sets
@@ -149,7 +151,7 @@ function pipeline.Assign(placements)
         end
       end
 
-      for _, sectionConfig in ipairs(config.sections or {}) do
+      for _, sectionConfig in ipairs(sectionConfigs) do
         if not sectionConfig.hidden then
           local names = pipeline.ResolveBindings(sectionConfig.categories)
           local items = {}
@@ -176,10 +178,25 @@ function pipeline.Assign(placements)
               end
             end
           end
+          -- Issue #44: the section's own count comes from the bag its category pairs with, and a bag
+          -- with free slots keeps its section on screen even when the category holds nothing — the
+          -- cell is the drop target, and a hidden section hides it (`/bos test 44d`).
           local free, slot = sectionFreeSlots(names, config.kind)
-          -- A section with nothing in it and no specialty bag of its own is noise — an empty
-          -- equipment set included, since it is a header with no cells under it.
-          if #items > 0 or free > 0 then
+          -- A category can also ask for its section to stay drawn while empty (`_showEmpty`). An
+          -- equipment set never does: an empty set is an Equipment Manager header with no cells under
+          -- it, so an equipment window draws a set only when that set holds something.
+          local hasEmptyCategory = false
+          for _, categoryName in ipairs(names) do
+            local cat = db.Categories()[categoryName]
+            if cat and cat._showEmpty then hasEmptyCategory = true break end
+          end
+          local showSection
+          if isEquipmentWindow then
+            showSection = #items > 0
+          else
+            showSection = #items > 0 or free > 0 or hasEmptyCategory
+          end
+          if showSection then
             local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = items, collapsed = sectionConfig.collapsed or false }
             if free > 0 then section.emptySlots = free; section.emptySlot = slot end
             window.sections[#window.sections + 1] = section

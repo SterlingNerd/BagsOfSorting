@@ -99,6 +99,20 @@ item on it puts the item in that bag. Two numbers on screen at once is intended 
 bag set (0..4, specialty bags included) and the section's is one bag. `FR-44`'s user-selectable half,
 compact count versus individual slots, arrives with the settings pane (docs/05).
 
+## Stack display
+
+Partial stacks of one item draw as one cell carrying the true total — 3 × 20 → one button, 60. That is
+`FR-43`'s merged default, and the window context menu's **Show Stacks** entry is what owns the choice.
+
+| Rule | Why |
+|---|---|
+| Merging happens in `Pipeline.Finish`, after the sort, and changes nothing about which real slot holds what | `FR-43`. The merged record is a **copy** of the item, because a category with `duplicate = true` puts the same harvested record in two sections at once and summing onto the shared record counts it twice (issue #59) |
+| One cell per **identity**, not per item id | the group key is the item's hyperlink — enchant, gems, suffix and bonus ids in it — so two pieces of gear with the same id and different stats never hide each other. `stackedCount` is the total the cell shows and `stackCount` the pile of the slot it points at |
+| Groups keep the order the sort gave them | a merged cell lands where that item's first stack was, so the sort order the player chose still reads the same |
+| The cell points at the **biggest** pile of that identity | every stock handler still resolves a real `bagID + slot` (`frames/item.lua`), so the icon is clickable — it picks up that pile, not the total the count shows. This is BetterBags' stack root (`data/stacks.lua`) and its click behaviour; #60 (`C_Container.CleanUpBags`) is the story that makes the physical bags match the number |
+| A total above 9999 draws as `*` | the client's own `GetFormattedItemQuantity` cap on the count fontstring — the same rendering it gives a real oversized stack |
+| `showStacks` reads `merged` or `always` today | `always` is what the toggle writes and what the profile keeps; `session` and `vendor` (docs/04) arrive with the mode picker |
+
 ## Item state we borrow rather than own
 
 | State | Ours |

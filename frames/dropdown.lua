@@ -31,6 +31,21 @@ local function ensureFrame()
   return dropdownFrame
 end
 
+--- A horizontal line between menu groups, entry for entry the client's own separator info
+--- (`UIDropDownMenu_AddSeparator`, Blizzard_SharedXML/Mainline/UIDropDownMenu.lua). `isTitle` on its
+--- own is `UIDropDownMenu_AddSpace`: a blank row, not a line — the line is the divider texture.
+---@return DropdownEntry
+function dropdown.Separator()
+  return {
+    hasArrow = false, dist = 0, isTitle = true, isUninteractable = true, notCheckable = true,
+    iconOnly = true, icon = 'Interface/Common/UI-TooltipDivider-Transparent',
+    tCoordLeft = 0, tCoordRight = 1, tCoordTop = 0, tCoordBottom = 1,
+    tSizeX = 0, tSizeY = 8, tFitDropDownSizeX = true,
+    iconInfo = { tCoordLeft = 0, tCoordRight = 1, tCoordTop = 0, tCoordBottom = 1,
+      tSizeX = 0, tSizeY = 8, tFitDropDownSizeX = true },
+  }
+end
+
 --- Show a dropdown menu anchored to a frame.
 ---@param anchorFrame Frame  -- frame to anchor to (for positioning)
 ---@param entries DropdownEntry[]
@@ -38,18 +53,14 @@ end
 function dropdown.Show(anchorFrame, entries, onSelect)
   ensureFrame()
 
-  -- Convert our entry format to EasyMenu format
+  -- Everything but the two fields we work out ourselves travels through untouched: a separator row
+  -- is its divider texture and coordinates, and nothing else converts them (EasyMenu is not on this
+  -- client, so the entry table is what `UIDropDownMenu_AddButton` reads).
   local menuList = {}
   for _, entry in ipairs(entries) do
     local info = {}
-    info.text = entry.text
-    info.value = entry.value
+    for key, value in pairs(entry) do info[key] = value end
     info.checked = type(entry.checked) == 'function' and entry.checked() or entry.checked
-    info.func = entry.func
-    info.isTitle = entry.isTitle
-    info.hasArrow = entry.hasArrow
-    info.menuList = entry.menuList
-    info.disabled = entry.disabled
     info.notCheckable = entry.notCheckable or (entry.func and not entry.checked)
     info.keepShownOnClick = entry.keepShownOnClick
 

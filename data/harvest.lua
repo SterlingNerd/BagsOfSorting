@@ -43,6 +43,7 @@ local constants = addon:GetModule('Constants')
 ---@field icon number?
 ---@field link string?
 ---@field stackCount number
+---@field stackedCount number?  -- the total a merged cell shows (FR-43, #59): written by Pipeline, never by the harvest
 ---@field isBound boolean?
 ---@field isLocked boolean?
 ---@field hasLoot boolean?

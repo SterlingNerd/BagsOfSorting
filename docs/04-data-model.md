@@ -104,8 +104,9 @@ BagsOfSortingDB = {
     stacking  = { showStacks="merged"|"always"|"session"|"vendor",  -- FR-43; "session" = merged but
                   -- a Show-stacks toggle un-merges until the bags close; "vendor" un-merges while a
                   -- vendor is open
-                  mergeUnstackable=false, dontMergePartial=true,
-                  dontMergeTransmog=true, preferAffinityBags=true },
+                  mergeUnstackable=true, dontMergePartial=false,   -- the stacking defaults BetterBags
+                  dontMergeTransmog=false,                          -- ships (core/constants.lua), and
+                  preferAffinityBags=true },                        -- the look FR-43 describes needs them
     sorting   = { section="manual"|"name"|"sizeDesc"|"sizeAsc",
                   item="nameThenQuality"|"qualityThenName"|"ilvl"|"expansion" },
     interaction = { sectionBulkActions=true, itemMenuModifier="CTRL",  -- FR-60b; our item menu, the

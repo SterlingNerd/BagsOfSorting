@@ -325,9 +325,12 @@ failed change?*
   (show, gear-only, minimum, position, quality-coloured). It is a modal on the bag, not a pane in
   Options, because you decide these by looking at the bags you are looking at. Defaults look like stock
   bags.
-- **Show stacks** (`FR-43`): a toggle in the section and window context menus. Merged is the default;
-  toggling un-merges for the session, until the bags close; `vendor` un-merges automatically while a
-  vendor is open; `always` never merges. Nothing here changes which real slot holds what.
+- **Show stacks** (`FR-43`): the window context menu — reached from the title or from the bag-icon
+  portrait — carries *Show Stacks* as its first entry with the client's own divider line under it
+  (issue #59). Ticked draws every partial stack on its own button (`always`); unticked is merged, the
+  default. The mode is a profile setting, so it survives a reload. `session` (un-merge until the bags
+  close) and `vendor` (un-merge while a vendor is open) and the section-header menu are the mode
+  picker's work. Nothing here changes which real slot holds what.
 - **New-item highlight** (`FR-47`): cleared by keybind, by the section/window context menu, by
   `/bos new`, or automatically on close, depending on `clearNewOnClose`.
 - **Selling a section** (`FR-65`): deliberately the most cautious action in the UI. Vendor buyback is
@@ -346,7 +349,7 @@ failed change?*
 | columns / scale / compact / open-with-all / icon | EditMode system dialog, or window context menu | `window.set` |
 | link / unlink a window to its twin | window context menu → *Link to…* / *Unlink* | `window.link`, `window.unlink` |
 | quality / item-level appearance | window context menu → *Appearance* modal | `display.set` |
-| show or hide merged stacks | section or window context menu | `stacking.setShowStacks` |
+| show or hide merged stacks | window context menu: the title or the bag-icon portrait | `stacking.setShowStacks` |
 | clear new-item highlights | keybind, section/window context menu, `/bos new` | `items.clearNew` |
 | delete window | window context menu `✕` with confirm | `window.delete` |
 | create section | `+ section` in configure mode | `section.create` |

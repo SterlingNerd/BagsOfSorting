@@ -225,6 +225,48 @@ function pipeline.Assign(placements)
   return models, shown
 end
 
+--- Issue #59 (FR-43): identical stacks of one item draw as one cell carrying the true total
+--- (3 × 20 → one cell, 60). This is BetterBags' virtual stacking over our own records: the group key
+--- is the item's **identity** — its hyperlink, which carries the enchant, gems, suffix and bonus ids
+--- — and not the bare item id, because two cloth shirts with the same id and different stats are not
+--- the same item and must not hide each other (BetterBags `data/stacks.lua` groups on an item hash
+--- built from those same link fields).
+---
+--- `stackedCount` is the total the cell shows; `stackCount` stays the count of the real slot the cell
+--- points at, which is the pile a click picks up. Like BetterBags' stack root, that slot is the
+--- **biggest** pile, so the click moves as much of the total as any one slot can. The record shown is
+--- a copy for one reason: a category with `duplicate = true` places the same harvested item in two
+--- sections at once, and summing onto the shared record would count it twice.
+---
+--- shortcut: one cell still points at one real slot, so a click moves that pile and not the total —
+--- the same thing BetterBags does — and #60 (Blizzard's `CleanUpBags`) is what makes the physical bags
+--- match the number. Groups keep the order the sort gave them; ties keep the first pile, since this
+--- iteration walks a sorted array and needs no tie-break of its own. A total above 9999 draws as
+--- Blizzard's own `*` (`GetFormattedItemQuantity`).
+---@param items BoSItem[]
+---@return BoSItem[]
+local function combineStacks(items)
+  local out, groups = {}, {}
+  for _, item in ipairs(items) do
+    local key = item.link or item.itemID
+    local merged = groups[key]
+    if not merged then
+      local copy = {}
+      for field, value in pairs(item) do copy[field] = value end
+      copy.stackedCount = copy.stackCount
+      groups[key] = copy
+      out[#out + 1] = copy
+    elseif item.stackCount > merged.stackCount then
+      local total = merged.stackedCount + item.stackCount
+      for field, value in pairs(item) do merged[field] = value end
+      merged.stackedCount = total
+    else
+      merged.stackedCount = merged.stackedCount + item.stackCount
+    end
+  end
+  return out
+end
+
 --- Phases 3-7 for an already-enriched item list.
 ---@param ctx BoSContext
 ---@param items BoSItem[]
@@ -236,8 +278,12 @@ function pipeline.Finish(ctx, items)
   local models, shown = pipeline.Assign(placements)
   context.MarkPhase(ctx, 'assign')
   local itemSort = db.Settings().sorting.item
+  local merge = db.Settings().stacking.showStacks ~= 'always'
   for _, window in ipairs(models) do
-    for _, section in ipairs(window.sections) do sortmod.Items(section.items, itemSort) end
+    for _, section in ipairs(window.sections) do
+      sortmod.Items(section.items, itemSort)
+      if merge then section.items = combineStacks(section.items) end
+    end
   end
   context.MarkPhase(ctx, 'sort')
   for _, window in ipairs(models) do addon:GetModule('Flow').Layout(window) end

@@ -19,6 +19,7 @@ local log = addon:GetModule('Log')
 local context = addon:GetModule('Context')
 local dropdown = addon:GetModule('Dropdown')
 local editModals = addon:GetModule('EditModals')
+local db = addon:GetModule('DB')
 
 ---@class BoSWindowFrame
 ---@field frame Frame
@@ -376,6 +377,18 @@ end
 -- Show the window title context menu
 function ShowWindowMenu(anchor, windowConfig)
   local entries = {
+    -- Issue #59 (FR-43): the stack display choice, at the top of the menu and its own line below.
+    -- Checked means the individual stacks are showing ('always'); unchecked is merged, the default.
+    -- The entry sends a command to the model and the model re-runs the pipeline (hard rule 5).
+    {
+      text = 'Show Stacks',
+      value = 'show_stacks',
+      checked = function() return db.Settings().stacking.showStacks == 'always' end,
+      func = function()
+        db.SetShowStacks(db.Settings().stacking.showStacks == 'always' and 'merged' or 'always')
+      end,
+    },
+    dropdown.Separator(),
     {
       text = 'Edit Window…',
       value = 'edit_window',

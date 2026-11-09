@@ -1130,6 +1130,104 @@ end
 
 testEquipmentSetSections()
 
+-- Issue #59 (FR-43): partial stacks of one item draw as one button carrying the true total, and
+-- the window context menu's Show stacks toggle is what flips that back. The two extra Linen Cloth
+-- stacks go in the keyring: it is the one container no window shows a free-slot count for, so every
+-- count the tests above assert stays put while they are in.
+local LINEN = 2578  -- Linen Cloth: already one 20-stack in the Tradeskills Cloth section
+
+local function testCombineStacks()
+  local db = addon.modules['DB']
+  contents[-1][2] = LINEN
+  contents[-1][3] = LINEN
+
+  local function cloth()
+    return sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Cloth')
+  end
+  local function itemIn(section, itemID)
+    for _, item in ipairs(section.items) do
+      if item.itemID == itemID then return item end
+    end
+  end
+
+  harvest.Invalidate()
+  pipeline.Refresh('stacks-merged')
+  local merged = cloth()
+  check('the profile starts merged (FR-43)', db.Settings().stacking.showStacks, 'merged')
+  check('three partial stacks of one item draw as one button', #merged.items, 1)
+  check('and that cell carries the true total', merged.items[1].stackedCount, 60)
+  check('while the slot it points at keeps its own pile', merged.items[1].stackCount, 20)
+  check('one merged item packs one cell', merged.cols .. '/' .. merged.rows, '1/1')
+  check('it still points at a real slot that holds that item',
+    contents[merged.items[1].bagID][merged.items[1].slot], LINEN)
+  check('items with different ids are not merged',
+    countSection(windowIn(pipeline.Model(), 'Consumables'), 'Consumables'), 3)
+  check('a single stack keeps its own count',
+    itemIn(sectionIn(windowIn(pipeline.Model(), 'Consumables'), 'Consumables'), 159).stackCount, 5)
+
+  -- The group key is identity, not the item id: the stub answers keyring slot 3 with a link carrying
+  -- a suffix the other two do not, so that copy is a different item and keeps its own cell.
+  local realInfo = _G.C_Container.GetContainerItemInfo
+  _G.C_Container.GetContainerItemInfo = function(bag, slot)
+    local info = realInfo(bag, slot)
+    if info and bag == -1 and slot == 3 then info.hyperlink = info.hyperlink .. ':1234' end
+    return info
+  end
+  pipeline.Refresh('stacks-one-different-copy')
+  local split = cloth()
+  check('the same id with a different link is not the same item', #split.items, 2)
+  local shownTotals = {}
+  for _, item in ipairs(split.items) do
+    shownTotals[#shownTotals + 1] = item.stackedCount .. '@' .. item.stackCount
+  end
+  table.sort(shownTotals)
+  check('one merged pair and one odd copy, each pointing at its own slot',
+    table.concat(shownTotals, ','), '20@20,40@20')
+  _G.C_Container.GetContainerItemInfo = realInfo
+
+  -- The summed total is not capped at one stack's max size. Above 9999 the client's own
+  -- GetFormattedItemQuantity takes over and the count reads `*`, which is a look the in-game
+  -- checklist row covers.
+  local maxStack = byID[LINEN].stackCount
+  byID[LINEN].stackCount = 9999
+  pipeline.Refresh('stacks-past-one-stack-max')
+  check('a merged total past one stack max keeps its number', cloth().items[1].stackedCount, 29997)
+  check('and the pile behind it keeps its own', cloth().items[1].stackCount, 9999)
+  byID[LINEN].stackCount = maxStack
+
+  check('toggling Show stacks ON is a change', db.SetShowStacks('always'), true)
+  check('toggling it again is not', db.SetShowStacks('always'), false)
+  pipeline.Refresh('stacks-always')
+  local shown = cloth()
+  check('Show stacks ON draws every partial stack', #shown.items, 3)
+  check('each carrying its own count',
+    shown.items[1].stackCount + shown.items[2].stackCount + shown.items[3].stackCount, 60)
+  check('three stacks pack three cells', shown.cols .. '/' .. shown.rows, '3/1')
+  check('the mode lives in the profile, which is the table SavedVariables writes',
+    db.sv.profiles.Default.settings.stacking.showStacks, 'always')
+
+  check('toggling back to merged is a change', db.SetShowStacks('merged'), true)
+  pipeline.Refresh('stacks-merged-again')
+  check('and the total is re-derived, not accumulated', cloth().items[1].stackedCount, 60)
+
+  db.Settings().stacking.showStacks = 'always'
+  db.Initialize()
+  check('a reload keeps the mode the player chose', db.Settings().stacking.showStacks, 'always')
+  db.sv.profiles.Default.settings.stacking = nil
+  db.Initialize()
+  check('a profile written before the setting gets the merged default',
+    db.Settings().stacking.showStacks, 'merged')
+
+  contents[-1][2], contents[-1][3] = nil, nil
+  harvest.Invalidate()
+  pipeline.Refresh('stacks-cleaned')
+  check('and the harness is left as it was found',
+    countSection(windowIn(pipeline.Model(), 'Tradeskills'), 'Cloth'), 1)
+end
+
+testCombineStacks()
+
+
 
 for _, failure in ipairs(failures) do
   print('FAIL ' .. failure)

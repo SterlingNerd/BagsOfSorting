@@ -804,6 +804,46 @@ local HELPERS = {
   subclasses = probes[20], owners = probes[21], bags = probes[22],
 }
 
+--- Issue #59: every cell the model laid out, and the count text the button sitting in front of it
+--- actually carries — our claim and the client's rendering side by side. `total` is what the cell says,
+--- `pile` is the count of the single real slot a click moves, and `slots with this id` is how many
+--- stacks of that item the bags hold.
+local function drawnCounts()
+  local models = addon:GetModule('Pipeline').Model()
+  if not models then record('no refresh has run yet') return end
+
+  local stacks = {}
+  for _, item in ipairs(addon:GetModule('Harvest').Items()) do
+    local side = item.containerKind == 'bank' and 'bank' or 'backpack'
+    local counts = stacks[side] or {}
+    stacks[side] = counts
+    counts[item.itemID] = (counts[item.itemID] or 0) + 1
+  end
+
+  for _, window in ipairs(models) do
+    local side = window.kind == 'bank' and 'bank' or 'backpack'
+    for _, section in ipairs(window.sections) do
+      record('window', window.id, window.name, 'section', section.name, 'cells', #section.items)
+      for _, item in ipairs(section.items) do
+        local button
+        for i = 1, 400 do
+          local candidate = _G['BagsOfSortingItemButton' .. i]
+          if candidate and candidate:IsShown() and candidate:GetParent():GetID() == item.bagID
+            and candidate:GetID() == item.slot then
+            button = candidate break
+          end
+        end
+        local count = button and (button.Count or _G[button:GetName() .. 'Count'])
+        record('  item', item.itemID, item.name,
+          'total x' .. (item.stackedCount or item.stackCount),
+          'pile x' .. item.stackCount, 'slot', item.bagID .. '.' .. item.slot,
+          'slots with this id', (stacks[side] or {})[item.itemID] or 0,
+          'button count', count and count:IsShown() and count:GetText() or 'hidden')
+      end
+    end
+  end
+end
+
 -- ---------------------------------------------------------------------------
 -- Pending manual tests: one entry per open issue, added when a story needs measuring and deleted
 -- when its capture is ingested. `issue` is the GitHub issue the run sheet answers; the id is what
@@ -899,6 +939,37 @@ local tests = {
           end
           record('tooltip scan complete, items with equipment sets:', found)
         end },
+    },
+  },
+
+  [59] = {
+    issue = 59,
+    what = 'merged stacks: the total one button carries, and what Show stacks draws instead',
+    needs = 'two or more partial stacks of the same item in your bags (three linen, say)',
+    steps = {
+      { text = 'setup: the mode the profile carries, which ids hold more than one slot, then open our windows', run = function()
+          local dbm = addon:GetModule('DB')
+          record('showStacks', dbm.Settings().stacking.showStacks)
+          local seen, dups = {}, {}
+          for _, item in ipairs(addon:GetModule('Harvest').Items()) do
+            seen[item.itemID] = (seen[item.itemID] or 0) + 1
+          end
+          for itemID, n in pairs(seen) do
+            if n > 1 then dups[#dups + 1] = itemID .. ' x' .. n end
+          end
+          table.sort(dups)
+          record('ids with more than one slot', #dups, table.concat(dups, ', '))
+          addon:GetModule('Init').Show()
+        end },
+      { text = 'capture: what the windows draw with the toggle off (merged)', run = drawnCounts },
+      { text = 'right-click the bag icon at the top-left corner of a window' },
+      { text = 'look: is "Show Stacks" the first entry, with a horizontal line under it?' },
+      { text = 'click the Show Stacks entry' },
+      { text = 'capture: what the windows draw with the toggle on (every stack)', run = drawnCounts },
+      { text = 'right-click the same bag icon again' },
+      { text = 'look: is Show Stacks still ticked, after opening the menu a second time?' },
+      { text = 'click the Show Stacks entry again' },
+      { text = 'capture: and back at merged', run = drawnCounts },
     },
   },
 }

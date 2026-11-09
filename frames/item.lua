@@ -108,7 +108,10 @@ function itemFrames.Paint(entry, item, parent)
 
   SetItemButtonTexture(entry.button, entry.item.icon or 0)
   SetItemButtonQuality(entry.button, item.quality, item.link, false, item.isBound)
-  SetItemButtonCount(entry.button, item.stackCount > 1 and item.stackCount or nil)
+  -- Issue #59: a merged cell shows the total of the piles behind it (`stackedCount`); a cell that came
+  -- straight from one slot shows that slot's own count.
+  local shown = item.stackedCount or item.stackCount
+  SetItemButtonCount(entry.button, shown > 1 and shown or nil)
   -- The new-item glow (FR-47, issue #35), drawn by the client's own method: UpdateNewItem reads
   -- C_NewItems.IsNewItem(bagID, slot), sets NewItemTexture's atlas from the quality and plays
   -- newitemglowAnim — alpha 1 → 0.2 → 1, 0.5 s each way, looping, which is the pulsating highlight

@@ -26,6 +26,9 @@ local DEFAULT_SETTINGS = {
   sorting = {
     item = 'nameThenQuality',   -- FR-46: nameThenQuality | qualityThenName | ilvl | expansion
   },
+  -- FR-43: merged is the default. 'always' is what the window menu's Show stacks toggle writes.
+  -- 'session' and 'vendor' (docs/04) arrive with the mode picker, not before it.
+  stacking = { showStacks = 'merged' },
   debug = false,
 }
 
@@ -551,6 +554,19 @@ function db.ClearPositions()
     end
   end
   return cleared
+end
+
+--- `stacking.setShowStacks` (docs/05 §Interaction inventory, FR-43): 'merged' folds every partial
+--- stack of one item into a single button carrying the true total; 'always' draws each stack on its
+--- own button. Only these two modes exist until the mode picker arrives.
+---@param mode string  -- 'merged' | 'always'
+---@return boolean changed
+function db.SetShowStacks(mode)
+  local stacking = db.Settings().stacking
+  if stacking.showStacks == mode then return false end
+  stacking.showStacks = mode
+  db.NotifyModelChanged()
+  return true
 end
 
 --- The layout model changed: ask the pipeline to re-run (FR-26's entry point).

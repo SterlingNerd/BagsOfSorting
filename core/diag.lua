@@ -3,7 +3,7 @@
 --   tests    short QA or investigation tasks tied to an open issue. `/bos test` lists the pending
 --            ones, `/bos test 42` prints its run sheet, `/bos test 42b` runs one captured step.
 --            An entry is added when a story needs measuring and deleted as part of ingesting the
---            capture. The workflow is `.pi/skills/bos-test-capture/SKILL.md`.
+--            capture. The workflow is the `bos-test-capture` skill.
 --   helpers  reusable captures a test step calls (dump, log, flags, keybind, newitem, clock,
 --            expansion, windows). Reachable from chat for ad-hoc investigation; they are not pending
 --            tests.

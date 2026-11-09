@@ -6,7 +6,7 @@ frame, a keybind, a protected action or a live Blizzard API.
 **Pending tests are not listed here.** `/bos test` lists them — short QA or investigation tasks tied
 to an open issue, defined in `core/diag.lua` and deleted once their capture is ingested. `/bos test
 <id>` prints one run sheet. The workflow — writing a test, running it, syncing, ingesting the result,
-and deleting the entry — is `.pi/skills/bos-test-capture/SKILL.md`.
+and deleting the entry — is the `bos-test-capture` skill.
 
 What stays here is the standing acceptance checklist: milestone acceptance criteria, and what those
 runs found. A client fact goes to the `wow-forever-api` reference that owns it; a decision about our own

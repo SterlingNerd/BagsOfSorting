@@ -40,7 +40,7 @@ Append nothing here. Put the fact in the file that owns it, then get back to the
 |---|---|
 | Does this API exist on Forever, what does it return, what did the live client measure (bags, bank, containers, events, item data, constants, SavedVariables, keybindings, timing) | `../.agents/skills/wow-forever-api/` — `references/containers-and-bags.md`, `references/item-and-spell-data.md`, `references/ui-templates.md`, `references/client-identity.md`, `references/taint-and-secure.md`, `references/editmode-move-mode.md`, `references/wow-ui-source.md` |
 | Choosing a widget or template, options-panel API, frame levels, chrome art | `references/ui-templates.md` |
-| Combat lockdown, secure buttons, taint, deferred init | `references/taint-and-secure.md` (and hard rule 2 below) |
+| Combat lockdown, secure buttons, taint, deferred init, and reading a live protected-action error | `references/taint-and-secure.md` for the mechanism, the `debugging-wow-addons` skill for the diagnosis path (hard rule 2) |
 | What our windows and UI do, and the rules we chose | `docs/08-window-behavior.md`, `docs/05-config-ui.md` |
 | Whether a feature is in scope, and why | `docs/00-vision-and-scope.md`, `docs/07-open-questions.md` |
 | A raw in-game capture, dated | the GitHub issue, as a comment |
@@ -68,7 +68,7 @@ skill is what the next addon in this workspace reads, and `docs/` is what this p
    showing/hiding Blizzard container frames outside a lockdown-safe path, no secure-button
    attribute writes while `InCombatLockdown()`. Deferred init uses a plain
    `CreateFrame("Frame")` + `PLAYER_REGEN_ENABLED`, never an AceEvent-mediated deferral
-   (that pattern already bit this workspace — see parent `../agents.md` §Debugging).
+   (that pattern already bit this workspace — see the `debugging-wow-addons` skill).
 3. **Item buttons are secure.** Pool them, reuse them, and never re-create a button in combat.
    If a button must be created during lockdown, mark it `tainted` and replace it on regen.
 4. **No AceConfig waterfall.** The config UI is hand-built per `docs/05-config-ui.md`. Adding
@@ -98,6 +98,9 @@ skill is what the next addon in this workspace reads, and `docs/` is what this p
 - **Style:** 2-space indent, `local x = 1`, module tables as `local mod = addon:NewModule('Mod')`.
   Follow BetterBags' annotation style (`---@class`, `---@field`) — it is the readable half of
   the two references.
+- **Worktrees:** one per issue, a sibling of this repo in the parent workspace, always
+  `BagsOfSorting-<issue>` (GitHub issue number, never a slug) — create, deploy, merge, restore the
+  shipped build and `cleanup.sh` are the `deploy-operations` skill's §The cycle.
 - **Naming:** addon folder / `addonName` / repo = **`BagsOfSorting`**, TOC title **`Bags of Sorting`**
   (plural decided, `docs/07` Q1), SavedVariables `BagsOfSortingDB`, slash command `/bos`. The client
   writes the file as `SavedVariables/BagsOfSorting.lua`, named after the folder whatever the TOC
@@ -139,7 +142,7 @@ bash tests/check-docs.sh        # docs budget: agents.md size, every doc indexed
 lua5.1 -e "loadfile('X.lua')"   # syntax-only smoke
 # install for in-game test: copy/symlink into ../addons/BagsOfSorting/
 # in-game manual tests: /bos test  (core/diag.lua) — the pending list; /bos test <id> prints its numbered run sheet, one action per step
-# capture workflow: .pi/skills/bos-test-capture/SKILL.md; the standing acceptance list: tests/CHECKLIST.md
+# capture workflow: .agents/skills/bos-test-capture/SKILL.md; the standing acceptance list: tests/CHECKLIST.md
 # API questions: the `spike` issues, and the wow-forever-api skill before writing any code path
 ```
 
@@ -149,7 +152,7 @@ no test code in a dev checkout or in a release zip. It proves the classifier and
 the Forever API calls (hard rule 1).
 
 The in-game half is the `/bos test` capture path, verified end-to-end on the live client (issue #27).
-`core/diag.lua` holds the pending list; `.pi/skills/bos-test-capture/SKILL.md` is the whole workflow —
+`core/diag.lua` holds the pending list; the `bos-test-capture` skill is the whole workflow —
 writing a test, running one action per step, syncing, ingesting the verdict to the file that owns it, and
 deleting the entry.
 

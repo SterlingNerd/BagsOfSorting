@@ -219,7 +219,7 @@ built, and then as per-client data tables, not injected adapters.`
 - No hooking of `OpenAllBags`/`CloseAllBags`/`ToggleBackpack` in v1 unless `docs/07` Q4 decides
   otherwise; instead our own keybinds + our own close-all-on-`PLAYER_INTERACTION_MANAGER_FRAME_SHOW`.
 - Deferred init: plain `CreateFrame("Frame")` + `PLAYER_REGEN_ENABLED` if `InCombatLockdown()` at
-  enable time. Never an AceEvent-mediated deferral (parent `../agents.md` §Debugging).
+  enable time. Never an AceEvent-mediated deferral (the `debugging-wow-addons` skill).
 - **Do not call Blizzard's container managers just to read them.** `ForeverPlus/Modules/BagWindow.lua`
   documents the exact trap on this client: `ContainerFrameSettingsManager:GetBagsShown()` looks like
   a question and is not one — it *builds and stores* the list, so calling it from our code ran
@@ -256,7 +256,7 @@ is the ecosystem habits a bag addon is expected to have. Named honestly, with th
 | **Blizzard's own search matcher** | our search and the client's search agree about what "matches" means | our search box calls `C_Container.SetItemSearch(text)` and filters with `ItemButtonUtil.GetItemContextMatchResultForItem(ItemLocation:CreateFromBagAndSlot(bag, slot))` — the same predicate `BagSearch_OnTextChanged` drives. Our bags already hold `item → (window, section, button)`; search is that map run in reverse (`docs/07` Q7) | use it for anything the client currently knows. It is **not** an index and cannot search a closed bank |
 | **AceConfig option tables** | appearing inside someone else's unified options suite | nothing — and this is a **deliberate refusal, not a platform gap**. AceConfig is out because its layout engine is what makes Baggins' config UI unusable at real scale: it wraps, truncates and reorders long section and category names, and its widget set fights a UI whose whole point is in-place editing. Forever's own settings API removes the only real reason addons reached for it | loss: none measured. No installed addon here aggregates option trees |
 | **LibSharedMedia / LibQTip / LibBagUtils / LibWindow / LibPeriodicTable** | fonts, dewdrop tooltips, bag-slot counting, saved positions, curated item lists | vanilla templates, `UIDropDownMenu`+`EasyMenu`, `C_Container.GetBagSlotFlag`, our own positions, our own preset data (`FR-31`) | replaced, no loss |
-| **Ace3 itself** | nothing we cannot write | ~470 lines total across lifecycle/events/hooks/locale/profiles | **gain**: no `AceEvent30Frame` class of `ADDON_ACTION_FORBIDDEN` (parent `../agents.md` §Debugging, `../TODO.md`) |
+| **Ace3 itself** | nothing we cannot write | ~470 lines total across lifecycle/events/hooks/locale/profiles | **gain**: no `AceEvent30Frame` class of `ADDON_ACTION_FORBIDDEN` (the `debugging-wow-addons` skill, `../TODO.md`) |
 
 Coexistence is a requirement, not a nicety (`FR-124`): `ForeverPlus` already repositions the vanilla
 bag window, `Leatrix_Plus` can `hooksecurefunc('OpenAllBags', CloseAllBags)`, and both `Baggins` and
@@ -293,7 +293,7 @@ BetterBags vendoring `LibUIDropDownMenu` is a Classic concession we do not need.
 | LibPeriodicTable (preset definitions) | ship our own preset data (`config/presets.lua`) — **and make it user-editable**, because LibPeriodicTable has not been meaningfully updated in years and cannot describe items Forever adds (`FR-31`) | 0 |
 
 **Zero vendored libraries in v1.** Also removes the entire `AceEvent30Frame` protected-frame class
-of bugs that bit this workspace (parent `../agents.md` §Debugging) — we never touch a Blizzard or
+of bugs that bit this workspace (the `debugging-wow-addons` skill) — we never touch a Blizzard or
 library-owned frame to register events.
 
 Optional *dependencies* (Blizzard-provided, not vendored): `Blizzard_EditMode` for move mode

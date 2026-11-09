@@ -90,6 +90,7 @@ local ORDER = {
   'data/rules.lua',
   'data/classify.lua',
   'data/sort.lua',
+  'data/equipment.lua',
   'data/pipeline.lua',
   'layout/flow.lua',
   'layout/anchors.lua',
@@ -269,11 +270,12 @@ local function containerAt(index)
   end
 end
 
-check('five windows in the model', #model, 5)
+check('six windows in the model', #model, 6)
 local names = {}
 for _, window in ipairs(model) do names[#names + 1] = window.name end
 check('profile order is model order', table.concat(names, ','),
-  'Backpack,Quests,Consumables,Tradeskills,Tools')   -- issue #41 inserted two between Quests and Tools
+  -- issue #41 inserted two between Quests and Tools; issue #57 put Equipment between Tradeskills and Tools
+  'Backpack,Quests,Consumables,Tradeskills,Equipment,Tools')
 local backpack = windowIn(model, 'Backpack')
 local quests = windowIn(model, 'Quests')
 local tools = windowIn(model, 'Tools')
@@ -349,7 +351,7 @@ local tradeskills = windowIn(model, 'Tradeskills')
 check('Consumables binds its one category', binds(consumables), 'Consumables')
 check('Tradeskills binds one category per section', binds(tradeskills),
   'Tradeskills.Herbs,Tradeskills.Ore,Tradeskills.Leather,Tradeskills.Cloth,'
-    .. 'Tradeskills.Elements,Tradeskills.Parts,Tradeskills.Cooking')
+    .. 'Tradeskills.Elements,Tradeskills.Parts,Tradeskills.Cooking,Tradeskills.Fishing')
 check('Consumables holds the potion, the water and the bandage',
   countSection(consumables, 'Consumables'), 3)
 check('Herbs holds one and Elements holds two',
@@ -391,8 +393,8 @@ check('bandages (1251)', placeOf(1251), 'Consumables/Consumables')
 
 check('Consumables is sized to its one 3-item section and no money band',
   consumables.height, TITLE + (18 + CELL) + 6 + 8)
-check('Tradeskills is sized to its seven sections, their gaps and the herb-bag cell',
-  tradeskills.height, TITLE + 7 * (18 + CELL) + 7 * 6 + CELL + 8)
+check('Tradeskills is sized to its seven sections, their gaps, the herb-bag cell and the show-empty Fishing band',
+  tradeskills.height, TITLE + 7 * (18 + CELL) + 7 * 6 + CELL + 8 + (18 + 6))
 check('neither new window repeats the free-slot count',
   tostring(consumables.emptySlots) .. '/' .. tostring(tradeskills.emptySlots), 'nil/nil')
 
@@ -551,7 +553,7 @@ local function testWindowVisibility()
   check('closed windows leave the model', #pipeline.Model(), 0)
   db.SetWindowsOpen(true)
   pipeline.Refresh('reopen')
-  check('reopened windows are back in the model', #pipeline.Model(), 5)
+  check('reopened windows are back in the model', #pipeline.Model(), 6)
   check('reopen clears the flag rather than setting it', db.Windows()[1].hidden, nil)
 end
 
@@ -585,8 +587,8 @@ local function testDuplicateBinding()
   local models = pipeline.Model()
   check('the first window in array order gets the items',
     countSection(windowIn(models, 'Backpack'), 'Tools copy'), 2)
-  check('the later window keeps its slot with no sections', #models, 5)
-  check('and holds nothing', #models[5].sections, 0)
+  check('the later window keeps its slot with no sections', #models, 6)
+  check('and holds nothing', #windowIn(models, 'Tools').sections, 0)
   table.remove(db.Windows()[1].sections)
   pipeline.Refresh('unduplicate')
 end
@@ -658,10 +660,10 @@ testNoSpecialtyBag()
 -- placement tests need the default placement (FR-41).
 local function testClearPositions()
   local db = addon.modules['DB']
-  db.Windows()[5].position = { point = 'TOP', relativePoint = 'TOP', x = 295.2, y = -191.7 }
+  db.Windows()[6].position = { point = 'TOP', relativePoint = 'TOP', x = 295.2, y = -191.7 }
   check('a saved position is counted as cleared', db.ClearPositions(), 1)
   check('the window keeps everything else about itself',
-    db.Windows()[5].id .. '/' .. tostring(db.Windows()[5].position), 'w3/nil')
+    db.Windows()[6].id .. '/' .. tostring(db.Windows()[6].position), 'w3/nil')
   check('nothing saved means nothing cleared', db.ClearPositions(), 0)
 end
 
@@ -772,10 +774,15 @@ testCategoryEnabled()
 -- already playing.
 local function testBagFamilyMigration()
   local db = addon.modules['DB']
+  local function windowConfig(id)
+    for _, window in ipairs(db.Windows()) do
+      if window.id == id then return window end
+    end
+  end
   db.sv.version = 1
   db.Profile().categories['Tradeskills.Herbs'].bagFamily = nil
   db.Migrate()
-  check('a version-1 profile is migrated to the current schema', db.sv.version, 4)
+  check('a version-1 profile is migrated to the current schema', db.sv.version, db.CURRENT_VERSION)
   check('the preset pairing arrives on the category that has one',
     db.Profile().categories['Tradeskills.Herbs'].bagFamily, 32)
   check('and nothing is invented for the category that has none',
@@ -783,6 +790,27 @@ local function testBagFamilyMigration()
   pipeline.Refresh('migrated')
   check('the migrated profile drives the same count',
     sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Herbs').emptySlots, 5)
+
+  -- Issue #56's reason for existing: a profile written before Fishing had a category must get the
+  -- category and its two sections back, not lose the section silently.
+  db.Profile().categories['Tradeskills.Fishing'] = nil
+  for _, id in ipairs({ 'w5', 'w9' }) do
+    local kept = {}
+    for _, section in ipairs(windowConfig(id).sections) do
+      if section.id ~= 's15' and section.id ~= 's28' then kept[#kept + 1] = section end
+    end
+    windowConfig(id).sections = kept
+  end
+  db.sv.version = 5
+  db.Migrate()
+  check('the Fishing category comes back', db.Profile().categories['Tradeskills.Fishing'] ~= nil, true)
+  check('and its section lands in the backpack Tradeskills window',
+    sectionIn(windowConfig('w5'), 'Fishing') and sectionIn(windowConfig('w5'), 'Fishing').id or 'missing', 's15')
+  check('and in the bank one',
+    sectionIn(windowConfig('w9'), 'Fishing') and sectionIn(windowConfig('w9'), 'Fishing').id or 'missing', 's28')
+  pipeline.Refresh('migrated-fishing')
+  check('the restored section is drawn even with no tackle in the bag',
+    sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Fishing') ~= nil, true)
 end
 
 testBagFamilyMigration()
@@ -843,7 +871,7 @@ local function testVendorOpensOurBags()
     tostring(combined.shown) .. '/' .. #pipeline.Model(), 'true/0')
 
   eventsMod.Emit('MERCHANT_SHOW')
-  check('a vendor opens our windows', #pipeline.Model(), 5)
+  check('a vendor opens our windows', #pipeline.Model(), 6)
   check('a vendor hides Blizzard bag window', combined.shown, false)
   check('suppression is on while the vendor is open', interactions.Suppressing(), true)
 
@@ -877,7 +905,7 @@ local function testInteractionLeavesPlayerWindowsAlone()
   check('a vendor does not re-open or re-close what the player already opened',
     windowFramesStub.hides - hides, 0)
   eventsMod.Emit('MERCHANT_CLOSED')
-  check('closing the vendor leaves the player windows open', #pipeline.Model(), 5)
+  check('closing the vendor leaves the player windows open', #pipeline.Model(), 6)
   check('and nothing was hidden on the way out', windowFramesStub.hides - hides, 0)
 end
 
@@ -893,7 +921,7 @@ local function testBankOpensOurBags()
   eventsMod.Emit('BANKFRAME_CLOSED')
   check('the stray BANKFRAME_CLOSED before an opening opens nothing', #pipeline.Model(), 0)
   eventsMod.Emit('BANKFRAME_OPENED')
-  check('the bank opens our windows, backpack mirrors included', #pipeline.Model(), 10)
+  check('the bank opens our windows, backpack mirrors included', #pipeline.Model(), 12)
   check('and hides Blizzard bag window', combined.shown, false)
   eventsMod.Emit('BANKFRAME_CLOSED')
   check('closing the bank hides the windows it opened', windowFramesStub.hides, 2)
@@ -912,7 +940,7 @@ local function testNoHidingInCombat()
   blizzardOpensBags()
   _G.InCombatLockdown = function() return true end
   eventsMod.Emit('BANKFRAME_OPENED')
-  check('a bank opened in combat still opens our windows', #pipeline.Model(), 10)
+  check('a bank opened in combat still opens our windows', #pipeline.Model(), 12)
   check('and leaves Blizzard bag window shown', combined.shown, true)
   blizzardOpensBags()
   check('the OpenAllBags hook hides nothing during lockdown either', combined.shown, true)
@@ -966,9 +994,9 @@ local function testBankWindows()
   pipeline.Refresh('47-bank-closed')
 
   check('the preset carries a bank twin for every backpack window',
-    countKind(db.Windows(), 'bank') .. '/' .. countKind(db.Windows(), 'backpack'), '5/5')
+    countKind(db.Windows(), 'bank') .. '/' .. countKind(db.Windows(), 'backpack'), '6/6')
   check('a closed bank harvests no bank container', containerAt(6), nil)
-  check('and the model holds the five backpack windows only', #pipeline.Model(), 5)
+  check('and the model holds the six backpack windows only', #pipeline.Model(), 6)
 
   eventsMod.Emit('BANKFRAME_OPENED')
   check('the bank open puts the 48-slot grid in the harvest', containerAt(6) and containerAt(6).slots, 48)
@@ -977,7 +1005,7 @@ local function testBankWindows()
       .. tostring(containerAt(14) or 'none'),
     'bank/none')
   local models = pipeline.Model()
-  check('and the five bank twins in the model', #models, 10)
+  check('and the six bank twins in the model', #models, 12)
 
   local bank = windowIn(models, 'Bank')
   check('the mirror of the default backpack is a bank window', bank.kind, 'bank')
@@ -1061,12 +1089,47 @@ local function testBankWindows()
 
   eventsMod.Emit('BANKFRAME_CLOSED')
   check('closing the bank drops the bank containers', containerAt(6), nil)
-  check('and every bank window leaves the model', #pipeline.Model(), 5)
+  check('and every bank window leaves the model', #pipeline.Model(), 6)
   check('the backpack windows are back where they were',
     windowIn(pipeline.Model(), 'Backpack').emptySlots, 21)
 end
 
 testBankWindows()
+
+-- Issue #57: an equipment set with nothing in the bags is an Equipment Manager header with no
+-- cells under it, so it takes no title band and no slot in the window. A set that does hold an
+-- item keeps its section. The categories here are the shape data/equipment.lua writes; the client
+-- API itself is what the in-game `/bos test 57` run measures.
+local function testEquipmentSetSections()
+  local db = addon.modules['DB']
+  local function set(name, itemIDs)
+    db.Categories()['Equipment.' .. name] = {
+      priority = 14, kind = 'manual', enabled = true, duplicate = false,
+      itemIDs = itemIDs, _equipmentSetID = name,
+    }
+  end
+
+  set('PvP', { [2901] = true })
+  pipeline.Refresh('equipment-pvp')
+  local solo = windowIn(pipeline.Model(), 'Equipment')
+  local soloLayout = solo.height .. '/' .. #solo.sections
+
+  set('Healing', {})
+  pipeline.Refresh('equipment-healing-empty')
+  local eq = windowIn(pipeline.Model(), 'Equipment')
+  check('a set that holds a bagged item keeps its section', countSection(eq, 'PvP'), 1)
+  check('an empty set draws no title of its own', sectionIn(eq, 'Healing'), nil)
+  check('and costs the window no height and no slot', eq.height .. '/' .. #eq.sections, soloLayout)
+
+  db.Categories()['Equipment.PvP'] = nil
+  db.Categories()['Equipment.Healing'] = nil
+  pipeline.Refresh('equipment-sets-cleared')
+  check('with no set holding anything the window is empty but still placed',
+    #windowIn(pipeline.Model(), 'Equipment').sections, 0)
+end
+
+testEquipmentSetSections()
+
 
 for _, failure in ipairs(failures) do
   print('FAIL ' .. failure)

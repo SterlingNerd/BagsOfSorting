@@ -300,6 +300,9 @@ local DEFAULT_PROFILE = {
     ['Tradeskills.Elements'] = tradeskill({ 'Elemental', 'Enchanting' }, BAG.Enchanting),
     ['Tradeskills.Parts'] = tradeskill({ 'Parts' }, BAG.Engineering),
     ['Tradeskills.Cooking'] = tradeskill({ 'Cooking' }),
+    -- Fishing has no subtype rule to hang on: the client files the pole and its trinket under
+    -- their own types, so this one is the item list. `_showEmpty` keeps the section drawn while
+    -- the bag holds no tackle -- it is where you drop the next one.
     ['Tradeskills.Fishing'] = {
       priority = 9,
       kind = 'manual',
@@ -400,69 +403,44 @@ local MIGRATIONS = {
     end
   end,
 
-  -- Add Tradeskills.Fishing category to profiles created before it existed.
+  -- Tradeskills.Fishing: the category and its two sections, for a profile written before they
+  -- existed.
   [6] = function(profile)
     profile.categories = profile.categories or {}
     if not profile.categories['Tradeskills.Fishing'] then
       profile.categories['Tradeskills.Fishing'] = deepCopy(DEFAULT_PROFILE.categories['Tradeskills.Fishing'])
     end
-    -- Also ensure the Fishing section exists in Tradeskills windows
     for _, window in ipairs(profile.windows or {}) do
-      if window.id == 'w5' then -- Tradeskills backpack window
+      if window.id == 'w5' or window.id == 'w9' then
+        local sectionID = window.id == 'w5' and 's15' or 's28'
         local hasFishing = false
         for _, section in ipairs(window.sections or {}) do
-          if section.id == 's15' then hasFishing = true break end
+          if section.id == sectionID then hasFishing = true break end
         end
         if not hasFishing then
-          window.sections[#window.sections + 1] = { id = 's15', name = 'Fishing', categories = { 'Tradeskills.Fishing' }, collapsed = false }
-        end
-      end
-      if window.id == 'w9' then -- Bank Tradeskills window
-        local hasFishing = false
-        for _, section in ipairs(window.sections or {}) do
-          if section.id == 's28' then hasFishing = true break end
-        end
-        if not hasFishing then
-          window.sections[#window.sections + 1] = { id = 's28', name = 'Fishing', categories = { 'Tradeskills.Fishing' }, collapsed = false }
+          window.sections[#window.sections + 1] = {
+            id = sectionID, name = 'Fishing', categories = { 'Tradeskills.Fishing' }, collapsed = false,
+          }
         end
       end
     end
   end,
 
-  -- Fix Fishing section window IDs (migration 6 used wrong IDs: w4/w7 instead of w5/w9)
+  -- A first cut of migration 6 wrote the Fishing sections into w4 and w7 (Consumables and Bank
+  -- Quests). A profile that ran it gets them back out; the w5 and w9 sections are the right ones
+  -- and stay. Filtered by id, so a section the player made themselves is never swept up.
   [7] = function(profile)
     for _, window in ipairs(profile.windows or {}) do
-      -- Remove any Fishing sections from wrong windows
       if window.id == 'w4' or window.id == 'w7' then
-        local newSections = {}
+        local kept = {}
         for _, section in ipairs(window.sections or {}) do
-          if section.id ~= 's15' and section.id ~= 's28' then
-            newSections[#newSections + 1] = section
-          end
+          if section.id ~= 's15' and section.id ~= 's28' then kept[#kept + 1] = section end
         end
-        window.sections = newSections
-      end
-      -- Ensure correct windows have Fishing section
-      if window.id == 'w5' then -- Tradeskills backpack window
-        local hasFishing = false
-        for _, section in ipairs(window.sections or {}) do
-          if section.id == 's15' then hasFishing = true break end
-        end
-        if not hasFishing then
-          window.sections[#window.sections + 1] = { id = 's15', name = 'Fishing', categories = { 'Tradeskills.Fishing' }, collapsed = false }
-        end
-      end
-      if window.id == 'w9' then -- Bank Tradeskills window
-        local hasFishing = false
-        for _, section in ipairs(window.sections or {}) do
-          if section.id == 's28' then hasFishing = true break end
-        end
-        if not hasFishing then
-          window.sections[#window.sections + 1] = { id = 's28', name = 'Fishing', categories = { 'Tradeskills.Fishing' }, collapsed = false }
-        end
+        window.sections = kept
       end
     end
   end,
+
 }
 
 function db.Migrate()

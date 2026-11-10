@@ -38,15 +38,18 @@ local function create()
 
   local button = CreateFrame('ItemButton', name, parent, 'ContainerFrameItemButtonTemplate')
   button:SetAllPoints(parent)
-  -- Register for all click types so modifier clicks (Alt, Shift, Ctrl) work
-  button:RegisterForClicks('AnyUp')
-  button:RegisterForDrag('LeftButton')
-  -- Ctrl+Right-click for item menu (wow-forever-api: free modifier for addon menus on items)
-  -- Preserve the template's OnClick (vendor sell, use item, pickup, stack split) and
-  -- add our Ctrl+Right-click menu on top.
-  local originalOnClick = button:GetScript('OnClick')
-  button:SetScript('OnClick', function(self, buttonName, down)
-    if originalOnClick then originalOnClick(self, buttonName, down) end
+  -- The mixin's own OnLoad already registers LeftButtonUp/RightButtonUp and LeftButton drag
+  -- (Mainline/ContainerFrame.lua ContainerFrameItemButtonMixin:OnLoad); re-registering here only
+  -- changes what Blizzard's handler sees.
+  --
+  -- Hook, never replace, the click handler. Pickup, use, modifier clicks and stack split all end
+  -- in UseContainerItem / PickupContainerItem, which are protected: Blizzard may call them, an
+  -- addon whose script sits in the call chain may not (issue #65's ADDON_ACTION_FORBIDDEN came
+  -- from calling the template's handler ourselves). HookScript leaves the frame's own handler
+  -- Blizzard's, so the protected call runs in Blizzard's context and ours runs after it — which is
+  -- also BetterBags' pattern on this client (frames/item.lua:1287, which hooks only decoration).
+  button:HookScript('OnClick', function(self, buttonName)
+    -- Ctrl+Right is the modifier the client's item handlers leave free (wow-forever-api).
     if buttonName == 'RightButton' and IsControlKeyDown() then
       local entry = self:GetParent()._entry
       if entry and entry.item then
@@ -99,9 +102,13 @@ function itemFrames.Paint(entry, item, parent)
   -- would draw behind the panel background.
   entry.button:SetFrameLevel(entry.parent:GetFrameLevel() + 1)
   entry.parent:SetID(item.bagID)
-  entry.button:SetID(item.slot)
-  -- Use Initialize (allowed in combat) instead of SetItemLocation (blocked in combat).
-  -- Forever's Initialize takes (holder, bagID, slotID).
+  -- Initialize (allowed in combat) instead of SetItemLocation (blocked in combat). Forever's
+  -- signature is (containerFrame, bag, slot) — three arguments, and it is the wrapper frame that
+  -- answers IsCombinedBagContainer when the button draws an empty slot's background.
+  -- [in-game 2026-11-09, build 1.60.1] Passing Retail's 2 arguments shifts every one: the bagID
+  -- lands in containerFrame, the slot in bag, and slot arrives nil, which is what
+  -- `bad argument #1 to 'SetID'` at ContainerFrame.lua:1861 reported. BetterBags reaches the same
+  -- conclusion on the same build (frames/item.lua:1393 initializeSlotButton).
   entry.button:Initialize(entry.parent, item.bagID, item.slot)
   -- Store reference for the Ctrl+Right-click handler
   entry.parent._entry = entry
@@ -147,9 +154,7 @@ function itemFrames.PaintEmpty(entry, slot, count, parent)
   entry.parent:SetFrameLevel(parent:GetFrameLevel() + 1)
   entry.button:SetFrameLevel(entry.parent:GetFrameLevel() + 1)
   entry.parent:SetID(slot.bagID)
-  entry.button:SetID(slot.slot)
-  -- Use Initialize (allowed in combat) instead of SetItemLocation (blocked in combat).
-  -- Forever's Initialize takes (holder, bagID, slotID).
+  -- Initialize takes (containerFrame, bag, slot) on Forever (see itemFrames.Paint).
   entry.button:Initialize(entry.parent, slot.bagID, slot.slot)
 
   SetItemButtonTexture(entry.button, nil)

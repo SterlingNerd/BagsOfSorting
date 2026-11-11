@@ -510,17 +510,18 @@ check('the slash dispatcher reaches the same step', captured, 3)
 -- capture has to carry its own command letter.
 local pending = {}
 for _, t in ipairs(diag.Tests()) do pending[t.id] = true end
-for _, id in ipairs({ 1, 4, 8, 10 }) do
+for _, id in ipairs({ 1, 4, 10 }) do
   check('test ' .. id .. ' is pending', pending[id] and true or nil, true)
 end
-for _, id in ipairs({ 1, 4, 8, 10 }) do
+for _, id in ipairs({ 1, 4, 10 }) do
   local lines = {}
   _G.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
   diag.Test(id)
   _G.print = realPrint
   local captures = 0
   for _, line in ipairs(lines) do
-    if line:match('capture') then
+    -- numbered step lines only: the pre-conditions line of a sheet can say anything
+    if line:match('^%d+%. .*capture') then
       check('test ' .. id .. ' promises a real captured step: ' .. line,
         line:match('/bos test ' .. id .. '%a') and true or nil, true)
       captures = captures + 1

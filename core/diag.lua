@@ -821,60 +821,95 @@ local tests = {}
 
 ---@return string
 local function secureLine()
-  return string.format('secure=%s lockdown=%s', tostring(issecure()), tostring(InCombatLockdown()))
+  -- `{ GetCursorInfo() }` not `tostring(GetCursorInfo())`: an empty cursor makes GetCursorInfo
+  -- return **no values at all**, and tostring on no value is a Lua error (issue #4's first run died
+  -- on exactly this, six times).
+  local cursor = ({ GetCursorInfo() })[1]
+  return string.format('secure=%s lockdown=%s cursor=%s', tostring(issecure()),
+    tostring(InCombatLockdown()), tostring(cursor))
 end
 
--- --------------------------------------------------------------------- issue #1
--- The item IDs issue #1 measures against — the issue's own starting guess. No addon can know which
--- IDs this client has never seen, so the run does not assume it: the answer is the *pair* per ID.
--- Tier 1 answering while C_Item.GetItemInfo answers nothing is the cold-ID case; both answering
--- means the fixture was already known and gets replaced; neither answering means the ID is not an
--- item this client knows at all.
-local COLD_IDS = { 26042, 26043, 26044, 26045, 26046 }
+-- issecure() read from this path is not a verdict: a slash command runs through the chat frame,
+-- which is tainted, so everything our code reads below it sits in a tainted chain and issecure()
+-- reads false whatever we did (measured on issue #4 2026-11-11, where it read false before anything
+-- was attempted). The signals that do mean something in these sheets are InCombatLockdown(), who is
+-- showing bags, whether our buttons still pick items up, and the taint log in /console.
 
---- The three reads that issue a request: tier 1, the free tier-3 read `data/enrich.lua` uses, and
---- the GetItem*ByID family (issue #1 step 8 — do they read the same server-backed cache?).
+-- --------------------------------------------------------------------- issue #1
+-- The fixture lesson from issue #1's first run (2026-11-11): 26042..26046 answered nothing at any
+-- tier, so they were not items this client knows at all, and they proved nothing about an id the
+-- client knows but has not seen. The scan picks its own fixtures — an id answered at tier 1 but not
+-- by the full read is, by the client's own answer, exactly that item.
+local BANDS = {
+  { name = 'classic-era ids', from = 1, to = 25800 },
+  { name = 'later-era ids', from = 25801, to = 60000 },
+}
+local SCAN_STRIDE = 1013
+local DETAIL_EACH = 8   -- ids recorded one by one; the stride is fixed, so two logins compare
+local FIXTURE_MAX = 8
+
+--- Tier 1, the free full read `data/enrich.lua` uses, and the GetItem*ByID family a pasted id list
+--- would fall back on. They are a different family: for an id with no data at all the name and
+--- quality answer nil while the icon answers 134400, the question mark (issue #1 2026-11-11).
 ---@param itemID number
 ---@return string line
 ---@return boolean tier1
 ---@return boolean full
 local function tierRead(itemID)
-  local ok1, _, tType, tSub, tLoc, tIcon = pcall(C_Item.GetItemInfoInstant, itemID)
-  local tier1 = ok1 and (tType ~= nil or tIcon ~= nil)
+  local ok1, _, rType, rSub, rLoc, rIcon = pcall(C_Item.GetItemInfoInstant, itemID)
+  local tier1 = ok1 and (rType ~= nil or rIcon ~= nil)
   local full = addon:GetModule('Enrich').ReadFull(itemID)
   local okN, byName = pcall(C_Item.GetItemNameByID, itemID)
   local okQ, byQuality = pcall(C_Item.GetItemQualityByID, itemID)
   local okI, byIcon = pcall(C_Item.GetItemIconByID, itemID)
   return string.format('  %d tier1=%s (%s | %s | %s | icon %s) full=%s byID=%s / %s / %s',
-    itemID, tier1 and 'answers' or 'nothing', tostring(tType), tostring(tSub), tostring(tLoc),
-    tostring(tIcon),
+    itemID, tier1 and 'answers' or 'nothing', tostring(rType), tostring(rSub), tostring(rLoc),
+    tostring(rIcon),
     full and (tostring(full.name) .. ' q' .. tostring(full.quality)) or 'nothing',
     okN and tostring(byName) or 'ERR', okQ and tostring(byQuality) or 'ERR',
     okI and tostring(byIcon) or 'ERR'), tier1, full ~= nil
 end
 
+--- The scan. Counts are the answer to "how much of the item database does this client carry"; the
+--- tier1-only ids it collects are what the request step then asks the server about.
 ---@param label string
-local function coldSweep(label)
-  record(label, 'tier1 / free full read / ByID family, one line per fixture')
-  local tierOnly, known, silent = 0, 0, 0
-  for _, itemID in ipairs(COLD_IDS) do
-    local line, tier1, full = tierRead(itemID)
-    record(line)
-    if tier1 and not full then
-      tierOnly = tierOnly + 1
-    elseif tier1 then
-      known = known + 1
-    else
-      silent = silent + 1
+---@return number[] tier1Only ids, capped at FIXTURE_MAX
+local function bandScan(label)
+  local found = {}
+  record(label, 'C_Item.GetItemInfoInstant against C_Item.GetItemInfo, stride', SCAN_STRIDE)
+  for _, band in ipairs(BANDS) do
+    local tier1Only, known, silent, detailed = 0, 0, 0, 0
+    for id = band.from, band.to, SCAN_STRIDE do
+      local ok, _, rType, _, _, rIcon = pcall(C_Item.GetItemInfoInstant, id)
+      local hasInstant = ok and (rType ~= nil or rIcon ~= nil)
+      local hasFull = addon:GetModule('Enrich').ReadFull(id) ~= nil
+      if hasInstant and not hasFull then
+        tier1Only = tier1Only + 1
+        if #found < FIXTURE_MAX then found[#found + 1] = id end
+      elseif hasInstant then
+        known = known + 1
+      else
+        silent = silent + 1
+      end
+      if detailed < DETAIL_EACH then
+        detailed = detailed + 1
+        record(tierRead(id))
+      end
     end
+    record('  ' .. band.name, 'sampled', tier1Only + known + silent, 'tier1-only', tier1Only,
+      'answered by both', known, 'answered by neither', silent)
   end
-  record('fixtures:', tierOnly, 'tier1-only (the cold-ID answer),', known, 'already known (replace),',
-    silent, 'silent (no such item on this client)')
+  return found
 end
+
+---@type number[] chosen by step a, asked about by step b
+local fixtures = {}
 
 local function issue1Baseline()
   record('enrich', addon:GetModule('Enrich').Stats())
-  coldSweep('fixtures ' .. table.concat(COLD_IDS, ' '))
+  fixtures = bandScan('scan, first login')
+  record('fixtures the scan picked (tier1 answers, the full read does not):',
+    #fixtures, table.concat(fixtures, ' '))
   local items = addon:GetModule('Harvest').Items()
   record('warm control, an item sitting in a bag:',
     #items > 0 and (tierRead(items[1].itemID)) or 'nothing in the bags to read')
@@ -886,20 +921,25 @@ local function issue1Request()
   local enrich = addon:GetModule('Enrich')
   local ctx = addon:GetModule('Context').New('test 1')
   local issued = 0
-  for _, itemID in ipairs(COLD_IDS) do
+  for _, itemID in ipairs(fixtures) do
     if enrich.RequestMissing(ctx, { itemID = itemID, dataReady = false }) then issued = issued + 1 end
   end
-  record('tier3 requests issued', issued, '| enrich', enrich.Stats())
+  record('tier3 requests issued', issued, 'of', #fixtures, 'fixtures | enrich', enrich.Stats())
 end
 
 local function issue1AfterRequests()
-  coldSweep('the same fixtures after the requests')
+  record('the fixtures after the requests')
+  for _, itemID in ipairs(fixtures) do
+    record(tierRead(itemID))
+  end
   record('enrich', addon:GetModule('Enrich').Stats())
   local last = addon:GetModule('Pipeline').Last()
   record('last refresh requestsIssued', last and tostring(last.requestsIssued) or 'no refresh yet')
 end
 
 --- AC-97: an id the persisted cache already holds must cost zero tier-3 requests on a later login.
+--- The scan runs again here with the same stride, so its detail lines compare with step a's line for
+--- line — which is what separates "resolved this session" from "resolved permanently".
 local function issue1SecondLogin()
   local itemcache = addon:GetModule('ItemCache')
   local items = addon:GetModule('Harvest').Items()
@@ -912,26 +952,36 @@ local function issue1SecondLogin()
     'requests this login issued', last and tostring(last.requestsIssued) or 'no refresh yet',
     '— AC-97 wants zero for the cached ones')
   record('enrich', addon:GetModule('Enrich').Stats())
-  coldSweep('the fixtures on the second login')
+  fixtures = bandScan('the same scan, second login')
 end
 
 -- --------------------------------------------------------------------- issue #4
--- The two halves issue #4 has never run: the secure baseline pair around each suspicious action,
--- and the `GetBagsShown()` trap verified by us rather than inherited from ForeverPlus. The trap is
--- the last captured step on purpose — a session it taints must not taint the steps before it.
+-- What issue #4 has never run: a state read on either side of each suspicious action made **during**
+-- lockdown, and the `GetBagsShown()` trap verified by us rather than inherited from ForeverPlus. The
+-- trap is the last captured step on purpose — a session it taints must not taint the steps before it.
 local function combatState(label)
-  record(label, secureLine(), 'windows shown', addon:GetModule('WindowFrames').Count(),
-    'cursor', tostring(GetCursorInfo()), 'pool', addon:GetModule('Pool').Stats())
+  record(label, secureLine(), 'our windows shown', addon:GetModule('WindowFrames').Count())
+  record('pool', addon:GetModule('Pool').Stats())
+  -- Who is showing bags is the behaviour that matters: Blizzard's own frames, ours, and whether the
+  -- suppression rule is still active after the attempt.
+  HELPERS.bags()
 end
 
 local function issue4Baseline()
   combatState('out of combat')
   record('ContainerFrameSettingsManager',
     ContainerFrameSettingsManager and 'frame exists' or 'no such global',
-    '— step g calls its GetBagsShown() on purpose')
+    '— step h calls its GetBagsShown() on purpose')
   record('our key', tostring(GetBindingKey('BAGSOF_SORTING_TOGGLE')),
-    '— a manual step presses it during lockdown')
+    '— a manual step presses it during lockdown; CTRL-B is the client\'s own open-all-bags')
 end
+
+--- The captured steps are the same state read at six points; the label is what separates them.
+local function issue4Combat() combatState('in combat') end
+local function issue4AfterToggle() combatState('after hide/show attempted in combat') end
+local function issue4AfterPickup() combatState('after the in-combat button pickup attempt') end
+local function issue4AfterKey() combatState('after our own key was pressed in combat') end
+local function issue4AfterCtrlB() combatState('after CTRL-B was pressed in combat') end
 
 --- A pooled button created during lockdown is issue #4 step 5. Blizzard's buttons are readable off
 --- the window's own `Items` table, ours off the pool's created count; neither touches the manager.
@@ -961,135 +1011,22 @@ local function issue4Trap()
   else
     local ok, shown = pcall(function() return manager:GetBagsShown() end)
     record('call', ok and 'returned' or ('errored: ' .. tostring(shown)),
-      ok and (type(shown) == 'table' and tostring(#shown) or 'not a table') or '-', 'entries')
+      ok and (type(shown) == 'table' and tostring(#shown) or 'not a table') or '-', 'entries',
+      '— an empty list while our windows suppress the client\'s is itself the number to read')
   end
   record('after:', secureLine())
   combatState('state after the trap')
-  record('a false here is our own taint, measured on purpose — ForeverPlus hit exactly this, and '
-    .. 'the next /reload is expected to clear it')
-end
-
--- --------------------------------------------------------------------- issue #8
--- The SavedVariables half: the same row census and memory number at three points, so a write on a
--- render path shows up as the census growing across open/close cycles. File size has no client API
--- and is measured off the client (the number the sheet's pre-conditions ask for first).
-
-local countRows   -- recursive, so it names itself before the assignment
-countRows = function(t)
-  local n = 0
-  for _, v in pairs(t or {}) do
-    n = n + 1
-    if type(v) == 'table' then n = n + countRows(v) end
-  end
-  return n
-end
-
---- `db.sv.diag` is left out of the total on purpose: it is this file's own capture, and counting it
---- would make every run look like growth.
----@param label string
-local function svCensus(label)
-  local ok, mem = pcall(GetAddOnMemoryUsage, 'BagsOfSorting')
-  record(label, 'memory', ok and string.format('%.1f KB', mem) or 'no answer',
-    'itemCache rows', countRows(db.sv.itemCache), 'profile rows', countRows(db.sv.profiles),
-    'global rows', countRows(db.sv.global))
-  record('pool', addon:GetModule('Pool').Stats(), '| enrich', addon:GetModule('Enrich').Stats())
-  local last = addon:GetModule('Pipeline').Last()
-  record('last refresh', last and addon:GetModule('Context').Format(last) or 'no refresh has run')
-end
-
-local function issue8Baseline() svCensus('baseline census') end
-
--- Test 4's captured steps are the same state read at four points; the label is what separates them.
-local function issue4Combat() combatState('in combat') end
-local function issue4AfterToggle() combatState('after hide/show attempted in combat') end
-local function issue4AfterPickup() combatState('after the in-combat pickup attempt') end
-local function issue4AfterKeybind() combatState('after the key and /bos refresh attempts') end
-
-local function issue8Cycles10() svCensus('after 10 open/close cycles') end
-local function issue8Cycles20() svCensus('after 20 open/close cycles') end
-
-local function issue8Bench()
-  record('the bench lines land in this bucket a few frames after the last refresh')
-  diag.Bench()
-end
-
-local function issue8OneItem()
-  record('AC-26: exactly one item the client has never seen was looted')
-  HELPERS.newitems()
-  svCensus('after one new item')
+  record('the secure readings are the slash-path value (always false); what a difference here would '
+    .. 'mean is the manager call itself — ForeverPlus hit exactly this, and the next /reload clears it')
 end
 
 -- --------------------------------------------------------------------- issue #10
--- The deposit half of #10 plus the FR-48 currency read. The deposit itself stays Blizzard's: the
--- bank panel's own Deposit button is `BankPanelItemDepositButtonMixin:OnClick` →
--- `C_Bank.AutoDepositItemsIntoBank` (Mainline/BankFrameTemplates.lua:1296), and we never call it.
--- The census on either side is ours.
----@param label string
-local function contents(label)
-  local containers = addon:GetModule('Harvest').Containers()
-  record(label, secureLine(), 'containers harvested', #containers)
-  for _, container in ipairs(containers) do
-    local ids = {}
-    for slot = 1, container.slots do
-      local ok, info = pcall(C_Container.GetContainerItemInfo, container.index, slot)
-      if ok and info and info.itemID then ids[#ids + 1] = tostring(info.itemID) end
-    end
-    record(string.format('  [%d] %s (%s) slots=%d items=%d %s', container.index, container.name,
-      container.kind, container.slots, #ids, table.concat(ids, ' ')))
-  end
-end
-
---- The bank's own auto-deposit furniture and its tab flags. Frame reads only: no panel method is
---- called from addon code (agents.md rule 8).
-local function bankDepositState()
-  record('bank window', BankFrame and tostring(BankFrame:IsShown()) or 'no BankFrame global')
-  local panel = BankFrame and BankFrame.BankPanel
-  local auto = panel and panel.AutoDepositFrame
-  record('AutoDepositFrame', auto and tostring(auto:IsShown()) or 'not on this bank panel',
-    'DepositButton enabled', auto and auto.DepositButton and tostring(auto.DepositButton:IsEnabled())
-      or '-',
-    'IncludeReagentsCheckbox',
-    auto and auto.IncludeReagentsCheckbox and tostring(auto.IncludeReagentsCheckbox:GetChecked()) or '-',
-    'cvar bankAutoDepositReagents', tostring(GetCVar('bankAutoDepositReagents')))
-  local okSupport, support = pcall(C_Bank.DoesBankTypeSupportAutoDeposit, Enum.BankType.Character)
-  record('DoesBankTypeSupportAutoDeposit(Character)', okSupport and tostring(support) or 'no answer')
-  for _, tab in ipairs(C_Bank.FetchPurchasedBankTabData(Enum.BankType.Character) or {}) do
-    record('  tab', tab.ID, tab.name, 'icon', tab.icon, 'depositFlags', tab.depositFlags,
-      'slots', C_Container.GetContainerNumSlots(tab.ID))
-  end
-  local okMoney, money = pcall(C_Bank.FetchDepositedMoney, Enum.BankType.Character)
-  record('FetchDepositedMoney', okMoney and tostring(money) or 'no answer')
-end
-
---- What the client's only bank-restriction predicate actually answers for items a player carries
---- (`C_Item.CanItemFitInContainer` is absent here). Issue #6's "verify destination space before
---- the first pickup" depends on this being a real predicate and not always-true.
-local function bankAllowed()
-  local tested, refused = 0, 0
-  for _, container in ipairs(addon:GetModule('Harvest').Containers()) do
-    for slot = 1, container.slots do
-      local ok, info = pcall(C_Container.GetContainerItemInfo, container.index, slot)
-      if ok and info and info.itemID then
-        local loc = ItemLocation:CreateFromBagAndSlot(container.index, slot)
-        local okA, allowed = pcall(C_Bank.IsItemAllowedInBankType, Enum.BankType.Character, loc)
-        tested = tested + 1
-        if not okA then
-          record('  ERR', container.index, slot, tostring(allowed))
-        elseif not allowed then
-          refused = refused + 1
-          record('  refused', string.format('[%d:%d]', container.index, slot),
-            tostring(info.itemID), tostring(info.itemName))
-        end
-      end
-    end
-  end
-  record('IsItemAllowedInBankType(Character):', tested, 'carried items tested,', refused, 'refused')
-end
-
+-- The deposit half is measured (2026-11-11, bucket [10] on the issue): Camelot's bank panel has no
+-- AutoDepositFrame at all, so the currency read is the half still open.
 --- The FR-48 half: is `GetBackpackCurrencyInfo` the list a money frame should draw, and what does
---- our own bar currently draw instead (Blizzard's coin frame on one window only, issue #42).
-local function currencyReads()
-  record('money', GetMoney(), 'C_CurrencyInfo', C_CurrencyInfo and 'present' or 'absent')
+--- our own bar draw instead (Blizzard's coin frame on one window only, issue #42).
+local function currencyReads(label)
+  record(label, GetMoney(), 'C_CurrencyInfo', C_CurrencyInfo and 'present' or 'absent')
   if not C_CurrencyInfo then return end
   local carried = 0
   for i = 1, 8 do
@@ -1118,18 +1055,8 @@ local function currencyReads()
   end
 end
 
-local function issue10Before() contents('before anything, bank closed') end
-local function issue10Open()
-  contents('bank open')
-  bankDepositState()
-  bankAllowed()
-end
-local function issue10After()
-  contents('after the deposit')
-  bankDepositState()
-end
-local function issue10Restored() contents('after withdrawing it all by hand') end
-local function issue10Currency() currencyReads() end
+local function issue10CurrencyBaseline() currencyReads('currency reads') end
+local function issue10CurrencyAfter() currencyReads('the same reads after the currency actions') end
 
 -- ---------------------------------------------------------------------------
 -- The pending list. `/bos test` prints these; `/bos test <id>` prints one run sheet.
@@ -1137,27 +1064,30 @@ local function issue10Currency() currencyReads() end
 
 tests[1] = {
   issue = 1,
-  what = 'cold item data: is tier 1 enough to render an id the client has never seen (AC-103, AC-97)',
-  needs = 'a fresh login first — cold cache, bags closed, nothing hovered. Fixtures are the ' ..
-    'COLD_IDS line above: replace any one step a already reports as already known. Steps a-c are ' ..
-    'one login, step d is a second login.',
+  what = 'cold item data: what this client answers for an id it has data for but has not seen ' ..
+    '(AC-103, AC-97)',
+  needs = 'a fresh login first — cold cache, bags closed, nothing hovered. The scan picks the ' ..
+    'fixtures, so nothing has to be chosen in advance. Steps a-c are one login, step d is a second ' ..
+    'login with the same character.',
   steps = {
-    { text = 'setup: fixtures read three ways, warm control from a bag slot', run = issue1Baseline },
-    { text = 'capture: issue the tier-3 requests through data/enrich.lua', run = issue1Request },
+    { text = 'setup: the id scan, its fixtures, and a warm control from a bag slot', run = issue1Baseline },
+    { text = 'capture: issue the tier-3 requests for the ids the scan picked', run = issue1Request },
     { text = 'wait ten seconds — do not open bags, do not hover items, then run /bos test 1c' },
     { text = 'capture: the same fixtures after the requests', run = issue1AfterRequests },
     { text = 'log out and back in with the same character, bags still closed, then run /bos test 1d' },
-    { text = 'capture: cached ids versus requests issued at login', run = issue1SecondLogin },
+    { text = 'capture: cached ids versus requests issued at login, and the scan again', run = issue1SecondLogin },
   },
 }
 
 tests[4] = {
   issue = 4,
-  what = 'the secure baseline pair around each suspicious action, and the GetBagsShown trap by us',
-  needs = 'out of combat at step a; our windows open with real items in them; a trainer or a mob ' ..
-    'you can pull on a character you do not mind dying on. Forever has no /events: the taint log is ' ..
-    'read in /console (step 10). Step g taints Blizzard bag code on purpose and is last for that ' ..
-    'reason.',
+  what = 'a state read on either side of each action attempted during lockdown, and the ' ..
+    'GetBagsShown trap run by us',
+  needs = 'out of combat at step a; our windows open with real items in them; a trainer or a mob you ' ..
+    'can pull on a character you do not mind dying on. issecure() reads false for anything triggered ' ..
+    'from a slash command, so read the lockdown, who is showing bags, and the taint log in /console ' ..
+    '(/events does not exist on Forever). Step h taints Blizzard bag code on purpose and is last for ' ..
+    'that reason.',
   steps = {
     { text = 'setup: baseline out of combat', run = issue4Baseline },
     { text = 'pull a mob or attack a trainer, and stay in combat' },
@@ -1166,57 +1096,35 @@ tests[4] = {
     { text = 'capture: state after the open/close attempt', run = issue4AfterToggle },
     { text = 'while still in combat: pick an item up off one of our buttons and drop it into ' ..
       'another of our slots' },
-    { text = 'capture: cursor and secure state after the pickup attempt', run = issue4AfterPickup },
-    { text = 'while still in combat: press your bound key, then /bos refresh' },
-    { text = 'capture: state after the keybind and refresh attempt', run = issue4AfterKeybind },
-    { text = 'open /console, copy every ADDON_ACTION_FORBIDDEN line — with the function name it ' ..
+    { text = 'capture: state after the button pickup attempt', run = issue4AfterPickup },
+    { text = 'while still in combat: press your own bound key once' },
+    { text = 'capture: state after our own key', run = issue4AfterKey },
+    { text = 'while still in combat: press CTRL-B (the client\'s own open-all-bags) and watch ' ..
+      'whether Blizzard\'s bag window appears' },
+    { text = 'capture: state after CTRL-B', run = issue4AfterCtrlB },
+    { text = 'open /console and copy every ADDON_ACTION_FORBIDDEN line — with the function name it ' ..
       'names — into issue #4' },
     { text = 'leave combat, wait for the regen flap, pull again, /reload while still in combat, ' ..
-      'then wait for regen and run /bos test 4f' },
-    { text = 'capture: post-combat state and both button pools', run = issue4PostCombat },
-    { text = 'capture: the deliberate GetBagsShown trap, secure before and after', run = issue4Trap },
-  },
-}
-
-tests[8] = {
-  issue = 8,
-  what = 'SavedVariables growth and memory flatness across open/close cycles (AC-42, AC-26, FR-104)',
-  needs = 'a character with a real backpack. Before the run, with the client closed: ' ..
-    'stat -c %s ../account/SavedVariables/BagsOfSorting.lua — that number is the baseline the ' ..
-    'census is compared against. Nothing here touches your inventory.',
-  steps = {
-    { text = 'setup: baseline census — memory, saved rows, pool, cache', run = issue8Baseline },
-    { text = '/bos hide, /bos show — repeat ten times' },
-    { text = 'capture: census after 10 cycles', run = issue8Cycles10 },
-    { text = '/bos hide, /bos show — ten more times' },
-    { text = 'capture: census after 20 cycles (FR-104 wants three points on one flat line)',
-      run = issue8Cycles20 },
-    { text = 'capture: pipeline cost across frames (the bench lines land a few frames later)',
-      run = issue8Bench },
-    { text = 'wait for the bench lines, then loot exactly one item this client has never seen' },
-    { text = 'capture: what one new item added', run = issue8OneItem },
+      'then wait for regen and run /bos test 4g' },
+    { text = 'capture: post-combat state, both button pools, the client bag window\'s own buttons',
+      run = issue4PostCombat },
+    { text = 'open /console again and copy anything new into issue #4' },
+    { text = 'capture: the deliberate GetBagsShown trap, state before and after', run = issue4Trap },
   },
 }
 
 tests[10] = {
   issue = 10,
-  what = 'what the bank auto-deposit actually moves, what IsItemAllowedInBankType refuses, and the ' ..
-    'currency read (FR-48)',
-  needs = '⚠ this run moves real items — use a character whose inventory you do not mind ' ..
-    'shuffling, and withdraw everything back by hand at step 7. Out of combat throughout. Blizzard ' ..
-    'calls AutoDepositItemsIntoBank from its own Deposit button; we call nothing.',
+  what = 'the currency read the money display is built on (FR-48)',
+  needs = 'nothing to shuffle: the deposit half is measured and captured on the issue (bucket [10], ' ..
+    '2026-11-11) and the rest of it is blocked on our own deposit code (M6). Out of combat. Carry or ' ..
+    'earn something that is not coin — a token, a mark, a badge.',
   steps = {
-    { text = 'setup: inventory census with the bank closed', run = issue10Before },
-    { text = 'open the bank — talk to the bank NPC or click the bank button' },
-    { text = 'capture: census while the bank is open, tab flags, the predicate per carried item',
-      run = issue10Open },
-    { text = 'click the bank panel’s own Deposit button. If it is not on screen, write that in ' ..
-      'issue #10 and skip the rest of the deposit steps' },
-    { text = 'optionally tick the include-reagents checkbox and click Deposit again' },
-    { text = 'capture: census after the deposit', run = issue10After },
-    { text = 'drag everything back out of the grid into your bags, by hand' },
-    { text = 'capture: census after withdrawing it all', run = issue10Restored },
-    { text = 'capture: currency reads and our money bar', run = issue10Currency },
+    { text = 'setup: the client\'s currency lists and which window draws a money bar',
+      run = issue10CurrencyBaseline },
+    { text = 'open the character panel\'s Currency tab, then buy or earn a currency (a innkeep toll, ' ..
+      'a vendor, a quest turn-in)' },
+    { text = 'capture: the same reads again, to see what moved', run = issue10CurrencyAfter },
   },
 }
 

@@ -56,7 +56,11 @@ One window carries `ContainerMoneyFrameTemplate` (issue #42): `Pipeline.Assign` 
 backpack window in screen order — the same single-owner rule as the free-slot count — and it travels when
 that window is closed. `flow.Layout` reserves `MONEY_BAR_SPACE` only for the window that draws it, so the
 others are 17 px shorter. The template keeps itself current; we add no refresh. Currency info
-(`GetBackpackCurrencyInfo`) is still open work (`FR-48`).
+Currency info is still open work (`FR-48`), and it is not money: it is a carried token, mark or badge, which
+the client itself draws on a separate `BackpackTokenFrame` and Blizzard stacks **above** the money bar
+(`ui-templates.md` §carried currency). No window of ours draws currency today, and a bank window never
+draws currency at all — the client's bank window shows only the price of the next bag slot, and it moves
+items rather than money (`FR-62`, issue #10).
 
 ## Free-slot indicator
 

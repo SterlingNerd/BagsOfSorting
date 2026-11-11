@@ -1022,9 +1022,12 @@ end
 
 -- --------------------------------------------------------------------- issue #10
 -- The deposit half is measured (2026-11-11, bucket [10] on the issue): Camelot's bank panel has no
--- AutoDepositFrame at all, so the currency read is the half still open.
---- The FR-48 half: is `GetBackpackCurrencyInfo` the list a money frame should draw, and what does
---- our own bar draw instead (Blizzard's coin frame on one window only, issue #42).
+-- AutoDepositFrame at all, and the bank window never moves currency: its only money frame is the price
+-- of the next bag slot (`tabData.tabCost`, Camelot/BankFrame.lua:19,41-50,398-405). The currency read is
+-- the half still open.
+--- The FR-48 half, three questions: does this client have carried currencies at all; does its own
+--- tracker already draw them next to the bags; and what does our bar draw instead (Blizzard's coin frame
+--- on one window only, issue #42).
 local function currencyReads(label)
   record(label, GetMoney(), 'C_CurrencyInfo', C_CurrencyInfo and 'present' or 'absent')
   if not C_CurrencyInfo then return end
@@ -1038,6 +1041,9 @@ local function currencyReads(label)
     end
   end
   record('backpack currencies', carried)
+  -- The list the character panel's Currency tab is built from. `isHeader` rows are section headings in
+  -- that list, not currencies: a size of 20 with 12 headers is not 20 currencies.
+
   local size = C_CurrencyInfo.GetCurrencyListSize and C_CurrencyInfo.GetCurrencyListSize() or 0
   record('currency list size', size)
   for i = 1, math.min(size, 20) do
@@ -1055,8 +1061,43 @@ local function currencyReads(label)
   end
 end
 
-local function issue10CurrencyBaseline() currencyReads('currency reads') end
-local function issue10CurrencyAfter() currencyReads('the same reads after the currency actions') end
+--- The client's own carried-currency tracker, drawn by Blizzard's code. `BackpackTokenFrame` is a named
+--- global the container window creates when `Blizzard_TokenUI` loads
+--- (`Mainline/ContainerFrame.lua:2393-2397`), and Camelot ships its own mixin
+--- (`Blizzard_TokenUI/Camelot/Blizzard_TokenUI.lua:632-751`): the chips it draws are the **watched**
+--- currencies from `GetBackpackCurrencyInfo`, how many fit is computed from the client's own bag window
+--- width, and `CURRENCY_DISPLAY_UPDATE` drives the update while it is shown. Reading the global frame is
+--- fine; reading the settings **manager** is what rule 8 forbids.
+local function tokenTrackerRead()
+  local tracker = _G.BackpackTokenFrame
+  if not tracker then
+    record('BackpackTokenFrame: no such frame on this client')
+    return
+  end
+  local okNum, num = pcall(function() return tracker:GetNumWatchedTokens() end)
+  local okMax, max = pcall(function() return tracker:GetMaxTokensWatched() end)
+  record('BackpackTokenFrame', 'shown', tostring(tracker:IsShown()), 'watched',
+    okNum and tostring(num) or 'ERR', 'max it can draw', okMax and tostring(max) or 'ERR',
+    'its own width', tostring(tracker:GetWidth()))
+  for i = 1, (okNum and num or 0) do
+    local token = tracker.Tokens and tracker.Tokens[i]
+    if token then
+      record('  watched chip', i, 'currencyID', tostring(token.currencyID),
+        'count shown', token.Count and tostring(token.Count:GetText()) or '-',
+        'icon', token.Icon and tostring(token.Icon:GetTexture()) or '-')
+    end
+  end
+end
+
+local function issue10CurrencyBaseline()
+  currencyReads('currency reads')
+  tokenTrackerRead()
+end
+
+local function issue10CurrencyAfter()
+  currencyReads('the same currency reads again')
+  tokenTrackerRead()
+end
 
 -- ---------------------------------------------------------------------------
 -- The pending list. `/bos test` prints these; `/bos test <id>` prints one run sheet.
@@ -1115,16 +1156,22 @@ tests[4] = {
 
 tests[10] = {
   issue = 10,
-  what = 'the currency read the money display is built on (FR-48)',
-  needs = 'nothing to shuffle: the deposit half is measured and captured on the issue (bucket [10], ' ..
-    '2026-11-11) and the rest of it is blocked on our own deposit code (M6). Out of combat. Carry or ' ..
-    'earn something that is not coin — a token, a mark, a badge.',
+  what = 'carried currency: does this client have any, and does its own BackpackTokenFrame already ' ..
+    'draw it next to the bags (FR-48)',
+  needs = 'nothing to shuffle. The deposit half is measured and captured on the issue (bucket [10], ' ..
+    '2026-11-11) and the rest of it is blocked on our own deposit code (M6). Out of combat. A currency ' ..
+    'here is a token, mark or badge carried in the bags — not coin, and not anything in the bank, which ' ..
+    'holds items only.',
   steps = {
-    { text = 'setup: the client\'s currency lists and which window draws a money bar',
+    { text = 'setup: the currency catalogue, the watched list, the client\'s own tracker, and our bars',
       run = issue10CurrencyBaseline },
-    { text = 'open the character panel\'s Currency tab, then buy or earn a currency (a innkeep toll, ' ..
-      'a vendor, a quest turn-in)' },
-    { text = 'capture: the same reads again, to see what moved', run = issue10CurrencyAfter },
+    { text = 'open the character panel\'s Currency tab. If it lists anything, tick a currency\'s watch '
+      .. 'so it shows in the backpack. If it lists nothing, write that in issue #10 — an empty catalogue '
+      .. 'is the answer that settles FR-48\'s shape' },
+    { text = 'capture: the same reads, to see what the watch toggle changed', run = issue10CurrencyAfter },
+    { text = 'press CTRL-B to open the client\'s own bag windows and note where its watched currencies draw' },
+    { text = 'capture: the same reads once more — the tracker\'s own width is the number that says what it '
+      .. 'tracks', run = issue10CurrencyAfter },
   },
 }
 

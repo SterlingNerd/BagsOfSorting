@@ -260,6 +260,7 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 7. Hover an item.
 
 **Expected:** every step behaves exactly as it does in Blizzard's own bag window: the stock item menu opens on right-click (not blocked, not empty), shift-click links the item in chat, alt-click does the client's modified-click action, the sale completes and money updates, Blizzard's own `StackSplitFrame` appears, and the tooltip is Blizzard's. No "Action blocked" anywhere.
+**Measured 2026-11-11 in live play, build 70532 (issue #65):** with the click fix in place the buttons pick items up, use them, move between slots and windows, complete a drag onto the vendor's sell area, and open the Ctrl+right-click item menu, with no `ADDON_ACTION_FORBIDDEN` in the call chain and no `bad argument #1 to 'SetID'` while painting. Graded by observation, not by a run sheet: there is no `/bos test 65` entry and no `diag` bucket behind this line, so it is a play pass on the deployed build rather than a captured measurement.
 
 ### Manual test: the new-item highlight (FR-47, issue #35)
 

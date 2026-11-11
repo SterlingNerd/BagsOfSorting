@@ -68,6 +68,10 @@ globals = {
 
     "GetTime",
     "GetBuildInfo",
+    "issecure",
+    "GetCursorInfo",
+    "GetCVar",
+    "GetAddOnMemoryUsage",
     "GetScreenHeight",
     "GetScreenWidth",
     "GetCoinTextureString",

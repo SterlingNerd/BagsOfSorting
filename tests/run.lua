@@ -505,6 +505,30 @@ check('the sheet ends with the sync step', sheet[7], '5. ../sync.sh')
 diag.Command('900b')
 check('the slash dispatcher reaches the same step', captured, 3)
 
+-- The pending sheets are what a human follows in game. A step whose run function is a typo or a nil
+-- reads as a manual step instead and quietly loses its capture, so every line that promises a
+-- capture has to carry its own command letter.
+local pending = {}
+for _, t in ipairs(diag.Tests()) do pending[t.id] = true end
+for _, id in ipairs({ 1, 4, 8, 10 }) do
+  check('test ' .. id .. ' is pending', pending[id] and true or nil, true)
+end
+for _, id in ipairs({ 1, 4, 8, 10 }) do
+  local lines = {}
+  _G.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
+  diag.Test(id)
+  _G.print = realPrint
+  local captures = 0
+  for _, line in ipairs(lines) do
+    if line:match('capture') then
+      check('test ' .. id .. ' promises a real captured step: ' .. line,
+        line:match('/bos test ' .. id .. '%a') and true or nil, true)
+      captures = captures + 1
+    end
+  end
+  check('test ' .. id .. ' has captured steps', captures > 0, true)
+end
+
 -- The keybind mirror (issue #13): the client writes our action to bindings-cache.wtf and it
 -- survives a restart, but /reload re-registers Bindings.xml and can drop it. Whatever the client
 -- has at login is stored; if the client has nothing, ours goes back.

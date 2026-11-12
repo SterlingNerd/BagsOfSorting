@@ -435,6 +435,10 @@ that has never had the addon, with the first-run experience tested by someone el
    `/script` is one line capped near 255 characters. Pending tests are issue-numbered entries in the
    same file, deleted when their capture is ingested; the run sheet numbers every step and each step is
    **one action** — a compound step is how a manual action gets skipped (issue #27).
+   An **empty blocked-action log is not proof of no taint**: issue #4's measured pass (2026-11-11) caught
+   ordinary events on our own logger and not one `ADDON_ACTION_BLOCKED` / `ADDON_ACTION_FORBIDDEN` line,
+   with no positive control available to stage (`references/taint-and-secure.md`). Closed spike #4's sheet
+   and its probes are restorable with `git show 8697cd7^:core/diag.lua` if a milestone pass wants them.
 4. In-game checklist (`tests/CHECKLIST.md`) run on Forever and pasted into the milestone entry with
    the date and patch. A milestone is not done until its AC lines have a dated entry. The runnable
    snippets for the API questions live in the **spike issues** (#1–#11), not in a docs file

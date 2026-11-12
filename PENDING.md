@@ -24,25 +24,26 @@ sheet prints). Then: `/reload` → `/bos test <id>` → follow the sheet → `/r
 |---|---|---|
 | **#1** item data | open, measured | Tier 1 answers 19 of 26 sampled Classic-era ids on its own (type/subclass/inventory type/**icon**); name, quality and ilvl need the full read, and a tier-3 request answers them **permanently**. Nothing answers above the Classic-era band. **AC-97** and the client half of **AC-103** pass. Left: 10 sampled ids answered between logins with **zero** requests from us — who asked is unmeasured; and the play half of AC-103. Close candidate. |
 | **#3** EditMode | open, blocked | `frames/movemode.lua` does not exist. A-vs-B (`RegisterSystemFrame` with a variable window count) and the settings-dialog verdict (`FR-71`, `AC-54`, Q13). |
-| **#4** taint / combat | open, measured once | Full pass done (2026-11-11): our key works during lockdown, hide defers the button release and regen completes it, the client shows its own windows during lockdown (60 visible buttons while shown), mid-combat `/reload` leaves nothing broken, and `GetBagsShown()` produced no observable consequence on the button path. **Two open threads:** (a) `ADDON_ACTION_BLOCKED`/`FORBIDDEN` never reached our logger, and the pass has **no positive control**, so "no blocked-action lines" is uninterpretable — the standing pass needs one before it can certify "no taint"; (b) an in-combat button attempt changed bags 5 and 1, and nothing proves whether an item really moved — decide whether our buttons must refuse movement during lockdown (`FR-4`) and settle it with a census on either side. Standing pass at every milestone exit — the entry comes back at the next milestone boundary. |
+| ~~**#4**~~ taint / combat | **closed 2026-11-12** | Full measured pass on the issue (4a–4k) plus the closing note. Our key works during lockdown; hide defers the button release and regen completes it; the client shows its own windows during lockdown (60 visible buttons while shown); mid-combat `/reload` breaks nothing; `GetBagsShown()` produced no observable consequence on either button path. Caveat carried forward instead of kept open: an empty blocked-action log is not proof of no taint (no positive control), now written in `references/taint-and-secure.md` and `docs/06` §Standing test discipline. Re-add the entry at a milestone exit with `git show 8697cd7^:core/diag.lua`. |
 | **#5** layout stress | open, blocked | Superseded by #48 (no river packing, no `layout/sizing.lua`), #49 (unscaled heights vs per-window scale), #61 (fixed). Measure when #48's packer exists; `AC-40`'s numbers belong on #48. Consider closing here with that pointer. |
 | **#6** physical moves | open, blocked | `actions/moves.lua` is M6. Census must cover containers 6–14; bank containers exist only while the bank is open. |
 | **#8** perf + SavedVariables | **close candidate** | Harness exists and produced numbers: rows flat, `itemButton` pool flat (50/50), bench **1.14 ms per refresh**, `GetAddOnMemoryUsage` useless (0.0 KB), AC-26's "never seen" item never actually exercised. |
 | **#10** bank deposit + money | open, deposit half only | Currency half measured: this client carries **nothing** (`GetBackpackCurrencyInfo` 0, `GetCurrencyListSize` 0) and its own `BackpackTokenFrame` is 0 watched / 8 max / **1 px** wide, shown only while Blizzard's own container windows are. Our money bar draws on the backpack window only. Deposit half **blocked on M6** (no `AutoDepositFrame`, bank moves items not coin, `IsItemAllowedInBankType` refuses nothing). Title still reads as the old scope. |
-| #2, #7, #9 | closed | — |
+| #2, #4, #7, #9 | closed | — |
 
 ## Decisions waiting on you
 
 1. Close **#1** and **#8**? Rename/narrow **#10** to the deposit half? Close or fold **#5** into #48?
-2. Issue #4's two open threads above. The positive control is the cheap one: it needs a *manual* step
-   that guarantees a refusal, and the obvious candidates (a `/script` protected call — the skill forbids
-   it; an Ace3 addon's `OnEnable` hit by a mid-combat `/reload` — the reload destroys our logger first)
-   both have a reason they do not work. Say which rule you want and the entry gets written.
+2. ~~Issue #4~~ closed 2026-11-12 with its closing note on the issue. Two things it left are recorded
+   rather than open: the blocked-log caveat (above, and in `docs/06`), and the unresolved "did the item
+   physically move during an in-combat drag". If anyone ever wants `FR-4`'s "read-only display in combat"
+   *enforced*, that is a story issue, not a spike. The issue body still names `/console eventTrace 1`,
+   `/events` and `ADDON_ACTION_FORBIDDEN` in `/events` — closed issues keep their history; the corrected
+   commands are in `references/taint-and-secure.md` and `docs/02` AC-1.
 3. `BagsOfSortingDB.diag` is never pruned — 11 buckets, 948 lines, sit in SavedVariables and every one of
    them now has its capture on an issue. Prune on load, or leave?
-4. Issue #4's body still names `/console eventTrace 1`, `/events`, and `ADDON_ACTION_FORBIDDEN` in
-   `/events`; its step list is the pre-client-check one. Body rewrite (the 11-step measured pass is now
-   the record).
+4. ~~Issue #4's body rewrite~~ — moot with the issue closed; see 2 above for where the corrected commands
+   live.
 5. ~~`docs/06` item 5 names `/bos test clock`~~ — not a bug: `clock` is a helper name in `diag.Command`
    (`HELPERS.clock = probes[13]`), so both spellings work.
 

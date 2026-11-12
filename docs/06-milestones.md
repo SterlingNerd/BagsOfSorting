@@ -44,8 +44,9 @@ Deliverables
 
 Exit criteria
 - **AC-1** loads with zero errors on login and 3× `/reload`; `/events` clean. **Met**, measured across
-  every `/bos` and `/bos test` run since 2026-10-17 (Forever has no `/events`, so errors surface in
-  `/console`). Lua errors found later are chased as they surface rather than treated as a gate on this
+  every `/bos` and `/bos test` run since 2026-10-17 (Forever has no `/events`, and `/console` is a cvar
+  command that opens no window — the client's log window is `/eventtrace`). Lua errors found later are
+  chased as they surface rather than treated as a gate on this
   milestone — the one error seen on 2026-10-19 came from a probe's wrong API call, not from loading.
 - `/bos` prints `isForever=true`, `hasWarbank=false`, `itemButtonType=ItemButton`, and **fills in the
   unverified `wow-forever-api` facts** (keyring presence — expect yes, since

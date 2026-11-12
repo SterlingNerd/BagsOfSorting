@@ -42,8 +42,9 @@ character has a bag and can reach a bank.
 2. Run `/bos`.
 3. `/reload`, twice more (three total).
 
-**Expected:** no Lua error frame and no "Action blocked" at any step — Forever has no `/events`, so
-open `/console` if an error appeared and read the script errors there; `/bos` prints
+**Expected:** no Lua error frame and no "Action blocked" at any step — Forever has no `/events`, and
+`/console` opens nothing (it is `ConsoleExec`, a cvar command), so the client's own log window is
+`/eventtrace`; `/bos` prints
 `project=18 camelot=true build=<build>` followed by the capability table.
 
 ### Manual test: capability dump fills the client-fact cache (M0 exit criterion)
@@ -230,7 +231,7 @@ Probe 7 died after its first line until 2026-10-19 because it called `GetBinding
 2. Press `F7` (close).
 3. Press `F7` (open).
 4. Loot an item while still in combat.
-5. Open `/console` and look for "Action blocked".
+5. Open `/eventtrace` and look for blocked actions — `/console` opens nothing on this client.
 6. Leave combat and wait a second.
 
 **Expected:** steps 2 and 3 both work with no error; the reopened window shows the contents as they were before combat; step 4 adds nothing to the window until step 6, when it re-renders and the looted item appears in the correct section; no "Action blocked" anywhere. An empty window at step 3 means nothing was painted before combat — the known limit of Q23 option A, record it rather than treating it as a crash.

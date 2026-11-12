@@ -152,6 +152,10 @@ local INTERACTION_EVENTS = {
   'BANK_TABS_CHANGED', 'BANK_BAG_SLOT_FLAGS_UPDATED', 'BANK_TAB_SETTINGS_UPDATED',
   'PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED', 'ITEM_LOCK_CHANGED', 'BAG_UPDATE',
   'MERCHANT_SHOW', 'MERCHANT_CLOSED',
+  -- Blocked-action events carry (isTainted, function) — the function name issue #4 asks for. Whether an
+  -- addon-owned frame may register them at all is itself one of the measurements. Issue #4's run stalled at
+  -- a `/console` review step: `/console` here is ConsoleExec, a cvar command that opens no window.
+  'ADDON_ACTION_BLOCKED', 'ADDON_ACTION_FORBIDDEN',
 }
 
 --- PLAYERBANKSLOTS_CHANGED carries a **bank bag slot number 1..9**, not a container index (measured
@@ -904,17 +908,28 @@ end
 -- The pending list. `/bos test` prints these; `/bos test <id>` prints one run sheet.
 -- ---------------------------------------------------------------------------
 
+--- The trap only matters if it changes behaviour, so the sheet follows it with two real attempts — one on
+--- our own button, one on Blizzard's own bag window — and this step reads what they left behind. It also
+--- stops the log armed at step i, so anything the client refused lands in this bucket with its name.
+local function issue4TrapProbe()
+  combatState('state after the two pickup attempts that follow the trap')
+  HELPERS.log()
+end
+
 tests[4] = {
   issue = 4,
-  what = 'a state read on either side of each action attempted during lockdown, and the ' ..
-    'GetBagsShown trap run by us',
+  what = 'a state read on either side of each action attempted during lockdown, the GetBagsShown trap ' ..
+    'run by us, and what that trap leaves a button interaction doing',
   needs = 'out of combat at step a; our windows open with real items in them; a trainer or a mob you ' ..
     'can pull on a character you do not mind dying on. issecure() reads false for anything triggered ' ..
-    'from a slash command, so read the lockdown, who is showing bags, and the taint log in /console ' ..
-    '(/events does not exist on Forever). Step h taints Blizzard bag code on purpose and is last for ' ..
-    'that reason.',
+    'from a slash command, so the verdicts come from the lockdown, who is showing bags, and the ' ..
+    'blocked-action log this sheet arms at step b and stops at step k. `/console` is ConsoleExec on this ' ..
+    'client — a cvar command that opens no window — so Blizzard\'s own view is `/eventtrace`. Steps j and ' ..
+    'k taint Blizzard bag code on purpose and are last for that reason.',
   steps = {
     { text = 'setup: baseline out of combat', run = issue4Baseline },
+    { text = 'capture: arm the event log — it records ADDON_ACTION_BLOCKED / ADDON_ACTION_FORBIDDEN with ' ..
+      'the function name each one names', run = HELPERS.log },
     { text = 'pull a mob or attack a trainer, and stay in combat' },
     { text = 'capture: in-combat state', run = issue4Combat },
     { text = 'while still in combat: /bos hide, then /bos show' },
@@ -927,14 +942,18 @@ tests[4] = {
     { text = 'while still in combat: press CTRL-B (the client\'s own open-all-bags) and watch ' ..
       'whether Blizzard\'s bag window appears' },
     { text = 'capture: state after CTRL-B', run = issue4AfterCtrlB },
-    { text = 'open /console and copy every ADDON_ACTION_FORBIDDEN line — with the function name it ' ..
-      'names — into issue #4' },
+    { text = 'type /eventtrace, Blizzard\'s own blocked-action window, and copy anything it shows there ' ..
+      'into issue #4. There is no /events on this client' },
     { text = 'leave combat, wait for the regen flap, pull again, /reload while still in combat, ' ..
-      'then wait for regen and run /bos test 4g' },
+      'then wait for regen and run /bos test 4h' },
     { text = 'capture: post-combat state, both button pools, the client bag window\'s own buttons',
       run = issue4PostCombat },
-    { text = 'open /console again and copy anything new into issue #4' },
+    { text = 'capture: arm the log again — the reload killed the first one', run = HELPERS.log },
     { text = 'capture: the deliberate GetBagsShown trap, state before and after', run = issue4Trap },
+    { text = 'out of combat: pick an item up off one of our buttons and drop it back where it came from' },
+    { text = 'then press CTRL-B and pick an item up off Blizzard\'s own bag window, dropping it back ' ..
+      'where it came from' },
+    { text = 'capture: state after both pickup attempts, and stop the log', run = issue4TrapProbe },
   },
 }
 

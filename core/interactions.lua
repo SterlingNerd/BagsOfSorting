@@ -133,14 +133,16 @@ end
 if type(ToggleAllBags) == 'function' then
   hooksecurefunc('ToggleAllBags', function()
     local combined = _G.ContainerFrameCombinedBags
-    if combined and not combined:IsShown() then
+    if combined and not combined:IsShown() and db.Settings().newItems.clearOnClose then
       harvest.ClearNewItemSession()
     end
   end)
 end
 if type(CloseAllBags) == 'function' then
   hooksecurefunc('CloseAllBags', function()
-    harvest.ClearNewItemSession()
+    if db.Settings().newItems.clearOnClose then
+      harvest.ClearNewItemSession()
+    end
   end)
 end
 

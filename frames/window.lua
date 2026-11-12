@@ -388,6 +388,14 @@ function ShowWindowMenu(anchor, windowConfig)
         db.SetShowStacks(db.Settings().stacking.showStacks == 'always' and 'merged' or 'always')
       end,
     },
+    {
+      text = 'Clear New on Close',
+      value = 'clear_new_on_close',
+      checked = function() return db.Settings().newItems.clearOnClose end,
+      func = function()
+        db.SetClearNewOnClose(not db.Settings().newItems.clearOnClose)
+      end,
+    },
     dropdown.Separator(),
     {
       text = 'Edit Window…',

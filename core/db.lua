@@ -29,6 +29,8 @@ local DEFAULT_SETTINGS = {
   -- FR-43: merged is the default. 'always' is what the window menu's Show stacks toggle writes.
   -- 'session' and 'vendor' (docs/04) arrive with the mode picker, not before it.
   stacking = { showStacks = 'merged' },
+  -- Issue #39: clear new-item session on bag close/reopen
+  newItems = { clearOnClose = true },
   debug = false,
 }
 
@@ -578,6 +580,16 @@ function db.SetShowStacks(mode)
   if stacking.showStacks == mode then return false end
   stacking.showStacks = mode
   db.NotifyModelChanged()
+  return true
+end
+
+--- Issue #39: toggle whether new-item session is cleared on bag close.
+---@param enabled boolean
+---@return boolean changed
+function db.SetClearNewOnClose(enabled)
+  local newItems = db.Settings().newItems
+  if newItems.clearOnClose == enabled then return false end
+  newItems.clearOnClose = enabled
   return true
 end
 

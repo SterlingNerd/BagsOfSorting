@@ -108,6 +108,8 @@ function classify.Run(items, categories)
       place(placements, 'New', item)
     end
     for _, entry in ipairs(ordered) do
+      -- Skip New category: handled specially above (issue #39)
+      if entry.name == 'New' then goto continue end
       local ok, matched, decidedBy = pcall(rules.Evaluate, entry.tree, item)
       if not ok then
         log.Error('category', entry.name, 'errored during classify:', matched)
@@ -124,6 +126,7 @@ function classify.Run(items, categories)
       else
         trace.tested[#trace.tested + 1] = entry.name
       end
+      ::continue::
     end
 
     item.trace = trace

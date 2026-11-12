@@ -257,9 +257,8 @@ local DEFAULT_PROFILE = {
       kind = 'rules',
       enabled = true,
       duplicate = true,
-      rules = { op = 'all', children = { { field = 'none', cmp = '=', value = true } } },
-      -- The rule is a placeholder; actual new-item detection is done at harvest time via
-      -- C_NewItems.IsNewItem. classify.Run places items here when harvest marks them new.
+      rules = { op = 'all', children = { { field = 'none', cmp = '=', value = false } } },
+      -- Rule never matches; new items placed here by classify.Run via item.isNew (issue #39).
     },
     ['Quest Items'] = {
       priority = 5,

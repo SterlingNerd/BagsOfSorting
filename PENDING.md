@@ -31,7 +31,10 @@ pickup attempt leaves `cursor=nil` (nothing reached the cursor) with no blocked-
 own key changes nothing during lockdown; and CTRL-B brings up **Blizzard's own windows during lockdown**
 (`ContainerFrameCombinedBags true`, one container frame shown). Open questions those numbers cannot
 answer: whether each attempt was refused by the client or simply did nothing, and which function any
-refusal names — which is what the armed log at step b is for.
+refusal names — which is what the armed log at step b is for. Note on 4e: `BAGSOF_SORTING_TOGGLE` reaches our
+code through a `Bindings.xml` snippet, so the client cannot refuse the press at all; a press that left six
+windows open in combat is a verdict about our own `Init.Toggle` path, not about lockdown. The step is rewritten
+so one press from a known-open state is unambiguous.
 
 `../test1.lua`, `../test4.lua`, `../test8.lua`, `../test10.lua` are scratch from the 2026-11-11 runs —
 every bucket in them is on its issue, so they are deleted.

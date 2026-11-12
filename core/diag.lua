@@ -855,16 +855,20 @@ local function issue4Baseline()
   combatState('out of combat')
   record('ContainerFrameSettingsManager',
     ContainerFrameSettingsManager and 'frame exists' or 'no such global',
-    '— step h calls its GetBagsShown() on purpose')
+    '— step j calls its GetBagsShown() on purpose')
   record('our key', tostring(GetBindingKey('BAGSOF_SORTING_TOGGLE')),
-    '— a manual step presses it during lockdown; CTRL-B is the client\'s own open-all-bags')
+    '— a manual step presses it during lockdown. It is a Bindings.xml snippet, so a refusal on that '
+    .. 'path is ours, not the client\'s; it opens and closes our windows and never moves an item. '
+    .. 'CTRL-B is the client\'s own open-all-bags')
 end
 
 --- The captured steps are the same state read at six points; the label is what separates them.
 local function issue4Combat() combatState('in combat') end
 local function issue4AfterToggle() combatState('after hide/show attempted in combat') end
 local function issue4AfterPickup() combatState('after the in-combat button pickup attempt') end
-local function issue4AfterKey() combatState('after our own key was pressed in combat') end
+local function issue4AfterKey()
+  combatState('after one press of our own key — our windows were open before it')
+end
 local function issue4AfterCtrlB() combatState('after CTRL-B was pressed in combat') end
 
 --- A pooled button created during lockdown is issue #4 step 5. Blizzard's buttons are readable off
@@ -937,7 +941,8 @@ tests[4] = {
     { text = 'while still in combat: pick an item up off one of our buttons and drop it into ' ..
       'another of our slots' },
     { text = 'capture: state after the button pickup attempt', run = issue4AfterPickup },
-    { text = 'while still in combat: press your own bound key once' },
+    { text = 'while still in combat: press your own bound key **once** — the windows are open from the '
+      .. 'step above, so one press closing them is the reading' },
     { text = 'capture: state after our own key', run = issue4AfterKey },
     { text = 'while still in combat: press CTRL-B (the client\'s own open-all-bags) and watch ' ..
       'whether Blizzard\'s bag window appears' },

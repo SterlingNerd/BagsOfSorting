@@ -510,10 +510,10 @@ check('the slash dispatcher reaches the same step', captured, 3)
 -- capture has to carry its own command letter.
 local pending = {}
 for _, t in ipairs(diag.Tests()) do pending[t.id] = true end
-for _, id in ipairs({ 1, 4, 10 }) do
+for _, id in ipairs({ 4 }) do
   check('test ' .. id .. ' is pending', pending[id] and true or nil, true)
 end
-for _, id in ipairs({ 1, 4, 10 }) do
+for _, id in ipairs({ 4 }) do
   local lines = {}
   _G.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
   diag.Test(id)

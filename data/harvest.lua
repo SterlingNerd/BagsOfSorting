@@ -64,6 +64,11 @@ local constants = addon:GetModule('Constants')
 ---@type BoSContainer[]
 local discovered
 
+---@type table<string, boolean>
+-- Session record of bagID:slot pairs that were new. Persists across refreshes,
+-- cleared when the backpack is closed and reopened.
+local newItemSession = {}
+
 ---@type table<string, number>?
 local freeSlots
 ---@type table<string, BoSFreeSlot>?
@@ -151,6 +156,8 @@ function harvest.Items()
       local ok, info = pcall(C_Container.GetContainerItemInfo, container.index, slot)
       if ok and info and info.itemID then
         local questOK, quest = pcall(C_Container.GetContainerItemQuestInfo, container.index, slot)
+        local isNew = harvest.IsNewItem(container.index, slot)
+        if isNew then harvest.MarkNewItemSession(container.index, slot) end
         items[#items + 1] = {
           bagID = container.index,
           slot = slot,
@@ -167,6 +174,7 @@ function harvest.Items()
           containerName = container.name,
           containerKind = container.kind,
           dataReady = false,
+          isNew = isNew,
         }
       else
         -- A slot the client reports no item for is a free slot: ContainerItemInfo.itemID is
@@ -267,6 +275,38 @@ end
 ---@return boolean
 function harvest.BankOpen()
   return bankOpen
+end
+
+--- Check if an item is currently flagged as new by the client.
+---@param bagID number
+---@param slot number
+---@return boolean
+function harvest.IsNewItem(bagID, slot)
+  if C_NewItems and C_NewItems.IsNewItem then
+    local ok, isNew = pcall(C_NewItems.IsNewItem, bagID, slot)
+    if ok then return isNew end
+  end
+  return false
+end
+
+--- Record that an item was new in this session.
+---@param bagID number
+---@param slot number
+function harvest.MarkNewItemSession(bagID, slot)
+  newItemSession[bagID .. ':' .. slot] = true
+end
+
+--- Check if an item was new in this session (even if client flag cleared).
+---@param bagID number
+---@param slot number
+---@return boolean
+function harvest.WasNewInSession(bagID, slot)
+  return newItemSession[bagID .. ':' .. slot] == true
+end
+
+--- Clear the new-item session record (called when backpack closes).
+function harvest.ClearNewItemSession()
+  newItemSession = {}
 end
 
 return harvest

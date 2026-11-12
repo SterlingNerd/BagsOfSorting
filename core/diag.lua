@@ -819,6 +819,39 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {}
+tests[39] = {
+  issue = 39,
+  what = "New section in default backpack",
+  needs = "loot a new item, then open backpack",
+  steps = {
+    { text = "loot a new item (e.g. from a mob or chest)", run = nil },
+    { text = "open backpack and verify New section appears at top with the item", run = function()
+      local harvest = addon:GetModule('Harvest')
+      local pipeline = addon:GetModule('Pipeline')
+      pipeline.Refresh('test-39-new-section')
+      local model = pipeline.Model()
+      for _, window in ipairs(model) do
+        if window.name == 'Backpack' then
+          for _, section in ipairs(window.sections) do
+            if section.name == 'New' then
+              record('New section found with ' .. #section.items .. ' items')
+              for _, item in ipairs(section.items) do
+                record('  Item: ' .. (item.name or item.itemID) .. ' isNew=' .. tostring(item.isNew))
+              end
+              return
+            end
+          end
+          record('New section NOT found in Backpack')
+        end
+      end
+    end },
+    { text = "hover over the item in New section to clear new flag", run = nil },
+    { text = "close and reopen backpack - New section should be empty", run = function()
+      local harvest = addon:GetModule('Harvest')
+      record('New item session cleared: ' .. tostring(next(harvest.newItemSession) == nil))
+    end },
+  },
+}
 
 -- ---------------------------------------------------------------------------
 -- The pending list. `/bos test` prints these; `/bos test <id>` prints one run sheet.

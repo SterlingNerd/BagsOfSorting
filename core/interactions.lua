@@ -129,6 +129,21 @@ if type(OpenAllBags) == 'function' then
   end)
 end
 
+-- Clear new-item session when player closes backpack (issue #39)
+if type(ToggleAllBags) == 'function' then
+  hooksecurefunc('ToggleAllBags', function()
+    local combined = _G.ContainerFrameCombinedBags
+    if combined and not combined:IsShown() then
+      harvest.ClearNewItemSession()
+    end
+  end)
+end
+if type(CloseAllBags) == 'function' then
+  hooksecurefunc('CloseAllBags', function()
+    harvest.ClearNewItemSession()
+  end)
+end
+
 ---@return boolean
 function interactions.Suppressing()
   return suppressing

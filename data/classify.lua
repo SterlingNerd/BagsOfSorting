@@ -101,6 +101,12 @@ function classify.Run(items, categories)
     ---@type BoSTrace
     local trace = { tested = {} }
 
+    -- New items: place in New category first (issue #39)
+    if item.isNew then
+      trace.matched = 'New'
+      trace.matchedBy = 'new item flag'
+      place(placements, 'New', item)
+    end
     for _, entry in ipairs(ordered) do
       local ok, matched, decidedBy = pcall(rules.Evaluate, entry.tree, item)
       if not ok then

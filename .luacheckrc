@@ -50,6 +50,8 @@ globals = {
     "ContainerFrameSettingsManager",
     "ContainerFrameCombinedBags",
     "OpenAllBags",
+    "ToggleAllBags",
+    "CloseAllBags",
     "hooksecurefunc",
     "BankFrame",
     "GetBindingKey",

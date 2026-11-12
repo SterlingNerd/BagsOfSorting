@@ -66,6 +66,7 @@ local DEFAULT_PROFILE = {
       compact = false,
       scale = 1.0,
       sections = {
+        { id = 's_new', name = 'New', categories = { 'New' } },
         { id = 's1', name = 'Junk', categories = { 'Junk' } },
         { id = 's2', name = 'Armor', categories = { 'Armor' } },
         { id = 's3', name = 'Everything else', categories = { '__catchall' } },
@@ -247,6 +248,17 @@ local DEFAULT_PROFILE = {
   categories = {
     -- Priority is the ladder the classifier walks, ascending (docs/04 §Precedence 1). A quest item
     -- must never fall to a generic rule, and a curated manual list beats a generic rule too.
+    -- New items section (issue #39): highest priority so new items match here first, then their
+    -- regular category (duplicate = true allows placement in both).
+    ['New'] = {
+      priority = 1,
+      kind = 'rules',
+      enabled = true,
+      duplicate = true,
+      rules = { op = 'all', children = { { field = 'none', cmp = '=', value = true } } },
+      -- The rule is a placeholder; actual new-item detection is done at harvest time via
+      -- C_NewItems.IsNewItem. classify.Run places items here when harvest marks them new.
+    },
     ['Quest Items'] = {
       priority = 5,
       kind = 'rules',

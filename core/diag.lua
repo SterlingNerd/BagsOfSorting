@@ -819,37 +819,115 @@ local HELPERS = {
 -- what make the capture readable.
 -- ---------------------------------------------------------------------------
 local tests = {}
-tests[39] = {
-  issue = 39,
-  what = "New section in default backpack",
-  needs = "loot a new item, then open backpack",
-  steps = {
-    { text = "loot a new item (e.g. from a mob or chest)", run = nil },
-    { text = "open backpack and verify New section appears at top with the item", run = function()
-      local harvest = addon:GetModule('Harvest')
-      local pipeline = addon:GetModule('Pipeline')
-      pipeline.Refresh('test-39-new-section')
-      local model = pipeline.Model()
-      for _, window in ipairs(model) do
-        if window.name == 'Backpack' then
-          for _, section in ipairs(window.sections) do
-            if section.name == 'New' then
-              record('New section found with ' .. #section.items .. ' items')
-              for _, item in ipairs(section.items) do
-                record('  Item: ' .. (item.name or item.itemID) .. ' isNew=' .. tostring(item.isNew))
-              end
-              return
-            end
+
+-- Part of the pending test 39 entry below: delete it with the entry.
+--
+-- The question is a client one: what actually clears the client's new-item list. `ContainerFrame_OnHide`
+-- is *written* to run `UpdateNewItemList` over every button the frame was showing, but that is FrameXML
+-- source from snapshots older than this client (`containers-and-bags.md` says so), and in-game the client's
+-- own highlight has been seen to survive a bag close. The three candidate clears are a Blizzard close
+-- (CTRL-B on this account), our vendor suppression hiding Blizzard's frames in the background (issue #38,
+-- whose ingest says the hide itself was never observed), and a hover. So each stage records four things
+-- side by side: the client's own list (the `newitems` probe from issue #35), what our windows draw, the
+-- frames each clear path belongs to, and the mouse focus - a stray hover is the one thing that can fake a
+-- clear here.
+-- shortcut: over constants.ASYNC_ITEM_THRESHOLD items the refresh below finishes after these lines are
+-- written, so keep the bag under 60 items for this one.
+local function newItemsStageCapture()
+  local pipeline = addon:GetModule('Pipeline')
+  local constants = addon:GetModule('Constants')
+  local interactions = addon:GetModule('Interactions')
+
+  probes[18]()                      -- the client's own list, read before we refresh anything of ours
+  pipeline.Refresh('test-39')
+
+  local total = NUM_CONTAINER_FRAMES or (constants.NUM_TOTAL_EQUIPPED_BAG_SLOTS + 2)
+  local shown = 0
+  for i = 1, total do
+    local frame = _G['ContainerFrame' .. i]
+    if frame and frame:IsShown() then shown = shown + 1 end
+  end
+  local combined = _G.ContainerFrameCombinedBags
+  record('blizzard bags: combined', tostring(combined and combined:IsShown()),
+    'ContainerFrame1-N shown', shown, 'of', total)
+  record('IsAnyBagOpen', tostring(IsAnyBagOpen and IsAnyBagOpen()),
+    'suppressing', tostring(interactions.Suppressing()),
+    'clearNewOnClose', tostring(db.Settings().display.clearNewOnClose))
+  for _, name in ipairs({ 'MerchantFrame', 'BankFrame' }) do
+    local frame = _G[name]
+    if frame and frame.IsShown then record('interaction frame', name, tostring(frame:IsShown())) end
+  end
+
+  local ourShown, ourTotal = 0, 0
+  for _, window in ipairs(db.Windows()) do
+    ourTotal = ourTotal + 1
+    local frame = _G['BagsOfSortingWindow' .. window.id]
+    if frame and frame:IsShown() then ourShown = ourShown + 1 end
+  end
+  record('our windows shown', ourShown, 'of', ourTotal)
+  local focus = GetMouseFocus and GetMouseFocus()
+  record('mouse focus', focus and (focus.GetName and focus:GetName() or focus:GetObjectType()) or 'none')
+
+  for _, window in ipairs(pipeline.Model() or {}) do
+    if window.kind == 'backpack' then
+      local order = {}
+      for _, section in ipairs(window.sections) do order[#order + 1] = section.name end
+      record('drawn sections:', table.concat(order, ' | '))
+      for _, section in ipairs(window.sections) do
+        if section.categories[1] == 'New' then
+          record('New holds', #section.items)
+          for _, item in ipairs(section.items) do
+            local okNew, flagged = pcall(C_NewItems.IsNewItem, item.bagID, item.slot)
+            record(' ', item.name or item.itemID, 'bag', item.bagID, 'slot', item.slot,
+              'client flag', tostring(okNew and flagged))
           end
-          record('New section NOT found in Backpack')
         end
       end
-    end },
-    { text = "hover over the item in New section to clear new flag", run = nil },
-    { text = "close and reopen backpack - New section should be empty", run = function()
-      local harvest = addon:GetModule('Harvest')
-      record('New item session cleared: ' .. tostring(next(harvest.newItemSession) == nil))
-    end },
+    end
+  end
+end
+
+local function newItemsSetupCapture()
+  record('apis: IsNewItem', tostring(type(C_NewItems and C_NewItems.IsNewItem) == 'function'),
+    'ToggleAllBags', tostring(type(ToggleAllBags) == 'function'),
+    'CloseAllBags', tostring(type(CloseAllBags) == 'function'),
+    'IsAnyBagOpen', tostring(type(IsAnyBagOpen) == 'function'),
+    'ItemButton_OnEnter', tostring(type(ContainerFrameItemButton_OnEnter) == 'function'))
+  record('the run: hover no bag cell until the hover step, and the looted item stays where it landed')
+  newItemsStageCapture()
+end
+
+tests[39] = {
+  issue = 39,
+  what = "what clears the client's new-item list - a Blizzard close, our vendor hide, or only a hover - "
+    .. 'and what our New section and the client glow do at each point',
+  needs = 'default mode (Clear New on Close on); one fresh kill, then the whole sheet OUT OF COMBAT '
+    .. '(our suppression will not hide Blizzard\'s frames in combat, issue #38); under 60 items in the bag; '
+    .. 'a merchant, not the bank (the bank changes the container set, issue #47); no hover except the hover step',
+  steps = {
+    { text = 'setup: the APIs, the mode, and the state before anything is looted',
+      run = newItemsSetupCapture },
+    { text = 'kill something and loot one new item - hover no bag cell on the way back', run = nil },
+    { text = 'capture: the looted item in the client\'s list and in our New section',
+      run = newItemsStageCapture },
+    { text = "press CTRL-B once (Blizzard's OPENALLBAGS bind; b says which way this press takes it)",
+      run = nil },
+    { text = "capture: Blizzard's bag window the other way from b", run = newItemsStageCapture },
+    { text = "press CTRL-B once more - c says whether that window is open, so this press closes it if it is",
+      run = nil },
+    { text = 'capture: one Blizzard close measured', run = newItemsStageCapture },
+    { text = "talk to a merchant to open its window - hover no bag cell (d says whether Blizzard's window was open for our suppression to hide)",
+      run = nil },
+    { text = "capture: our vendor suppression with Blizzard's frames in the background (issue #38)",
+      run = newItemsStageCapture },
+    { text = 'close the merchant window', run = nil },
+    { text = 'capture: after the merchant', run = newItemsStageCapture },
+    { text = 'hover the new item in our window - the clear issue #35 measured', run = nil },
+    { text = 'capture: what the hover took out, client side and ours', run = newItemsStageCapture },
+    { text = 'press B once (our own BAGSOF_SORTING_TOGGLE bind) to close our windows', run = nil },
+    { text = 'capture: our windows closed, which is not a closed bag', run = newItemsStageCapture },
+    { text = 'press B again to open them', run = nil },
+    { text = 'capture: our windows open again, the last state of the run', run = newItemsStageCapture },
   },
 }
 

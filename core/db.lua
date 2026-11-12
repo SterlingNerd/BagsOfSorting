@@ -17,7 +17,7 @@ local constants = addon:GetModule('Constants')
 
 local BAG = constants.BAG_FAMILY
 
-db.CURRENT_VERSION = 8
+db.CURRENT_VERSION = 9
 
 ---@class BoSSettings
 -- Only settings something actually reads are present (FR-80: a setting with no UI home is
@@ -29,8 +29,9 @@ local DEFAULT_SETTINGS = {
   -- FR-43: merged is the default. 'always' is what the window menu's Show stacks toggle writes.
   -- 'session' and 'vendor' (docs/04) arrive with the mode picker, not before it.
   stacking = { showStacks = 'merged' },
-  -- Issue #39: clear new-item session on bag close/reopen
-  newItems = { clearOnClose = true },
+  -- FR-47 / issue #39: closing the bags is what clears new-ness, which is what empties the New
+  -- section. false leaves the hover as the only thing that takes an item out of it.
+  display = { clearNewOnClose = true },
   debug = false,
 }
 
@@ -250,15 +251,17 @@ local DEFAULT_PROFILE = {
   categories = {
     -- Priority is the ladder the classifier walks, ascending (docs/04 §Precedence 1). A quest item
     -- must never fall to a generic rule, and a curated manual list beats a generic rule too.
-    -- New items section (issue #39): highest priority so new items match here first, then their
-    -- regular category (duplicate = true allows placement in both).
+    -- Issue #39: the New section (docs/02 FR-21 lists `isNew` in the v1 field set). Highest
+    -- priority so it is the first rule walked, and `duplicate = true` so a new item stays in the
+    -- category its own rules put it in -- the same slot is drawn in both places (FR-15).
+    -- The rule is the client's own flag as the harvest recorded it (data/harvest.lua); this is a
+    -- category with a real rule, not a code path.
     ['New'] = {
       priority = 1,
       kind = 'rules',
       enabled = true,
       duplicate = true,
-      rules = { op = 'all', children = { { field = 'none', cmp = '=', value = false } } },
-      -- Rule never matches; new items placed here by classify.Run via item.isNew (issue #39).
+      rules = { op = 'all', children = { { field = 'isNew', cmp = '=', value = true } } },
     },
     ['Quest Items'] = {
       priority = 5,
@@ -477,6 +480,26 @@ local MIGRATIONS = {
     end
   end,
 
+  -- A first cut of the New category carried a `none` leaf, which is true for every item at the top
+  -- of the ladder -- so every item landed in the New section -- and carried its setting as
+  -- `newItems.clearOnClose` instead of the `display.clearNewOnClose` (docs/04 §settings) FR-47 is
+  -- written against. A profile that ran migration 8 gets both put back.
+  [9] = function(profile)
+    local cat = profile.categories and profile.categories['New']
+    local leaf = cat and cat.rules and cat.rules.children and cat.rules.children[1]
+    if leaf and leaf.field == 'none' then
+      cat.rules = deepCopy(DEFAULT_PROFILE.categories['New'].rules)
+    end
+    local settings = profile.settings
+    if settings and settings.newItems then
+      settings.display = settings.display or {}
+      if settings.display.clearNewOnClose == nil then
+        settings.display.clearNewOnClose = settings.newItems.clearOnClose
+      end
+      settings.newItems = nil
+    end
+  end,
+
 }
 
 function db.Migrate()
@@ -602,13 +625,19 @@ function db.SetShowStacks(mode)
   return true
 end
 
---- Issue #39: toggle whether new-item session is cleared on bag close.
+--- FR-47 / issue #39: the window menu's Clear New on Close. Off leaves the New section tracking the
+--- client's own list, so a hover is the only thing that takes an item out of it.
 ---@param enabled boolean
 ---@return boolean changed
 function db.SetClearNewOnClose(enabled)
-  local newItems = db.Settings().newItems
-  if newItems.clearOnClose == enabled then return false end
-  newItems.clearOnClose = enabled
+  local display = db.Settings().display
+  if display.clearNewOnClose == enabled then return false end
+  display.clearNewOnClose = enabled
+  -- Turning the mode off starts the record clean: from there only a hover clears, and a record kept
+  -- from the mode that was clearing on close would otherwise list items the player already hovered
+  -- away (docs/08).
+  if not enabled then addon:GetModule('Harvest').ClearNewItemSession() end
+  db.NotifyModelChanged()
   return true
 end
 

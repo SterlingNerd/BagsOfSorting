@@ -7,6 +7,10 @@
 -- the Forever API surface — the in-game checklist in docs/06 and the spike issues do that
 -- (agents.md hard rule 1).
 
+-- The harness runs on the client's Lua 5.1 (CI installs lua5.1); a dev machine on a newer Lua gets
+-- the same `unpack` from one lookup, so `lua tests/run.lua` answers the same questions locally.
+local unpack = unpack or table.unpack
+
 _G.NUM_BAG_SLOTS = 4
 _G.NUM_REAGENTBAG_SLOTS = 1
 _G.NUM_TOTAL_EQUIPPED_BAG_SLOTS = 5
@@ -38,13 +42,27 @@ _G.Enum = {
 -- global calls a vendor and the bank make are replaced by tables that remember being hidden.
 _G.InCombatLockdown = function() return false end
 
+-- Issue #39: `newItemsBagged[bag][slot]` is what this client would flag as new. The harness leaves it
+-- empty, so every assertion written before this feature reads a bag with nothing new in it and the New
+-- section is not drawn.
+newItemsBagged = {}
+
 local function fakeFrame(name)
   return {
     shown = true,
     GetName = function(self) return name end,
     IsShown = function(self) return self.shown end,
     Show = function(self) self.shown = true end,
-    Hide = function(self) self.shown = false end,
+    -- A shown frame losing the screen runs ContainerFrame_OnHide, and that runs UpdateNewItemList over
+    -- every button it was showing (ContainerFrame.lua:817, :393): the client's new flags go with the
+    -- window. This is the path our own vendor and bank suppression walks.
+    -- shortcut: the stub has no per-frame item sets, so a hide clears the whole list — which is what a
+    -- combined-bags hide does on the client.
+    Hide = function(self)
+      if not self.shown then return end
+      self.shown = false
+      newItemsBagged = {}
+    end,
   }
 end
 
@@ -54,6 +72,36 @@ _G.ContainerFrame1 = fakeFrame('ContainerFrame1')
 -- (ContainerFrame.lua:8-11, :140). Frame 6 is the one a loop bounded at NUM_TOTAL_BAG_FRAMES misses.
 _G.NUM_CONTAINER_FRAMES = 7
 _G.ContainerFrame6 = fakeFrame('ContainerFrame6')
+
+--- The FrameXML calls core/interactions.lua hooks or reads (ContainerFrame.lua): `CloseAllBags` :2222,
+--- `ToggleAllBags` :2113, `IsAnyBagOpen` :2175 (which answers from `IsShown` — :2838), and the hover
+--- clear `ContainerFrameItemButton_OnEnter` :1687, which clears the flag at :1724 and is what the item
+--- button template's own OnEnter calls (ContainerFrame.xml:164) — so it is what our buttons run too.
+--- A hide clears flags through fakeFrame's own model of `UpdateNewItemList` above.
+local function newItemsClear(bag, slot)
+  local bagged = newItemsBagged[bag]
+  if bagged then bagged[slot] = nil end
+end
+_G.C_NewItems = {
+  IsNewItem = function(bag, slot)
+    local bagged = newItemsBagged[bag]
+    return bagged ~= nil and bagged[slot] == true
+  end,
+  RemoveNewItem = newItemsClear,
+  ClearAll = function() newItemsBagged = {} end,
+}
+_G.ContainerFrameItemButton_OnEnter = function(button)
+  newItemsClear(button:GetBagID(), button:GetID())
+end
+_G.IsAnyBagOpen = function() return _G.ContainerFrameCombinedBags:IsShown() end
+_G.CloseAllBags = function()
+  _G.ContainerFrameCombinedBags:Hide()
+  _G.ContainerFrame1:Hide()
+  _G.ContainerFrame6:Hide()
+end
+_G.ToggleAllBags = function()
+  if _G.IsAnyBagOpen() then CloseAllBags() else OpenAllBags() end
+end
 
 --- Blizzard's own "show every bag", and hooksecurefunc's semantics: the hook runs after the
 --- original, with the same arguments.
@@ -1032,9 +1080,11 @@ local function testBankWindows()
   local bank = windowIn(models, 'Bank')
   check('the mirror of the default backpack is a bank window', bank.kind, 'bank')
   -- The copy is a config fact: same sections, same bindings, same order. Which of them get drawn is
-  -- a content fact, and the bank holds different content.
-  check('it copies the default backpack sections and bindings',
-    configBinds(db.Windows(), 'Bank'), configBinds(db.Windows(), 'Backpack'))
+  -- a content fact, and the bank holds different content. The New section (issue #39) is the one
+  -- section the mirror deliberately does not copy: what you just picked up is a backpack fact.
+  check('it copies the default backpack sections and bindings bar the New section',
+    configBinds(db.Windows(), 'Bank'),
+    (configBinds(db.Windows(), 'Backpack'):gsub('^New,', '')))
   check('the bank Tradeskills window copies the backpack one',
     configBinds(db.Windows(), 'Bank Tradeskills'), configBinds(db.Windows(), 'Tradeskills'))
   check('and draws only the sections the bank has content for', binds(bank), 'Junk,__catchall')
@@ -1250,6 +1300,167 @@ end
 testCombineStacks()
 
 
+
+-- Issue #39. The New section is an ordinary duplicate category whose rule is the client's own
+-- per-slot new flag as data/harvest.lua records it, so these are the acceptance criteria one at a
+-- time: a new item lands in the section, it ALSO stays in its own category, the section survives the
+-- hover that clears the client's flag, and closing the bags is what empties it. The negative half is
+-- the window menu's Clear New on Close: with it off, a hover is the only thing that takes an item out
+-- — not a bag close, and not a container frame hiding, which is what the client's own new-item list
+-- cannot survive (ContainerFrame.lua:817, :393).
+local function testNewSection()
+  local dbMod = addon.modules['DB']
+  local function backpack() return windowIn(pipeline.Model(), 'Backpack') end
+  -- 'bagID:slot' -> the window/section list that drew that slot. Duplication is only visible as a list.
+  local function drawn()
+    local where = {}
+    for _, window in ipairs(pipeline.Model()) do
+      for _, section in ipairs(window.sections) do
+        for _, item in ipairs(section.items) do
+          local key = item.bagID .. ':' .. item.slot
+          local list = where[key]
+          if not list then list = {} where[key] = list end
+          list[#list + 1] = window.name .. '/' .. section.name
+        end
+      end
+    end
+    for key, list in pairs(where) do where[key] = table.concat(list, ', ') end
+    return where
+  end
+  local function record(itemID)
+    local found
+    for _, window in ipairs(pipeline.Model()) do
+      for _, section in ipairs(window.sections) do
+        for _, item in ipairs(section.items) do
+          if item.itemID == itemID then found = item end
+        end
+      end
+    end
+    return found
+  end
+  -- The hover a real item button performs: the template's OnEnter calls this global, which is what
+  -- core/interactions.lua's hook watches (ContainerFrame.lua:1687, ContainerFrame.xml:164).
+  local function hoverItemButton(bag, slot)
+    ContainerFrameItemButton_OnEnter({
+      GetBagID = function() return bag end,
+      GetID = function() return slot end,
+    })
+  end
+
+  -- Known state: the client's bag windows open, so a Hide below really is a shown frame losing screen.
+  _G.ContainerFrameCombinedBags:Show()
+  _G.ContainerFrame1:Show()
+  _G.ContainerFrame6:Show()
+
+  -- 1001 Rusty Chainmail, bag 0 slot 1: quality 0 armour, so its own category is the Junk section.
+  newItemsBagged = { [0] = { [1] = true } }
+  pipeline.Refresh('new-flagged')
+  check('a new item gets a New section', countSection(backpack(), 'New'), 1)
+  check('and it is the first section the default backpack draws', backpack().sections[1].name, 'New')
+  check('the same slot is drawn in the New section and in its own category',
+    drawn()['0:1'], 'Backpack/New, Backpack/Junk')
+  local chainmail = record(1001)
+  check('New duplicates rather than owns: the item still belongs to Junk',
+    chainmail and chainmail.owner, 'Junk')
+
+  -- The hover, with Clear New on Close on. frames/item.lua paints on ContainerFrameItemButtonTemplate,
+  -- whose OnEnter runs C_NewItems.RemoveNewItem on the real slot (ContainerFrame.lua:1724). AC-39 is what
+  -- happens after that: the client's flag is gone and the listing stays.
+  hoverItemButton(0, 1)
+  check('the hover cleared the client flag', harvest.IsNewItem(0, 1), false)
+  pipeline.Refresh('new-after-hover')
+  check('and the item is still in the New section', countSection(backpack(), 'New'), 1)
+
+  -- Turning the mode off starts from a clean record, so an item the player already hovered past does not
+  -- come back out of it (core/db.lua).
+  check('toggling Clear New on Close reports a change', dbMod.SetClearNewOnClose(false), true)
+  pipeline.Refresh('new-toggle-off')
+  check('and does not resurrect an item the player already hovered past', countSection(backpack(), 'New'), 0)
+
+  -- The mode the toggle exists for: a hover is the only thing that clears. The client's own list cannot
+  -- serve it, because a container frame hide runs UpdateNewItemList over every button that frame was
+  -- showing (ContainerFrame.lua:817, :393) and C_NewItems has no way to put a flag back — so the record
+  -- in data/harvest.lua is what the section runs on.
+  newItemsBagged = { [0] = { [1] = true } }
+  pipeline.Refresh('new-off-flagged')
+  check('with the toggle off a new item gets a New section too', countSection(backpack(), 'New'), 1)
+
+  -- The bags open and then a container frame closes, which is the path a vendor takes: the client's own
+  -- vendor panel opens the bags (MerchantFrame.lua:149 -> OpenAllBags) and core/interactions.lua hides
+  -- them again. That hide is the one the client clears its new list with, and it is exactly the one this
+  -- toggle is asked not to treat as a clear.
+  _G.ContainerFrameCombinedBags:Show()
+  _G.ContainerFrame1:Show()
+  _G.ContainerFrame6:Show()
+  _G.ContainerFrameCombinedBags:Hide()
+  pipeline.Refresh('new-off-hidden-frame')
+  check('the client lost its flag with the window', harvest.IsNewItem(0, 1), false)
+  check('and the New section keeps the item anyway', countSection(backpack(), 'New'), 1)
+
+  CloseAllBags()
+  pipeline.Refresh('new-off-closed')
+  check('closing the bags does not empty it either while the toggle is off', countSection(backpack(), 'New'), 1)
+  hoverItemButton(0, 1)
+  pipeline.Refresh('new-off-hovered')
+  check('while a hover does empty it', countSection(backpack(), 'New'), 0)
+
+  -- Back to the default, where closing the bags is the clear (AC-39). Known state again: the frames have
+  -- to be open for CloseAllBags to really be a close.
+  check('toggling the default back reports a change', dbMod.SetClearNewOnClose(true), true)
+  check('and the same choice again as no change', dbMod.SetClearNewOnClose(true), false)
+  _G.ContainerFrameCombinedBags:Show()
+  _G.ContainerFrame1:Show()
+  _G.ContainerFrame6:Show()
+  newItemsBagged = { [0] = { [1] = true, [2] = true } }
+  pipeline.Refresh('new-on-flagged')
+  check('with the toggle on, new items get the section back', countSection(backpack(), 'New'), 2)
+  check('and each one is also drawn in its own category',
+    (drawn()['0:1'] or '-') .. ' | ' .. (drawn()['0:2'] or '-'),
+    'Backpack/New, Backpack/Junk | Backpack/New, Backpack/Everything else')
+  CloseAllBags()
+  pipeline.Refresh('new-on-closed')
+  check('closing the bags drops them out of the New section', countSection(backpack(), 'New'), 0)
+  check('an empty New section is not drawn at all', sectionIn(backpack(), 'New'), nil)
+  check('while both are still drawn where their own categories put them',
+    (drawn()['0:1'] or '-') .. ' | ' .. (drawn()['0:2'] or '-'),
+    'Backpack/Junk | Backpack/Everything else')
+  check('the choice is written to the profile, at the key docs/04 §settings names',
+    dbMod.sv.profiles.Default.settings.display.clearNewOnClose, true)
+
+  newItemsBagged = {}
+  harvest.ClearNewItemSession()
+  _G.ContainerFrameCombinedBags:Show()
+  _G.ContainerFrame1:Show()
+  _G.ContainerFrame6:Show()
+  pipeline.Refresh('new-section-cleaned')
+  check('and the harness is left as it was found', countSection(backpack(), 'New'), 0)
+end
+
+testNewSection()
+
+-- A profile that ran migration 8 while the New category carried a `none` leaf — true for every item
+-- at the top of the ladder, so the whole bag landed in the New section — and while the toggle sat
+-- under `newItems` instead of the `display.clearNewOnClose` docs/04 names. Migration 9 repairs both
+-- and carries the player's own choice across.
+local function testNewSectionMigration()
+  local db = addon.modules['DB']
+  db.Profile().categories['New'].rules =
+    { op = 'all', children = { { field = 'none', cmp = '=', value = true } } }
+  db.Profile().settings.newItems = { clearOnClose = false }
+  db.Profile().settings.display = nil
+  db.sv.version = 8
+  db.Migrate()
+  check('a version-8 profile gets the real isNew rule back',
+    db.Profile().categories['New'].rules.children[1].field, 'isNew')
+  check('its setting moves to the key the data model names', db.Settings().display.clearNewOnClose, false)
+  check('the old key is gone', db.Profile().settings.newItems, nil)
+  check('and it runs to the current version', db.sv.version, db.CURRENT_VERSION)
+  check('carrying the player choice into the new key',
+    db.sv.profiles.Default.settings.display.clearNewOnClose, false)
+  db.SetClearNewOnClose(true)
+end
+
+testNewSectionMigration()
 
 for _, failure in ipairs(failures) do
   print('FAIL ' .. failure)

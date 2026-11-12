@@ -8,6 +8,7 @@
 --   itemID  — `itemID in {…}` is a leaf inside a rule tree (FR-24) and the most-used rule
 --             type in the measured configs (docs/01)
 --   none    — makes `__catchall` a real category instead of a code path (docs/04)
+--   isNew   — the client's per-slot new-item flag, what the New category binds (issue #39)
 
 local _, addon = ...
 
@@ -102,6 +103,16 @@ register({
   cmps = { '=' },
   read = function(item) return item.isQuestItem end,
   sentence = function(rule) return rule.value and 'is a quest item' or 'is not a quest item' end,
+})
+
+-- Issue #39 (`docs/02` FR-21 lists `isNew` in the v1 set): the harvest records the client's own
+-- per-slot flag here, and that is what the default New category binds. The client drops the flag
+-- the moment the button is hovered, so data/harvest.lua carries it for the rest of the session.
+register({
+  key = 'isNew', label = 'New item', valueKind = 'bool',
+  cmps = { '=' },
+  read = function(item) return item.isNew end,
+  sentence = function(rule) return rule.value and 'is a new item' or 'is not a new item' end,
 })
 
 -- `itemID in {…}`: value is a set { [itemID] = true }, so the read is a hash lookup and the

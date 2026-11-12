@@ -391,9 +391,9 @@ function ShowWindowMenu(anchor, windowConfig)
     {
       text = 'Clear New on Close',
       value = 'clear_new_on_close',
-      checked = function() return db.Settings().newItems.clearOnClose end,
+      checked = function() return db.Settings().display.clearNewOnClose end,
       func = function()
-        db.SetClearNewOnClose(not db.Settings().newItems.clearOnClose)
+        db.SetClearNewOnClose(not db.Settings().display.clearNewOnClose)
       end,
     },
     dropdown.Separator(),

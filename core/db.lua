@@ -17,7 +17,7 @@ local constants = addon:GetModule('Constants')
 
 local BAG = constants.BAG_FAMILY
 
-db.CURRENT_VERSION = 7
+db.CURRENT_VERSION = 8
 
 ---@class BoSSettings
 -- Only settings something actually reads are present (FR-80: a setting with no UI home is
@@ -454,6 +454,26 @@ local MIGRATIONS = {
           if section.id ~= 's15' and section.id ~= 's28' then kept[#kept + 1] = section end
         end
         window.sections = kept
+      end
+    end
+  end,
+
+  -- Issue #39: add New category and New section to profiles created before the New items feature.
+  [8] = function(profile)
+    profile.categories = profile.categories or {}
+    if not profile.categories['New'] then
+      profile.categories['New'] = deepCopy(DEFAULT_PROFILE.categories['New'])
+    end
+    for _, window in ipairs(profile.windows or {}) do
+      if window.id == 'w1' then
+        local hasNew = false
+        for _, section in ipairs(window.sections or {}) do
+          if section.id == 's_new' then hasNew = true break end
+        end
+        if not hasNew then
+          -- Insert at position 1 (top of backpack)
+          table.insert(window.sections, 1, { id = 's_new', name = 'New', categories = { 'New' }, collapsed = false })
+        end
       end
     end
   end,

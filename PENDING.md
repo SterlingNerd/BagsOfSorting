@@ -1,8 +1,9 @@
 # Pending — spike triage #1–#10
 
-**Nothing is pending.** `/bos test` prints an empty list: the entries for #1, #8 and #10 went in the
-2026-11-11 round and #4's went tonight, each with its capture on the issue and its probes deleted from
-`core/diag.lua`. `../test1.lua`, `../test4.lua`, `../test8.lua`, `../test10.lua` are gone, and every
+**Nothing is pending.** `/bos test` prints an empty list: the entries for #1, #8 and #10 went in the 2026-11-11
+round and #4's the same night, each with its capture on the issue, its probes deleted from `core/diag.lua`, and —
+together with the runs from earlier rounds — **all four of those spikes are now closed** with a closing note naming
+what was measured and what was left. `../test1.lua`, `../test4.lua`, `../test8.lua`, `../test10.lua` are gone, and every
 bucket they held is on its issue.
 
 ## The loop, for the next entry
@@ -22,30 +23,36 @@ sheet prints). Then: `/reload` → `/bos test <id>` → follow the sheet → `/r
 
 | issue | state | what's left |
 |---|---|---|
-| **#1** item data | open, measured | Tier 1 answers 19 of 26 sampled Classic-era ids on its own (type/subclass/inventory type/**icon**); name, quality and ilvl need the full read, and a tier-3 request answers them **permanently**. Nothing answers above the Classic-era band. **AC-97** and the client half of **AC-103** pass. Left: 10 sampled ids answered between logins with **zero** requests from us — who asked is unmeasured; and the play half of AC-103. Close candidate. |
-| **#3** EditMode | open, blocked | `frames/movemode.lua` does not exist. A-vs-B (`RegisterSystemFrame` with a variable window count) and the settings-dialog verdict (`FR-71`, `AC-54`, Q13). |
-| ~~**#4**~~ taint / combat | **closed 2026-11-12** | Full measured pass on the issue (4a–4k) plus the closing note. Our key works during lockdown; hide defers the button release and regen completes it; the client shows its own windows during lockdown (60 visible buttons while shown); mid-combat `/reload` breaks nothing; `GetBagsShown()` produced no observable consequence on either button path. Caveat carried forward instead of kept open: an empty blocked-action log is not proof of no taint (no positive control), now written in `references/taint-and-secure.md` and `docs/06` §Standing test discipline. Re-add the entry at a milestone exit with `git show 8697cd7^:core/diag.lua`. |
-| **#5** layout stress | open, blocked | Superseded by #48 (no river packing, no `layout/sizing.lua`), #49 (unscaled heights vs per-window scale), #61 (fixed). Measure when #48's packer exists; `AC-40`'s numbers belong on #48. Consider closing here with that pointer. |
+| **#3** EditMode | open, blocked | `frames/movemode.lua` does not exist. A-vs-B (`RegisterSystemFrame` with a variable window count) and the settings-dialog verdict (`FR-71`, `AC-54`, Q13). The A-vs-B choice is **ours to decide**, not the client's to be asked — which makes it a design decision sitting inside a spike. |
+| **#5** layout stress | open, blocked | Superseded by #48 (no river packing, no `layout/sizing.lua`), #49 (unscaled heights vs per-window scale), #61 (fixed). Measure when #48's packer exists; `AC-40`'s numbers belong on #48. **Close candidate** — fold it into #48 with that pointer. |
 | **#6** physical moves | open, blocked | `actions/moves.lua` is M6. Census must cover containers 6–14; bank containers exist only while the bank is open. |
-| **#8** perf + SavedVariables | **close candidate** | Harness exists and produced numbers: rows flat, `itemButton` pool flat (50/50), bench **1.14 ms per refresh**, `GetAddOnMemoryUsage` useless (0.0 KB), AC-26's "never seen" item never actually exercised. |
-| **#10** bank deposit + money | open, deposit half only | Currency half measured: this client carries **nothing** (`GetBackpackCurrencyInfo` 0, `GetCurrencyListSize` 0) and its own `BackpackTokenFrame` is 0 watched / 8 max / **1 px** wide, shown only while Blizzard's own container windows are. Our money bar draws on the backpack window only. Deposit half **blocked on M6** (no `AutoDepositFrame`, bank moves items not coin, `IsItemAllowedInBankType` refuses nothing). Title still reads as the old scope. |
-| #2, #4, #7, #9 | closed | — |
+| #1, #2, #4, #7, #8, #9, #10 | **closed** | Captures, verdicts and closing notes are on the issues; client facts in `../.agents/skills/wow-forever-api/references/`; our rules in `docs/`. Re-runnable sheets if a milestone pass wants them: `git show b736df8^:core/diag.lua` (#8), `git show 8697cd7^:core/diag.lua` (#4). |
+
+## What the closed spikes left recorded (not open, not forgotten)
+
+- **AC-26's two halves were never exercised** — a one-rule edit measured as a `/bos perf` delta, and a genuinely
+  never-seen looted item. They are **M3 exit criteria** (`docs/06`), where rules exist to edit.
+- **`FR-100`'s stated inventory condition (≥ 100 slots, ≥ 60 distinct items) has never been met here** — 31 items in 60
+  bag slots. Refresh cost is recorded (1.14 ms/refresh on build 70888, 2.20 ms on 70450); the budget is not tested at
+  size. Needs a character with more bags and more loot.
+- **An empty blocked-action log is not proof of no taint** — no positive control exists, and the two obvious ways to
+  stage one are blocked by our own rules (`docs/06` §Standing test discipline, `references/taint-and-secure.md`).
+- **`FR-4`'s "read-only display in combat" is descriptive, not enforced**: our buttons run Blizzard's own handler and the
+  client engaged with an in-combat drag without refusing it. Enforcing it would be a story issue.
+- **Currency chips** need a character that carries a token; coin-on-the-bag-window is measured and shipped.
+- **10 sampled ids answered between logins with zero requests from us** — a fact about the client's own store,
+  unmeasured in detail, and nothing in `data/enrich.lua` changes whichever way it goes.
 
 ## Decisions waiting on you
 
-1. Close **#1** and **#8**? Rename/narrow **#10** to the deposit half? Close or fold **#5** into #48?
-2. ~~Issue #4~~ closed 2026-11-12 with its closing note on the issue. Two things it left are recorded
-   rather than open: the blocked-log caveat (above, and in `docs/06`), and the unresolved "did the item
-   physically move during an in-combat drag". If anyone ever wants `FR-4`'s "read-only display in combat"
-   *enforced*, that is a story issue, not a spike. The issue body still names `/console eventTrace 1`,
-   `/events` and `ADDON_ACTION_FORBIDDEN` in `/events` — closed issues keep their history; the corrected
-   commands are in `references/taint-and-secure.md` and `docs/02` AC-1.
-3. `BagsOfSortingDB.diag` is never pruned — 11 buckets, 948 lines, sit in SavedVariables and every one of
-   them now has its capture on an issue. Prune on load, or leave?
-4. ~~Issue #4's body rewrite~~ — moot with the issue closed; see 2 above for where the corrected commands
-   live.
-5. ~~`docs/06` item 5 names `/bos test clock`~~ — not a bug: `clock` is a helper name in `diag.Command`
-   (`HELPERS.clock = probes[13]`), so both spellings work.
+1. **Fold #5 into #48?** It is the only open spike with nothing left that its superseding issues do not already own.
+2. **#3 — is the EditMode A-vs-B choice still a spike?** The client cannot answer it; it is a design decision that has to
+   be made before `frames/movemode.lua` exists. Either decide it here and let the story carry the rest, or move the
+   question into that story and close the spike.
+3. `BagsOfSortingDB.diag` is never pruned — 12 buckets, 1,075 lines (1, 4, 8, 10, 38, 41, 43, 44, 47, 52, 57 and
+   `autotest57`), and every one of them now has its capture on an issue. Prune on load, or leave?
+4. The build on `local` is one commit behind `main` and still carries the deleted test-4 entry in its `core/diag.lua`.
+   Deploy on your go-ahead only.
 
 ## Where an answer lives
 

@@ -1179,7 +1179,7 @@ local function testCombineStacks()
   check('three partial stacks of one item draw as one button', #merged.items, 1)
   check('and that cell carries the true total', merged.items[1].stackedCount, 60)
   check('while the slot it points at keeps its own pile', merged.items[1].stackCount, 20)
-  check('one merged item packs one cell', merged.cols .. '/' .. merged.rows, '1/1')
+  check('one merged item packs one cell', merged.cols .. '/' .. merged.rows, '2/1')
   check('it still points at a real slot that holds that item',
     contents[merged.items[1].bagID][merged.items[1].slot], LINEN)
   check('items with different ids are not merged',

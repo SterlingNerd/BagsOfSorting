@@ -78,7 +78,7 @@ function flow.Layout(window)
       -- A category whose section pipeline.Assign keeps alive with nothing in it (`_showEmpty`, the
       -- Fishing section) still gets a title band: it is a drop target, not noise.
       if count > 0 or (section.emptySlots or 0) > 0 then
-        section.cols = count > 0 and math.min(maxColumns, count) or maxColumns
+        section.cols = count > 0 and math.max(2, math.min(maxColumns, count)) or maxColumns
         section.rows = math.ceil(count / section.cols)
         section.width = section.cols * CELL
         section.height = constants.SECTION_TITLE_HEIGHT + section.rows * CELL

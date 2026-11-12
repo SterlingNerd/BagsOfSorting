@@ -21,9 +21,16 @@ Acceptance criteria are written as things a human verifies **in-game on the Fore
 | FR-6 | W | Retail / Classic Era / TBC / Cata / MoP support in v1. Architecture must not *prevent* it (`docs/03` §Client capability layer). |
 | FR-7 | C | Loads alongside Baggins or BetterBags with a startup warning that two bag addons are active, rather than silently double-drawing bags. |
 
-**AC-1** fresh install, `/reload` ×3, login while in combat (death-restore case), no errors in
-`/events`. **AC-2** `grep -rn "IsForever\|WOW_PROJECT" core/ frames/` shows hits only in
+**AC-1** fresh install, `/reload` ×3, login while in combat (death-restore case), no Lua errors —
+Forever has no `/events` and `/console` is a cvar command that opens nothing, so the client's own log
+window is `/eventtrace`. **AC-2** `grep -rn "IsForever\|WOW_PROJECT" core/ frames/` shows hits only in
 `core/client.lua`. **AC-4** toggle every bag window during combat: no taint, no lockdown error.
+**Measured 2026-11-11 with `/bos test 4`** (issue #4): one press of our own key closes the windows
+during lockdown; hiding defers the button release, and the deferred release completes at
+`PLAYER_REGEN_ENABLED`; a mid-combat `/reload` leaves the pools fresh with every button working
+afterwards. What that run could not settle is whether an item move attempted through our buttons in
+combat is refused or actually moves the item — `FR-4`'s "read-only display" half stays open until a
+census on either side of the attempt answers it.
 
 ## B. Inventory model
 

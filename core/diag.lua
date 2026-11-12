@@ -152,9 +152,10 @@ local INTERACTION_EVENTS = {
   'BANK_TABS_CHANGED', 'BANK_BAG_SLOT_FLAGS_UPDATED', 'BANK_TAB_SETTINGS_UPDATED',
   'PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED', 'ITEM_LOCK_CHANGED', 'BAG_UPDATE',
   'MERCHANT_SHOW', 'MERCHANT_CLOSED',
-  -- Blocked-action events carry (isTainted, function) — the function name issue #4 asks for. Whether an
-  -- addon-owned frame may register them at all is itself one of the measurements. Issue #4's run stalled at
-  -- a `/console` review step: `/console` here is ConsoleExec, a cvar command that opens no window.
+  -- Blocked-action events carry (isTainted, function): the function name a refusal should name. Measured
+  -- 2026-11-11 (issue #4): a full lockdown pass caught ITEM_LOCK_CHANGED and BAG_UPDATE on this same frame
+  -- and **not one** ADDON_ACTION_* line, so these two may never reach an addon-owned frame at all. An empty
+  -- log is not "nothing was refused" — reading it that way needs a positive control.
   'ADDON_ACTION_BLOCKED', 'ADDON_ACTION_FORBIDDEN',
 }
 
@@ -819,148 +820,9 @@ local HELPERS = {
 -- ---------------------------------------------------------------------------
 local tests = {}
 
--- Steps for the pending tests below. A step only ever reads and records: every pull, key press,
--- hide, Blizzard button click and item move in these sheets stays a manual step, because an addon
--- call inside the protected chain is exactly what issue #4 exists to keep out (agents.md rule 2).
-
----@return string
-local function secureLine()
-  -- `{ GetCursorInfo() }` not `tostring(GetCursorInfo())`: an empty cursor makes GetCursorInfo
-  -- return **no values at all**, and tostring on no value is a Lua error (issue #4's first run died
-  -- on exactly this, six times).
-  local cursor = ({ GetCursorInfo() })[1]
-  return string.format('secure=%s lockdown=%s cursor=%s', tostring(issecure()),
-    tostring(InCombatLockdown()), tostring(cursor))
-end
-
--- issecure() read from this path is not a verdict: a slash command runs through the chat frame,
--- which is tainted, so everything our code reads below it sits in a tainted chain and issecure()
--- reads false whatever we did (measured on issue #4 2026-11-11, where it read false before anything
--- was attempted). The signals that do mean something in these sheets are InCombatLockdown(), who is
--- showing bags, whether our buttons still pick items up, and the taint log in /console.
-
--- --------------------------------------------------------------------- issue #4
--- What issue #4 has never run: a state read on either side of each suspicious action made **during**
--- lockdown, and the `GetBagsShown()` trap verified by us rather than inherited from ForeverPlus. The
--- trap is the last captured step on purpose — a session it taints must not taint the steps before it.
-local function combatState(label)
-  record(label, secureLine(), 'our windows shown', addon:GetModule('WindowFrames').Count())
-  record('pool', addon:GetModule('Pool').Stats())
-  -- Who is showing bags is the behaviour that matters: Blizzard's own frames, ours, and whether the
-  -- suppression rule is still active after the attempt.
-  HELPERS.bags()
-end
-
-local function issue4Baseline()
-  combatState('out of combat')
-  record('ContainerFrameSettingsManager',
-    ContainerFrameSettingsManager and 'frame exists' or 'no such global',
-    '— step j calls its GetBagsShown() on purpose')
-  record('our key', tostring(GetBindingKey('BAGSOF_SORTING_TOGGLE')),
-    '— a manual step presses it during lockdown. It is a Bindings.xml snippet, so a refusal on that '
-    .. 'path is ours, not the client\'s; it opens and closes our windows and never moves an item. '
-    .. 'CTRL-B is the client\'s own open-all-bags')
-end
-
---- The captured steps are the same state read at six points; the label is what separates them.
-local function issue4Combat() combatState('in combat') end
-local function issue4AfterToggle() combatState('after hide/show attempted in combat') end
-local function issue4AfterPickup() combatState('after the in-combat button pickup attempt') end
-local function issue4AfterKey()
-  combatState('after one press of our own key — our windows were open before it')
-end
-local function issue4AfterCtrlB() combatState('after CTRL-B was pressed in combat') end
-
---- A pooled button created during lockdown is issue #4 step 5. Blizzard's buttons are readable off
---- the window's own `Items` table, ours off the pool's created count; neither touches the manager.
-local function issue4PostCombat()
-  combatState('after combat and the mid-combat /reload')
-  local bag = ContainerFrameCombinedBags
-  local shown = 0
-  for _, button in ipairs((bag and bag.Items) or {}) do
-    if button and button:IsShown() then shown = shown + 1 end
-  end
-  record('client bag window', bag and (bag:IsShown() and 'shown' or 'closed') or 'no global',
-    'its visible buttons', shown)
-  local ours = 0
-  for i = 1, 400 do
-    local button = _G['BagsOfSortingItemButton' .. i]
-    if button and button:IsShown() then ours = ours + 1 end
-  end
-  record('our visible buttons', ours)
-end
-
-local function issue4Trap()
-  record('the deliberate trap:', 'ContainerFrameSettingsManager:GetBagsShown()')
-  record('before:', secureLine())
-  local manager = ContainerFrameSettingsManager
-  if not (manager and manager.GetBagsShown) then
-    record('no manager, or no GetBagsShown method on this client')
-  else
-    local ok, shown = pcall(function() return manager:GetBagsShown() end)
-    record('call', ok and 'returned' or ('errored: ' .. tostring(shown)),
-      ok and (type(shown) == 'table' and tostring(#shown) or 'not a table') or '-', 'entries',
-      '— an empty list while our windows suppress the client\'s is itself the number to read')
-  end
-  record('after:', secureLine())
-  combatState('state after the trap')
-  record('the secure readings are the slash-path value (always false); what a difference here would '
-    .. 'mean is the manager call itself — ForeverPlus hit exactly this, and the next /reload clears it')
-end
-
 -- ---------------------------------------------------------------------------
 -- The pending list. `/bos test` prints these; `/bos test <id>` prints one run sheet.
 -- ---------------------------------------------------------------------------
-
---- The trap only matters if it changes behaviour, so the sheet follows it with two real attempts — one on
---- our own button, one on Blizzard's own bag window — and this step reads what they left behind. It also
---- stops the log armed at step i, so anything the client refused lands in this bucket with its name.
-local function issue4TrapProbe()
-  combatState('state after the two pickup attempts that follow the trap')
-  HELPERS.log()
-end
-
-tests[4] = {
-  issue = 4,
-  what = 'a state read on either side of each action attempted during lockdown, the GetBagsShown trap ' ..
-    'run by us, and what that trap leaves a button interaction doing',
-  needs = 'out of combat at step a; our windows open with real items in them; a trainer or a mob you ' ..
-    'can pull on a character you do not mind dying on. issecure() reads false for anything triggered ' ..
-    'from a slash command, so the verdicts come from the lockdown, who is showing bags, and the ' ..
-    'blocked-action log this sheet arms at step b and stops at step k. `/console` is ConsoleExec on this ' ..
-    'client — a cvar command that opens no window — so Blizzard\'s own view is `/eventtrace`. Steps j and ' ..
-    'k taint Blizzard bag code on purpose and are last for that reason.',
-  steps = {
-    { text = 'setup: baseline out of combat', run = issue4Baseline },
-    { text = 'capture: arm the event log — it records ADDON_ACTION_BLOCKED / ADDON_ACTION_FORBIDDEN with ' ..
-      'the function name each one names', run = HELPERS.log },
-    { text = 'pull a mob or attack a trainer, and stay in combat' },
-    { text = 'capture: in-combat state', run = issue4Combat },
-    { text = 'while still in combat: /bos hide, then /bos show' },
-    { text = 'capture: state after the open/close attempt', run = issue4AfterToggle },
-    { text = 'while still in combat: pick an item up off one of our buttons and drop it into ' ..
-      'another of our slots' },
-    { text = 'capture: state after the button pickup attempt', run = issue4AfterPickup },
-    { text = 'while still in combat: press your own bound key **once** — the windows are open from the '
-      .. 'step above, so one press closing them is the reading' },
-    { text = 'capture: state after our own key', run = issue4AfterKey },
-    { text = 'while still in combat: press CTRL-B (the client\'s own open-all-bags) and watch ' ..
-      'whether Blizzard\'s bag window appears' },
-    { text = 'capture: state after CTRL-B', run = issue4AfterCtrlB },
-    { text = 'type /eventtrace, Blizzard\'s own blocked-action window, and copy anything it shows there ' ..
-      'into issue #4. There is no /events on this client' },
-    { text = 'leave combat, wait for the regen flap, pull again, /reload while still in combat, ' ..
-      'then wait for regen and run /bos test 4h' },
-    { text = 'capture: post-combat state, both button pools, the client bag window\'s own buttons',
-      run = issue4PostCombat },
-    { text = 'capture: arm the log again — the reload killed the first one', run = HELPERS.log },
-    { text = 'capture: the deliberate GetBagsShown trap, state before and after', run = issue4Trap },
-    { text = 'out of combat: pick an item up off one of our buttons and drop it back where it came from' },
-    { text = 'then press CTRL-B and pick an item up off Blizzard\'s own bag window, dropping it back ' ..
-      'where it came from' },
-    { text = 'capture: state after both pickup attempts, and stop the log', run = issue4TrapProbe },
-  },
-}
 
 local function letterOf(n) return string.char(96 + n) end
 

@@ -508,26 +508,23 @@ check('the slash dispatcher reaches the same step', captured, 3)
 -- The pending sheets are what a human follows in game. A step whose run function is a typo or a nil
 -- reads as a manual step instead and quietly loses its capture, so every line that promises a
 -- capture has to carry its own command letter.
-local pending = {}
-for _, t in ipairs(diag.Tests()) do pending[t.id] = true end
-for _, id in ipairs({ 4 }) do
-  check('test ' .. id .. ' is pending', pending[id] and true or nil, true)
-end
-for _, id in ipairs({ 4 }) do
+-- Between rounds the pending list is empty, so this walks whatever is registered — the fixture above
+-- included — rather than naming issue numbers.
+for _, t in ipairs(diag.Tests()) do
   local lines = {}
   _G.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
-  diag.Test(id)
+  diag.Test(t.id)
   _G.print = realPrint
   local captures = 0
   for _, line in ipairs(lines) do
     -- numbered step lines only: the pre-conditions line of a sheet can say anything
     if line:match('^%d+%. .*capture') then
-      check('test ' .. id .. ' promises a real captured step: ' .. line,
-        line:match('/bos test ' .. id .. '%a') and true or nil, true)
+      check('test ' .. t.id .. ' promises a real captured step: ' .. line,
+        line:match('/bos test ' .. t.id .. '%a') and true or nil, true)
       captures = captures + 1
     end
   end
-  check('test ' .. id .. ' has captured steps', captures > 0, true)
+  check('test ' .. t.id .. ' has captured steps', captures > 0, true)
 end
 
 -- The keybind mirror (issue #13): the client writes our action to bindings-cache.wtf and it

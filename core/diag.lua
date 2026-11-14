@@ -934,4 +934,66 @@ function diag.Command(rest)
     .. 'freeslots · portrait · subclasses · owners · bags')
 end
 
+-- /bos test 72: in-memory item cache timing (issue #72)
+local cacheStats = {}
+diag.Add(72, {
+  issue = 72,
+  what = 'in-memory item cache timing',
+  needs = 'login with items in bags; run step a on cold login, step b after play, step c after /reload',
+  steps = {
+    { text = 'cold login: measure time to first quality/ilvl/expansion sort', run = function()
+      local started = GetTime()
+      local enrich = addon:GetModule('Enrich')
+      local harvest = addon:GetModule('Harvest')
+      local itemcache = addon:GetModule('ItemCache')
+      local items = harvest.Items()
+      local withQuality = 0
+      for _, item in ipairs(items) do
+        local enriched = enrich.Enrich({ itemID = item.itemID })
+        if enriched.quality then withQuality = withQuality + 1 end
+      end
+      local ms = (GetTime() - started) * 1000
+      cacheStats.coldLoginMs = ms
+      cacheStats.coldLoginItems = #items
+      cacheStats.coldLoginWithQuality = withQuality
+      cacheStats.cacheSize = itemcache.Count()
+      record(string.format('cold login: %.2fms enrich %d items, %d with quality, cache=%d',
+        ms, #items, withQuality, itemcache.Count()))
+    end },
+    { text = 'after play: measure cache hit rate and tier-3 requests', run = function()
+      local enrich = addon:GetModule('Enrich')
+      local itemcache = addon:GetModule('ItemCache')
+      local memBefore = collectgarbage('count')
+      local stats = enrich.Stats()
+      local memAfter = collectgarbage('count')
+      cacheStats.playMemKb = memAfter
+      cacheStats.playStats = stats
+      record(string.format('after play: mem=%.1f KB, %s', memAfter, stats))
+    end },
+    { text = '/reload: measure re-population time', run = function()
+      local started = GetTime()
+      local enrich = addon:GetModule('Enrich')
+      local harvest = addon:GetModule('Harvest')
+      local itemcache = addon:GetModule('ItemCache')
+      local items = harvest.Items()
+      local withQuality = 0
+      for _, item in ipairs(items) do
+        local enriched = enrich.Enrich({ itemID = item.itemID })
+        if enriched.quality then withQuality = withQuality + 1 end
+      end
+      local ms = (GetTime() - started) * 1000
+      cacheStats.reloadMs = ms
+      cacheStats.reloadItems = #items
+      cacheStats.reloadWithQuality = withQuality
+      cacheStats.reloadCacheSize = itemcache.Count()
+      record(string.format('reload: %.2fms enrich %d items, %d with quality, cache=%d',
+        ms, #items, withQuality, itemcache.Count()))
+      -- Summary comparison
+      record(string.format('SUMMARY: cold=%.2fms reload=%.2fms cache_cold=%d cache_reload=%d',
+        cacheStats.coldLoginMs or -1, cacheStats.reloadMs or -1,
+        cacheStats.cacheSize or -1, cacheStats.reloadCacheSize or -1))
+    end },
+  },
+})
+
 return diag

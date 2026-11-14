@@ -67,6 +67,8 @@ function init.Start()
   -- copy only when the client holds none (issue #13).
   keybinds.Restore()
   harvest.Discover()
+  -- Prime the in-memory item cache with items currently in bags (issue #72).
+  addon:GetModule('ItemCache').PrimeFromInventory(harvest.Items())
   -- Pre-warm the button pool from the real inventory so a combat loot event does not have to
   -- create a secure button (agents.md hard rule 3).
   itemFrames.Warm(math.min(200, #harvest.Items() + 20))

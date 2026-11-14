@@ -510,6 +510,15 @@ function db.ItemCache()
   return db.sv.itemCache
 end
 
+--- One-time handoff: returns the persisted cache table and clears the SV reference so
+--- the 230 KB can be GC'd. Called by ItemCache module on first load.
+---@return table<number, any>
+function db.DetachItemCache()
+  local cache = db.sv.itemCache
+  db.sv.itemCache = nil
+  return cache
+end
+
 --- Open or close every window. A closed window is out of the model, so no refresh reopens it;
 --- the window's own X writes the same `hidden` flag (FR-41).
 ---@param open boolean

@@ -261,17 +261,19 @@ function editModals.OpenWindowEdit(windowConfig)
   end)
 end
 
---- Open the category editor dialog (issue #71). Lists every enabled, non-__catchall category and
---- lets the player edit each manual category's itemIDs. Edits commit immediately and repaint the
---- bags. db must not require Pipeline (circular require risk), so the refresh reason is passed in
---- from here, the same way OpenSectionEdit passes 'section-edit'.
+--- Open the category editor dialog (issue #71). HUD Edit Mode style: a translucent dialog that
+--- lists every enabled, non-__catchall category in a grid. Each row is one category:
+--- rule-based (dynamic) categories show a read-only label; manual categories list their item IDs
+--- horizontally, each with a remove button, plus an inline Add input. Edits commit immediately
+--- and repaint the bags. db must not require Pipeline (circular require risk), so the refresh
+--- reason is passed in from here, the same way OpenSectionEdit passes 'section-edit'.
 function editModals.OpenCategoryEditor()
   if categoryEditorFrame then
     categoryEditorFrame:Hide()
   end
 
-  categoryEditorFrame = CreateFrame('Frame', 'BagsOfSortingCategoryEditor', UIParent, 'BasicFrameTemplateWithInset')
-  categoryEditorFrame:SetSize(440, 520)
+  categoryEditorFrame = CreateFrame('Frame', 'BagsOfSortingCategoryEditor', UIParent, 'DialogBorderTranslucentTemplate')
+  categoryEditorFrame:SetSize(760, 560)
   categoryEditorFrame:SetPoint('CENTER')
   categoryEditorFrame:SetFrameStrata('DIALOG')
   categoryEditorFrame:SetMovable(true)
@@ -279,137 +281,185 @@ function editModals.OpenCategoryEditor()
   categoryEditorFrame:RegisterForDrag('LeftButton')
   categoryEditorFrame:SetScript('OnDragStart', categoryEditorFrame.StartMoving)
   categoryEditorFrame:SetScript('OnDragStop', categoryEditorFrame.StopMovingOrSizing)
-  categoryEditorFrame.TitleText:SetText('Edit Categories')
+
+  local title = categoryEditorFrame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightLarge')
+  title:SetPoint('TOP', 0, -13)
+  title:SetText('Edit Categories')
+
+  local closeBtn = CreateFrame('Button', nil, categoryEditorFrame, 'UIPanelCloseButton')
+  closeBtn:SetPoint('TOPRIGHT', -6, 6)
+
+  local scrollFrame = CreateFrame('ScrollFrame', nil, categoryEditorFrame, 'UIPanelScrollFrameTemplate')
+  scrollFrame:SetPoint('TOPLEFT', 18, -44)
+  scrollFrame:SetPoint('BOTTOMRIGHT', -18, 76)
+
+  local scrollChild = CreateFrame('Frame', nil, scrollFrame)
+  scrollChild:SetSize(710, 1)
+  scrollFrame:SetScrollChild(scrollChild)
 
   local cats = db.Categories()
   local categoryList = getCategoryList()
-  local selected = categoryList[1]
-  local refreshList
+  local rows = {}  -- categoryName -> row frame
 
-  -- Category selector: which category's itemIDs are shown and edited below
-  local catLabel = categoryEditorFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-  catLabel:SetPoint('TOPLEFT', 15, -35)
-  catLabel:SetText('Category:')
+  local rowHeight = 34
+  local nameWidth = 170
+  local idGap = 10
 
-  local catDropdown = CreateFrame('Frame', 'BagsOfSortingCategoryEditorCatDropdown', categoryEditorFrame, 'UIDropDownMenuTemplate')
-  catDropdown:SetPoint('TOPLEFT', catLabel, 'BOTTOMLEFT', -15, -5)
-  UIDropDownMenu_SetWidth(catDropdown, 300)
-  UIDropDownMenu_SetSelectedValue(catDropdown, selected)
-  UIDropDownMenu_Initialize(catDropdown, function(self, level)
-    for _, name in ipairs(categoryList) do
-      local info = UIDropDownMenu_CreateInfo()
-      info.text = name
-      info.value = name
-      info.func = function(btn)
-        selected = btn.value
-        UIDropDownMenu_SetSelectedValue(catDropdown, selected)
-        refreshList()
+  --- Build / refresh every category row. Reuses row frames so repeated refreshes do not leak frames.
+  local function refresh()
+    local y = -8
+    for _, catName in ipairs(categoryList) do
+      local cat = cats[catName]
+      local isManual = cat.kind == 'manual'
+
+      local row = rows[catName]
+      if not row then
+        row = CreateFrame('Frame', nil, scrollChild)
+        row:SetSize(710, rowHeight)
+        rows[catName] = row
       end
-      info.checked = (name == selected)
-      UIDropDownMenu_AddButton(info, level)
-    end
-  end)
+      row:ClearAllPoints()
+      row:SetPoint('TOPLEFT', 0, y)
+      row:Show()
 
-  -- Scrollable list of the selected category's item IDs, each with a Remove button
-  local listLabel = categoryEditorFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-  listLabel:SetPoint('TOPLEFT', catDropdown, 'BOTTOMLEFT', 15, -12)
-  listLabel:SetText('Item IDs:')
-
-  local listContainer = CreateFrame('Frame', nil, categoryEditorFrame)
-  listContainer:SetSize(400, 220)
-  listContainer:SetPoint('TOPLEFT', listLabel, 'BOTTOMLEFT', 0, -5)
-
-  local scrollFrame = CreateFrame('ScrollFrame', nil, listContainer, 'UIPanelScrollFrameTemplate')
-  scrollFrame:SetAllPoints(listContainer)
-
-  local scrollChild = CreateFrame('Frame', nil, scrollFrame)
-  scrollChild:SetSize(380, 1)
-  scrollFrame:SetScrollChild(scrollChild)
-
-  local rows = {}
-
-  refreshList = function()
-    for _, r in ipairs(rows) do
-      r.id:Hide()
-      if r.remove then r.remove:Hide() end
-    end
-    local cat = cats[selected]
-    local ids = {}
-    if cat and cat.itemIDs then
-      for id in pairs(cat.itemIDs) do ids[#ids + 1] = id end
-    end
-    table.sort(ids)
-    local n = #ids
-    if n == 0 then n = 1 end
-    for i = 1, n do
-      local r = rows[i]
-      if not r then
-        local idText = scrollChild:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-        idText:SetPoint('TOPLEFT', 10, -(i - 1) * 20)
-        local remove = CreateFrame('Button', nil, scrollChild, 'UIPanelButtonTemplate')
-        remove:SetSize(70, 18)
-        remove:SetPoint('TOPLEFT', 110, -(i - 1) * 20 - 2)
-        remove:SetText('Remove')
-        remove:Hide()
-        r = { id = idText, remove = remove }
-        rows[i] = r
+      -- Category name label (created once per row)
+      if not row.nameLabel then
+        row.nameLabel = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+        row.nameLabel:SetWidth(nameWidth)
+        row.nameLabel:SetJustifyH('LEFT')
+        row.nameLabel:SetPoint('TOPLEFT', 8, -7)
       end
-      r.id:Show()
-      if #ids == 0 then
-        r.id:SetText('(none)')
-        r.remove:Hide()
+      row.nameLabel:SetText(catName)
+
+      -- Clear per-row dynamic children (id entries + add controls), keeping the name label
+      for _, entry in ipairs(row.idEntries or {}) do
+        entry.label:Hide()
+        entry.remove:Hide()
+      end
+      if row.addEdit then row.addEdit:Hide() end
+      if row.addBtn then row.addBtn:Hide() end
+      if row.statusLabel then row.statusLabel:Hide() end
+
+      local x = 8 + nameWidth + 14
+
+      if not isManual then
+        -- Rule-based / dynamic category: read-only label
+        if not row.statusLabel then
+          row.statusLabel = row:CreateFontString(nil, 'OVERLAY', 'GameFontDisable')
+          row.statusLabel:SetPoint('TOPLEFT', x, -7)
+        end
+        row.statusLabel:SetText('(rule-based — read-only)')
+        row.statusLabel:Show()
       else
-        local id = ids[i]
-        r.remove.itemID = id
-        r.id:SetText(tostring(id))
-        r.remove:SetScript('OnClick', function(self)
-          db.RemoveItemFromCategory(selected, self.itemID)
+        -- Manual category: list item IDs horizontally, each with a remove button
+        local idEntries = row.idEntries or {}
+        row.idEntries = idEntries
+        local ids = {}
+        if cat.itemIDs then
+          for id in pairs(cat.itemIDs) do ids[#ids + 1] = id end
+        end
+        table.sort(ids)
+
+        for i, id in ipairs(ids) do
+          local entry = idEntries[i]
+          if not entry then
+            local label = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+            label:SetWidth(44)
+            label:SetJustifyH('RIGHT')
+            local remove = CreateFrame('Button', nil, row, 'UIPanelButtonTemplate')
+            remove:SetSize(20, 18)
+            remove:SetText('×')
+            entry = { label = label, remove = remove }
+            idEntries[i] = entry
+          end
+          entry.label:SetText(tostring(id))
+          entry.label:ClearAllPoints()
+          entry.label:SetPoint('TOPLEFT', x, -6)
+          entry.label:Show()
+          entry.remove:ClearAllPoints()
+          entry.remove:SetPoint('TOPLEFT', x + 48, -5)
+          entry.remove.id = id
+          entry.remove:SetScript('OnClick', function(self)
+            db.RemoveItemFromCategory(catName, self.id)
+            pipeline.Refresh('category-editor')
+            refresh()
+          end)
+          entry.remove:Show()
+          x = x + 48 + 20 + idGap
+        end
+
+        if #ids == 0 then
+          if not row.emptyLabel then
+            row.emptyLabel = row:CreateFontString(nil, 'OVERLAY', 'GameFontDisable')
+            row.emptyLabel:SetText('(none)')
+            row.emptyLabel:SetPoint('TOPLEFT', x, -7)
+          end
+          row.emptyLabel:Show()
+          x = x + 50
+        elseif row.emptyLabel then
+          row.emptyLabel:Hide()
+        end
+
+        -- Inline Add input + Add button
+        if not row.addEdit then
+          row.addEdit = CreateFrame('EditBox', nil, row, 'InputBoxTemplate')
+          row.addEdit:SetSize(80, 22)
+          row.addEdit:SetAutoFocus(false)
+          row.addEdit:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
+        end
+        row.addEdit:ClearAllPoints()
+        row.addEdit:SetPoint('TOPLEFT', x, -6)
+        row.addEdit:SetText('')
+        row.addEdit:Show()
+
+        if not row.addBtn then
+          row.addBtn = CreateFrame('Button', nil, row, 'UIPanelButtonTemplate')
+          row.addBtn:SetSize(54, 22)
+          row.addBtn:SetText('Add')
+        end
+        row.addBtn:ClearAllPoints()
+        row.addBtn:SetPoint('TOPLEFT', x + 86, -5)
+        row.addBtn:SetScript('OnClick', function()
+          local text = row.addEdit:GetText():trim()
+          local num = tonumber(text)
+          if not num or num <= 0 then
+            print('|cff00ff00BagsOfSorting|r: Item ID must be a number')
+            return
+          end
+          if not db.AddItemToCategory(catName, num) then
+            print('|cff00ff00BagsOfSorting|r: Cannot add to ' .. catName .. ' (rule-based categories cannot be edited here)')
+            return
+          end
           pipeline.Refresh('category-editor')
-          refreshList()
+          refresh()
+          row.addEdit:SetText('')
         end)
-        r.remove:Show()
+        row.addBtn:Show()
       end
+
+      y = y - rowHeight
     end
-    scrollChild:SetHeight(math.max(#ids, 1) * 20 + 10)
+
+    -- Hide any leftover rows (categories removed)
+    for _, row in pairs(rows) do
+      local shown = false
+      for _, catName in ipairs(categoryList) do
+        if rows[catName] == row then shown = true break end
+      end
+      if not shown then row:Hide() end
+    end
+
+    scrollChild:SetHeight(math.max(#categoryList * rowHeight + 16, 1))
   end
 
-  -- Item ID input + Add: appends to the selected manual category
-  local addLabel = categoryEditorFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-  addLabel:SetPoint('TOPLEFT', listContainer, 'BOTTOMLEFT', 0, -12)
-  addLabel:SetText('Item ID:')
-
-  local idEdit = CreateFrame('EditBox', nil, categoryEditorFrame, 'InputBoxTemplate')
-  idEdit:SetSize(120, 25)
-  idEdit:SetPoint('TOPLEFT', addLabel, 'BOTTOMLEFT', 0, -5)
-  idEdit:SetAutoFocus(false)
-  idEdit:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
-
-  local addBtn = CreateFrame('Button', nil, categoryEditorFrame, 'UIPanelButtonTemplate')
-  addBtn:SetSize(70, 25)
-  addBtn:SetPoint('LEFT', idEdit, 'RIGHT', 10, 0)
-  addBtn:SetText('Add')
-  addBtn:SetScript('OnClick', function()
-    local text = idEdit:GetText():trim()
-    local num = tonumber(text)
-    if not num or num <= 0 then
-      print('|cff00ff00BagsOfSorting|r: Item ID must be a number')
-      return
-    end
-    if not db.AddItemToCategory(selected, num) then
-      print('|cff00ff00BagsOfSorting|r: Cannot add to ' .. tostring(selected) .. ' (rule-based categories cannot be edited here)')
-      return
-    end
-    pipeline.Refresh('category-editor')
-    refreshList()
-    idEdit:SetText('')
-  end)
+  refresh()
 
   -- Close: hides the dialog. Edits commit immediately, there is no Cancel.
-  local closeBtn = CreateFrame('Button', nil, categoryEditorFrame, 'UIPanelButtonTemplate')
-  closeBtn:SetSize(100, 25)
-  closeBtn:SetPoint('BOTTOMRIGHT', -15, 15)
-  closeBtn:SetText('Close')
-  closeBtn:SetScript('OnClick', function()
+  local doneBtn = CreateFrame('Button', nil, categoryEditorFrame, 'UIPanelButtonTemplate')
+  doneBtn:SetSize(100, 26)
+  doneBtn:SetPoint('BOTTOMRIGHT', -16, 16)
+  doneBtn:SetText('Close')
+  doneBtn:SetScript('OnClick', function()
     categoryEditorFrame:Hide()
   end)
 end

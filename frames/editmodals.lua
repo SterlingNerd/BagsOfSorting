@@ -12,6 +12,8 @@ local pipeline = addon:GetModule('Pipeline')
 local sectionEditFrame
 ---@type Frame?
 local windowEditFrame
+---@type Frame?
+local categoryEditorFrame
 
 -- Categories available for multi-select (populated dynamically)
 local function getCategoryList()
@@ -256,6 +258,159 @@ function editModals.OpenWindowEdit(windowConfig)
     db.NotifyModelChanged()
     pipeline.Refresh('window-edit')
     windowEditFrame:Hide()
+  end)
+end
+
+--- Open the category editor dialog (issue #71). Lists every enabled, non-__catchall category and
+--- lets the player edit each manual category's itemIDs. Edits commit immediately and repaint the
+--- bags. db must not require Pipeline (circular require risk), so the refresh reason is passed in
+--- from here, the same way OpenSectionEdit passes 'section-edit'.
+function editModals.OpenCategoryEditor()
+  if categoryEditorFrame then
+    categoryEditorFrame:Hide()
+  end
+
+  categoryEditorFrame = CreateFrame('Frame', 'BagsOfSortingCategoryEditor', UIParent, 'BasicFrameTemplateWithInset')
+  categoryEditorFrame:SetSize(440, 520)
+  categoryEditorFrame:SetPoint('CENTER')
+  categoryEditorFrame:SetFrameStrata('DIALOG')
+  categoryEditorFrame:SetMovable(true)
+  categoryEditorFrame:EnableMouse(true)
+  categoryEditorFrame:RegisterForDrag('LeftButton')
+  categoryEditorFrame:SetScript('OnDragStart', categoryEditorFrame.StartMoving)
+  categoryEditorFrame:SetScript('OnDragStop', categoryEditorFrame.StopMovingOrSizing)
+  categoryEditorFrame.TitleText:SetText('Edit Categories')
+
+  local cats = db.Categories()
+  local categoryList = getCategoryList()
+  local selected = categoryList[1]
+  local refreshList
+
+  -- Category selector: which category's itemIDs are shown and edited below
+  local catLabel = categoryEditorFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+  catLabel:SetPoint('TOPLEFT', 15, -35)
+  catLabel:SetText('Category:')
+
+  local catDropdown = CreateFrame('Frame', 'BagsOfSortingCategoryEditorCatDropdown', categoryEditorFrame, 'UIDropDownMenuTemplate')
+  catDropdown:SetPoint('TOPLEFT', catLabel, 'BOTTOMLEFT', -15, -5)
+  UIDropDownMenu_SetWidth(catDropdown, 300)
+  UIDropDownMenu_SetSelectedValue(catDropdown, selected)
+  UIDropDownMenu_Initialize(catDropdown, function(self, level)
+    for _, name in ipairs(categoryList) do
+      local info = UIDropDownMenu_CreateInfo()
+      info.text = name
+      info.value = name
+      info.func = function(btn)
+        selected = btn.value
+        UIDropDownMenu_SetSelectedValue(catDropdown, selected)
+        refreshList()
+      end
+      info.checked = (name == selected)
+      UIDropDownMenu_AddButton(info, level)
+    end
+  end)
+
+  -- Scrollable list of the selected category's item IDs, each with a Remove button
+  local listLabel = categoryEditorFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+  listLabel:SetPoint('TOPLEFT', catDropdown, 'BOTTOMLEFT', 15, -12)
+  listLabel:SetText('Item IDs:')
+
+  local listContainer = CreateFrame('Frame', nil, categoryEditorFrame)
+  listContainer:SetSize(400, 220)
+  listContainer:SetPoint('TOPLEFT', listLabel, 'BOTTOMLEFT', 0, -5)
+
+  local scrollFrame = CreateFrame('ScrollFrame', nil, listContainer, 'UIPanelScrollFrameTemplate')
+  scrollFrame:SetAllPoints(listContainer)
+
+  local scrollChild = CreateFrame('Frame', nil, scrollFrame)
+  scrollChild:SetSize(380, 1)
+  scrollFrame:SetScrollChild(scrollChild)
+
+  local rows = {}
+
+  refreshList = function()
+    for _, r in ipairs(rows) do
+      r.id:Hide()
+      if r.remove then r.remove:Hide() end
+    end
+    local cat = cats[selected]
+    local ids = {}
+    if cat and cat.itemIDs then
+      for id in pairs(cat.itemIDs) do ids[#ids + 1] = id end
+    end
+    table.sort(ids)
+    local n = #ids
+    if n == 0 then n = 1 end
+    for i = 1, n do
+      local r = rows[i]
+      if not r then
+        local idText = scrollChild:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+        idText:SetPoint('TOPLEFT', 10, -(i - 1) * 20)
+        local remove = CreateFrame('Button', nil, scrollChild, 'UIPanelButtonTemplate')
+        remove:SetSize(70, 18)
+        remove:SetPoint('TOPLEFT', 110, -(i - 1) * 20 - 2)
+        remove:SetText('Remove')
+        remove:Hide()
+        r = { id = idText, remove = remove }
+        rows[i] = r
+      end
+      r.id:Show()
+      if #ids == 0 then
+        r.id:SetText('(none)')
+        r.remove:Hide()
+      else
+        local id = ids[i]
+        r.remove.itemID = id
+        r.id:SetText(tostring(id))
+        r.remove:SetScript('OnClick', function(self)
+          db.RemoveItemFromCategory(selected, self.itemID)
+          pipeline.Refresh('category-editor')
+          refreshList()
+        end)
+        r.remove:Show()
+      end
+    end
+    scrollChild:SetHeight(math.max(#ids, 1) * 20 + 10)
+  end
+
+  -- Item ID input + Add: appends to the selected manual category
+  local addLabel = categoryEditorFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+  addLabel:SetPoint('TOPLEFT', listContainer, 'BOTTOMLEFT', 0, -12)
+  addLabel:SetText('Item ID:')
+
+  local idEdit = CreateFrame('EditBox', nil, categoryEditorFrame, 'InputBoxTemplate')
+  idEdit:SetSize(120, 25)
+  idEdit:SetPoint('TOPLEFT', addLabel, 'BOTTOMLEFT', 0, -5)
+  idEdit:SetAutoFocus(false)
+  idEdit:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
+
+  local addBtn = CreateFrame('Button', nil, categoryEditorFrame, 'UIPanelButtonTemplate')
+  addBtn:SetSize(70, 25)
+  addBtn:SetPoint('LEFT', idEdit, 'RIGHT', 10, 0)
+  addBtn:SetText('Add')
+  addBtn:SetScript('OnClick', function()
+    local text = idEdit:GetText():trim()
+    local num = tonumber(text)
+    if not num or num <= 0 then
+      print('|cff00ff00BagsOfSorting|r: Item ID must be a number')
+      return
+    end
+    if not db.AddItemToCategory(selected, num) then
+      print('|cff00ff00BagsOfSorting|r: Cannot add to ' .. tostring(selected) .. ' (rule-based categories cannot be edited here)')
+      return
+    end
+    pipeline.Refresh('category-editor')
+    refreshList()
+    idEdit:SetText('')
+  end)
+
+  -- Close: hides the dialog. Edits commit immediately, there is no Cancel.
+  local closeBtn = CreateFrame('Button', nil, categoryEditorFrame, 'UIPanelButtonTemplate')
+  closeBtn:SetSize(100, 25)
+  closeBtn:SetPoint('BOTTOMRIGHT', -15, 15)
+  closeBtn:SetText('Close')
+  closeBtn:SetScript('OnClick', function()
+    categoryEditorFrame:Hide()
   end)
 end
 

@@ -597,6 +597,36 @@ function db.SetCategoryEnabled(name, enabled)
   return true
 end
 
+--- Add a manual item ID to a category (issue #71). Refuses rule-based categories and IDs the
+--- category already owns. Commits immediately via NotifyModelChanged; the caller triggers the
+--- repaint with pipeline.Refresh (db must not require Pipeline -- circular require risk).
+---@param name string
+---@param itemID integer
+---@return boolean added
+function db.AddItemToCategory(name, itemID)
+  local cat = db.Categories()[name]
+  if not cat or cat.kind ~= 'manual' then return false end
+  cat.itemIDs = cat.itemIDs or {}
+  if cat.itemIDs[itemID] then return false end
+  cat.itemIDs[itemID] = true
+  db.NotifyModelChanged()
+  return true
+end
+
+--- Remove a manual item ID from a category (issue #71). Refuses rule-based categories and IDs
+--- the category does not own. Commits immediately via NotifyModelChanged.
+---@param name string
+---@param itemID integer
+---@return boolean removed
+function db.RemoveItemFromCategory(name, itemID)
+  local cat = db.Categories()[name]
+  if not cat or cat.kind ~= 'manual' or not cat.itemIDs then return false end
+  if not cat.itemIDs[itemID] then return false end
+  cat.itemIDs[itemID] = nil
+  db.NotifyModelChanged()
+  return true
+end
+
 --- A dragged window keeps its saved point, and that point is the only thing that overrides the
 --- layout rule (FR-41). The placement tests need the default placement, so this hands the windows
 --- back to it. It clears nothing else: `hidden`, sections and scale stay as they are.

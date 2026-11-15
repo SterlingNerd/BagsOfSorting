@@ -268,12 +268,13 @@ end
 --- and repaint the bags. db must not require Pipeline (circular require risk), so the refresh
 --- reason is passed in from here, the same way OpenSectionEdit passes 'section-edit'.
 function editModals.OpenCategoryEditor()
+  print('|cff00ff00BagsOfSorting|r: category editor opening')
   if categoryEditorFrame then
     categoryEditorFrame:Hide()
   end
 
   local sw, sh = GetScreenWidth(), GetScreenHeight()
-  local width, height = math.floor(sw * 0.75), math.floor(sh * 0.75)
+  local width, height = math.floor(sw * 0.5), math.floor(sh * 0.5)
 
   categoryEditorFrame = CreateFrame('Frame', 'BagsOfSortingCategoryEditor', UIParent, 'BasicFrameTemplateWithInset')
   categoryEditorFrame:SetSize(width, height)
@@ -299,6 +300,7 @@ function editModals.OpenCategoryEditor()
 
   local cats = db.Categories()
   local categoryList = getCategoryList()
+  print(string.format('|cff00ff00BagsOfSorting|r: category editor: %d categories, dialog %dx%d', #categoryList, width, height))
   local rows = {}  -- categoryName -> row frame
 
   local nameWidth = 170
@@ -322,12 +324,15 @@ function editModals.OpenCategoryEditor()
 
   --- Build / refresh every category row. Reuses row frames so repeated refreshes do not leak frames.
   local function refresh()
+    print(string.format('|cff00ff00BagsOfSorting|r: category editor refresh: %d categories', #categoryList))
     local y = -8
     local scrollW = scrollChild:GetWidth()
     local maxRight = scrollW - 14
+    print(string.format('|cff00ff00BagsOfSorting|r: scrollW=%d maxRight=%d idStartX=%d', scrollW, maxRight, idStartX))
     for _, catName in ipairs(categoryList) do
       local cat = cats[catName]
       local isManual = cat.kind == 'manual'
+      local idCount = cat.itemIDs and #(function() local t={} for k in pairs(cat.itemIDs) do t[#t+1]=k end return t end)() or 0
 
       local row = rows[catName]
       if not row then
@@ -474,6 +479,7 @@ function editModals.OpenCategoryEditor()
       end
 
       y = y - (rowBottom + 6 + rowGap)
+      print(string.format('|cff00ff00BagsOfSorting|r: row %s manual=%s ids=%d bottom=%d y=%d', catName, tostring(isManual), idCount, rowBottom, y))
     end
 
     -- Hide any leftover rows (categories removed)
@@ -487,6 +493,7 @@ function editModals.OpenCategoryEditor()
 
     scrollChild:SetHeight(math.max(-y + 10, 1))
     scrollChild:SetWidth(width - 36)
+    print(string.format('|cff00ff00BagsOfSorting|r: scrollChild height=%d', math.max(-y + 10, 1)))
   end
 
   refresh()

@@ -396,6 +396,14 @@ function ShowWindowMenu(anchor, windowConfig)
         db.SetClearNewOnClose(not db.Settings().display.clearNewOnClose)
       end,
     },
+    {
+      text = 'Show Empty Sections',
+      value = 'show_empty_sections',
+      checked = function() return db.Settings().display.showEmptySections end,
+      func = function()
+        db.SetShowEmptySections(not db.Settings().display.showEmptySections)
+      end,
+    },
     dropdown.Separator(),
     {
       text = 'Edit Window…',

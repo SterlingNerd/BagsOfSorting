@@ -201,7 +201,7 @@ function pipeline.Assign(placements)
           if isEquipmentWindow then
             showSection = #items > 0
           else
-            showSection = #items > 0 or free > 0 or hasEmptyCategory
+            showSection = #items > 0 or free > 0 or hasEmptyCategory or db.Settings().display.showEmptySections
           end
           if showSection then
             local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = items, collapsed = sectionConfig.collapsed or false }

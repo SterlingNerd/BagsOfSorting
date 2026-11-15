@@ -31,7 +31,7 @@ local DEFAULT_SETTINGS = {
   stacking = { showStacks = 'merged' },
   -- FR-47 / issue #39: closing the bags is what clears new-ness, which is what empties the New
   -- section. false leaves the hover as the only thing that takes an item out of it.
-  display = { clearNewOnClose = true },
+  display = { clearNewOnClose = true, showEmptySections = false },
   debug = false,
 }
 
@@ -698,6 +698,17 @@ function db.SetClearNewOnClose(enabled)
   -- from the mode that was clearing on close would otherwise list items the player already hovered
   -- away (docs/08).
   if not enabled then addon:GetModule('Harvest').ClearNewItemSession() end
+  db.NotifyModelChanged()
+  return true
+end
+
+--- Show sections that hold nothing: header only, no cells under it.
+---@param enabled boolean
+---@return boolean changed
+function db.SetShowEmptySections(enabled)
+  local display = db.Settings().display
+  if display.showEmptySections == enabled then return false end
+  display.showEmptySections = enabled
   db.NotifyModelChanged()
   return true
 end

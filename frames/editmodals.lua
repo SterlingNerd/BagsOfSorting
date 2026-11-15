@@ -286,6 +286,7 @@ function editModals.OpenCategoryEditor()
   categoryEditorFrame:SetScript('OnDragStart', categoryEditorFrame.StartMoving)
   categoryEditorFrame:SetScript('OnDragStop', categoryEditorFrame.StopMovingOrSizing)
   categoryEditorFrame.TitleText:SetText('Edit Categories')
+  categoryEditorFrame:Show()
 
   local closeBtn = CreateFrame('Button', nil, categoryEditorFrame, 'UIPanelCloseButton')
   closeBtn:SetPoint('TOPRIGHT', -6, 6)

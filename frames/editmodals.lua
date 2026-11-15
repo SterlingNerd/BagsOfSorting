@@ -267,8 +267,12 @@ end
 --- horizontally, each with a remove button, plus an inline Add input. Edits commit immediately
 --- and repaint the bags. db must not require Pipeline (circular require risk), so the refresh
 --- reason is passed in from here, the same way OpenSectionEdit passes 'section-edit'.
+--- Open the category editor dialog (issue #71). Lists every enabled, non-__catchall category;
+--- rule-based categories are read-only, manual categories list their item IDs as clickable links
+--- (with remove buttons) plus an inline Add input placed last in the row. Edits commit immediately
+--- and repaint the bags. db must not require Pipeline (circular require risk), so the refresh
+--- reason is passed in from here, the same way OpenSectionEdit passes 'section-edit'.
 function editModals.OpenCategoryEditor()
-  print('|cff00ff00BagsOfSorting|r: category editor opening')
   if categoryEditorFrame then
     categoryEditorFrame:Hide()
   end
@@ -301,13 +305,12 @@ function editModals.OpenCategoryEditor()
 
   local cats = db.Categories()
   local categoryList = getCategoryList()
-  print(string.format('|cff00ff00BagsOfSorting|r: category editor: %d categories, dialog %dx%d', #categoryList, width, height))
   local rows = {}  -- categoryName -> row frame
 
   local nameWidth = 170
-  local rowGap = 10
+  local rowGap = 16
   local lineHeight = 22
-  local idGap = 10
+  local idGap = 6
   local idStartX = 8 + nameWidth + 14
 
   --- Resolve an itemID to a clickable item link, falling back to a raw link if uncached.
@@ -325,15 +328,12 @@ function editModals.OpenCategoryEditor()
 
   --- Build / refresh every category row. Reuses row frames so repeated refreshes do not leak frames.
   local function refresh()
-    print(string.format('|cff00ff00BagsOfSorting|r: category editor refresh: %d categories', #categoryList))
     local y = -8
     local scrollW = scrollChild:GetWidth()
     local maxRight = scrollW - 14
-    print(string.format('|cff00ff00BagsOfSorting|r: scrollW=%d maxRight=%d idStartX=%d', scrollW, maxRight, idStartX))
     for _, catName in ipairs(categoryList) do
       local cat = cats[catName]
       local isManual = cat.kind == 'manual'
-      local idCount = cat.itemIDs and #(function() local t={} for k in pairs(cat.itemIDs) do t[#t+1]=k end return t end)() or 0
 
       local row = rows[catName]
       if not row then
@@ -349,7 +349,7 @@ function editModals.OpenCategoryEditor()
         row.nameLabel = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
         row.nameLabel:SetWidth(nameWidth)
         row.nameLabel:SetJustifyH('LEFT')
-        row.nameLabel:SetPoint('TOPLEFT', 8, -6)
+        row.nameLabel:SetPoint('TOPLEFT', 8, -7)
       end
       row.nameLabel:SetText(catName)
 
@@ -362,19 +362,23 @@ function editModals.OpenCategoryEditor()
       if row.addBtn then row.addBtn:Hide() end
       if row.statusLabel then row.statusLabel:Hide() end
       if row.emptyLabel then row.emptyLabel:Hide() end
+      if row.divider then row.divider:Hide() end
 
-      local rowBottom = -6  -- lowest content edge in this row (relative to row top)
+      local x = idStartX
+      local lineY = -7
+      local rowBottom = -7
+
       if not isManual then
         -- Rule-based / dynamic category: read-only label
         if not row.statusLabel then
           row.statusLabel = row:CreateFontString(nil, 'OVERLAY', 'GameFontDisable')
         end
-        row.statusLabel:SetPoint('TOPLEFT', idStartX, -6)
+        row.statusLabel:SetPoint('TOPLEFT', x, -7)
         row.statusLabel:SetText('(rule-based — read-only)')
         row.statusLabel:Show()
-        rowBottom = -6 + lineHeight
+        rowBottom = -7 + lineHeight
       else
-        -- Manual category: list item IDs as links horizontally, wrapping when they run out of room
+        -- Manual category: list item IDs as clickable links horizontally, wrapping when needed
         local idEntries = row.idEntries or {}
         row.idEntries = idEntries
         local ids = {}
@@ -383,8 +387,6 @@ function editModals.OpenCategoryEditor()
         end
         table.sort(ids)
 
-        local x = idStartX
-        local lineY = -6
         for i, id in ipairs(ids) do
           local link = itemLinkFor(id)
           local labelW = textWidth(link)
@@ -398,8 +400,16 @@ function editModals.OpenCategoryEditor()
           if not entry then
             local label = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
             label:SetJustifyH('LEFT')
+            label:SetScript('OnEnter', function(self)
+              GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+              GameTooltip:SetItemByID(id)
+              GameTooltip:Show()
+            end)
+            label:SetScript('OnLeave', function(self)
+              GameTooltip:Hide()
+            end)
             local remove = CreateFrame('Button', nil, row, 'UIPanelButtonTemplate')
-            remove:SetSize(20, 18)
+            remove:SetSize(18, 16)
             remove:SetText('×')
             entry = { label = label, remove = remove }
             idEntries[i] = entry
@@ -410,7 +420,7 @@ function editModals.OpenCategoryEditor()
           entry.label:SetPoint('TOPLEFT', x, lineY - 2)
           entry.label:Show()
           entry.remove:ClearAllPoints()
-          entry.remove:SetPoint('TOPLEFT', x + labelW + 4, lineY - 2)
+          entry.remove:SetPoint('TOPLEFT', x + labelW + 3, lineY - 2)
           entry.remove.id = id
           entry.remove:SetScript('OnClick', function(self)
             db.RemoveItemFromCategory(catName, self.id)
@@ -419,7 +429,7 @@ function editModals.OpenCategoryEditor()
           end)
           entry.remove:Show()
           rowBottom = math.max(rowBottom, lineY + lineHeight)
-          x = x + labelW + 4 + 20 + idGap
+          x = x + labelW + 3 + 18 + idGap
         end
 
         if #ids == 0 then
@@ -428,39 +438,34 @@ function editModals.OpenCategoryEditor()
             row.emptyLabel:SetText('(none)')
           end
           row.emptyLabel:ClearAllPoints()
-          row.emptyLabel:SetPoint('TOPLEFT', x, -6)
+          row.emptyLabel:SetPoint('TOPLEFT', x, -7)
           row.emptyLabel:Show()
-          rowBottom = math.max(rowBottom, -6 + lineHeight)
+          rowBottom = math.max(rowBottom, -7 + lineHeight)
           x = x + 50
         elseif row.emptyLabel then
           row.emptyLabel:Hide()
         end
 
-        -- Inline Add input + Add button, placed after items on this line if room, else a new line
+        -- Add input + Add button, always last on its own line
         if not row.addEdit then
           row.addEdit = CreateFrame('EditBox', nil, row, 'InputBoxTemplate')
           row.addEdit:SetSize(80, 22)
           row.addEdit:SetAutoFocus(false)
           row.addEdit:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
         end
-        local addEditW, addBtnW = 80, 54
-        if x + addEditW + addBtnW + idGap > maxRight and x > idStartX then
-          x = idStartX
-          lineY = lineY + lineHeight
-        end
         row.addEdit:ClearAllPoints()
-        row.addEdit:SetPoint('TOPLEFT', x, lineY - 2)
+        row.addEdit:SetPoint('TOPLEFT', x, lineY)
         row.addEdit:SetText('')
         row.addEdit:Show()
-        rowBottom = math.max(rowBottom, lineY + lineHeight)
+        rowBottom = math.max(rowBottom, lineY + 26)
 
         if not row.addBtn then
           row.addBtn = CreateFrame('Button', nil, row, 'UIPanelButtonTemplate')
-          row.addBtn:SetSize(54, 22)
+          row.addBtn:SetSize(50, 22)
           row.addBtn:SetText('Add')
         end
         row.addBtn:ClearAllPoints()
-        row.addBtn:SetPoint('TOPLEFT', x + addEditW + 6, lineY - 2)
+        row.addBtn:SetPoint('TOPLEFT', x + 86, lineY - 2)
         row.addBtn:SetScript('OnClick', function()
           local text = row.addEdit:GetText():trim()
           local num = tonumber(text)
@@ -479,10 +484,21 @@ function editModals.OpenCategoryEditor()
         row.addBtn:Show()
       end
 
-      row:SetSize(scrollW - 30, math.max(rowBottom + 12, 24))
+      -- Divider line between categories
+      local dividerY = rowBottom + 6  -- content bottom + small gap
+      if not row.divider then
+        row.divider = row:CreateTexture(nil, 'ARTWORK')
+        row.divider:SetHeight(1)
+        row.divider:SetColorTexture(0.5, 0.5, 0.5, 0.3)
+      end
+      row.divider:ClearAllPoints()
+      row.divider:SetPoint('TOPLEFT', 8, dividerY)
+      row.divider:SetPoint('TOPRIGHT', -8, dividerY)
+      row.divider:Show()
 
-      y = y - (rowBottom + 6 + rowGap)
-      print(string.format('|cff00ff00BagsOfSorting|r: row %s manual=%s ids=%d bottom=%d y=%d', catName, tostring(isManual), idCount, rowBottom, y))
+      local rowHeight = math.max(dividerY + 1 + rowGap, 40)
+      row:SetSize(scrollW - 30, rowHeight)
+      y = y - rowHeight
     end
 
     -- Hide any leftover rows (categories removed)
@@ -497,7 +513,6 @@ function editModals.OpenCategoryEditor()
     scrollChild:SetHeight(math.max(-y + 10, 1))
     scrollChild:SetWidth(width - 36)
     scrollFrame:UpdateScrollChildRect()
-    print(string.format('|cff00ff00BagsOfSorting|r: scrollChild height=%d scrollFrame %dx%d range=%d', math.max(-y + 10, 1), scrollFrame:GetWidth(), scrollFrame:GetHeight(), scrollFrame:GetVerticalScrollRange()))
   end
 
   refresh()
@@ -511,6 +526,7 @@ function editModals.OpenCategoryEditor()
     categoryEditorFrame:Hide()
   end)
 end
+
 
 --- Add a new section below the given one.
 ---@param model BoSSectionModel

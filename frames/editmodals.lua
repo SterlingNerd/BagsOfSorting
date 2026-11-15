@@ -364,23 +364,26 @@ function editModals.OpenCategoryEditor()
       end
       row.nameLabel:SetText(catName)
 
-      -- Remove this whole category (X next to the name; __catchall is never listed)
-      if not row.removeCatBtn then
-        row.removeCatBtn = CreateFrame('Button', nil, row, 'UIPanelButtonTemplate')
-        row.removeCatBtn:SetSize(16, 16)
-        row.removeCatBtn:SetText('×')
+      -- Remove this whole category (X next to the name; manual categories only,
+      -- __catchall is never listed). Removing confirms via a popup so a misclick
+      -- cannot wipe a category and its items.
+      if isManual then
+        if not row.removeCatBtn then
+          row.removeCatBtn = CreateFrame('Button', nil, row, 'UIPanelButtonTemplate')
+          row.removeCatBtn:SetSize(16, 16)
+          row.removeCatBtn:SetText('×')
+        end
+        local nameW = row.nameLabel:GetStringWidth()
+        if nameW == 0 then nameW = textWidth(catName) end
+        row.removeCatBtn:ClearAllPoints()
+        row.removeCatBtn:SetPoint('TOPLEFT', 8 + nameW + 5, -6)
+        row.removeCatBtn:SetScript('OnClick', function(self)
+          StaticPopup_Show('BOS_CONFIRM_REMOVE_CATEGORY', catName)
+        end)
+        row.removeCatBtn:Show()
+      elseif row.removeCatBtn then
+        row.removeCatBtn:Hide()
       end
-      local nameW = row.nameLabel:GetStringWidth()
-      if nameW == 0 then nameW = textWidth(catName) end
-      row.removeCatBtn:ClearAllPoints()
-      row.removeCatBtn:SetPoint('TOPLEFT', 8 + nameW + 5, -6)
-      row.removeCatBtn:SetScript('OnClick', function(self)
-        if not db.RemoveCategory(catName) then return end
-        pipeline.Refresh('category-editor')
-        categoryList = getCategoryList()
-        refresh()
-      end)
-      row.removeCatBtn:Show()
 
       -- Clear per-row dynamic children (id entries + add controls), keeping the name label
       for _, entry in ipairs(row.idEntries or {}) do
@@ -431,9 +434,10 @@ function editModals.OpenCategoryEditor()
             idEntries[i] = entry
           end
           entry.label:SetText(link)
-          -- Measure the link's true rendered width, but never trust a single
-          -- estimator: GetStringWidth is exact for the loaded font, textWidth is a
-          -- floor estimate. max() guarantees we never under-estimate and collide.
+          -- Show before measuring: GetStringWidth returns 0 on a label still
+          -- hidden (we hid every entry in the clear loop above). textWidth is a
+          -- conservative floor if the font has not applied yet.
+          entry.label:Show()
           local measuredW = entry.label:GetStringWidth()
           local estimatedW = textWidth(link)
           local actualW = math.max(measuredW, estimatedW)
@@ -556,6 +560,23 @@ function editModals.OpenCategoryEditor()
     scrollFrame:UpdateScrollChildRect()
   end
 
+  StaticPopupDialogs['BOS_CONFIRM_REMOVE_CATEGORY'] = {
+    text = 'Remove category "%s"? Items in it will fall to __catchall.',
+    button1 = 'Remove',
+    button2 = 'Cancel',
+    OnAccept = function(self, data)
+      if db.RemoveCategory(data) then
+        pipeline.Refresh('category-editor')
+        categoryList = getCategoryList()
+        refresh()
+      end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+  }
+
   refresh()
 
   -- Footer: add a brand-new category (below the scroll, left of Close)
@@ -572,32 +593,13 @@ function editModals.OpenCategoryEditor()
   newCatName:SetPoint('TOPLEFT', 2, -24)
   newCatName:SetAutoFocus(false)
 
-  local newCatKind = CreateFrame('Frame', nil, footer, 'UIDropDownMenuTemplate')
-  UIDropDownMenu_SetWidth(newCatKind, 70)
-  newCatKind:SetPoint('TOPLEFT', 118, -26)
-  UIDropDownMenu_Initialize(newCatKind, function(self, level)
-    for _, k in ipairs({ 'manual', 'rules' }) do
-      local info = UIDropDownMenu_CreateInfo()
-      info.text = k
-      info.value = k
-      info.func = function(btn)
-        UIDropDownMenu_SetSelectedValue(newCatKind, btn.value)
-        newCatKind.selectedValue = btn.value
-      end
-      info.checked = (k == 'manual')
-      UIDropDownMenu_AddButton(info, level)
-    end
-  end)
-  UIDropDownMenu_SetSelectedValue(newCatKind, 'manual')
-  newCatKind.selectedValue = 'manual'
-
   local newCatBtn = CreateFrame('Button', nil, footer, 'UIPanelButtonTemplate')
   newCatBtn:SetSize(100, 22)
-  newCatBtn:SetPoint('TOPLEFT', 194, -24)
+  newCatBtn:SetPoint('TOPLEFT', 126, -24)
   newCatBtn:SetText('Add Category')
   newCatBtn:SetScript('OnClick', function()
     local name = newCatName:GetText():trim()
-    if not db.AddCategory(name, newCatKind.selectedValue or 'manual') then
+    if not db.AddCategory(name, 'manual') then
       print('|cff00ff00BagsOfSorting|r: Could not add category "' .. tostring(name) .. '" (empty or duplicate)')
       return
     end

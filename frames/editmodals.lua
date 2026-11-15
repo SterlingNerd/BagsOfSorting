@@ -308,10 +308,10 @@ function editModals.OpenCategoryEditor()
 
   local scrollFrame = CreateFrame('ScrollFrame', nil, categoryEditorFrame, 'UIPanelScrollFrameTemplate')
   scrollFrame:SetPoint('TOPLEFT', 14, -42)
-  scrollFrame:SetPoint('BOTTOMRIGHT', -14, 70)
+  scrollFrame:SetPoint('BOTTOMRIGHT', -34, 70)
 
   local scrollChild = CreateFrame('Frame', nil, scrollFrame)
-  scrollChild:SetSize(width - 36, 1)
+  scrollChild:SetSize(width - 52, 1)
   scrollFrame:SetScrollChild(scrollChild)
 
   local cats = db.Categories()
@@ -418,6 +418,12 @@ function editModals.OpenCategoryEditor()
             actualW = textWidth(link)
           end
           entry.label:SetWidth(actualW)
+          local entryWidth = actualW + 4 + 18 + idGap
+          -- wrap if this item won't fit on the current line (and it's not the first)
+          if x + entryWidth > maxRight and x > idStartX then
+            x = idStartX
+            lineY = lineY + lineHeight
+          end
           entry.label:ClearAllPoints()
           entry.label:SetPoint('TOPLEFT', x, lineY - 2)
           entry.label:Show()
@@ -440,7 +446,7 @@ function editModals.OpenCategoryEditor()
           end)
           entry.remove:Show()
           rowBottom = math.max(rowBottom, lineY + lineHeight)
-          x = x + actualW + 4 + 18 + idGap
+          x = x + entryWidth
         end
 
         if #ids == 0 then
@@ -462,10 +468,12 @@ function editModals.OpenCategoryEditor()
           row.addEdit:SetAutoFocus(false)
           row.addEdit:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
         end
-        -- Add input + Add button on their own line below the items so they never sit
-        -- beside (and spill over) the last item or the empty label.
-        lineY = lineY + lineHeight
-        x = idStartX
+        -- Add input + Add button continue the item flow; wrap to a new line if needed
+        local addWidth = 80 + 4 + 50 + idGap
+        if x + addWidth > maxRight and x > idStartX then
+          x = idStartX
+          lineY = lineY + lineHeight
+        end
         row.addEdit:ClearAllPoints()
         row.addEdit:SetPoint('TOPLEFT', x, lineY)
         row.addEdit:SetText('')
@@ -502,14 +510,14 @@ function editModals.OpenCategoryEditor()
       if not row.divider then
         row.divider = row:CreateTexture(nil, 'ARTWORK')
         row.divider:SetHeight(1)
-        row.divider:SetColorTexture(0.5, 0.5, 0.5, 0.3)
+        row.divider:SetColorTexture(0.5, 0.5, 0.5, 0.6)
       end
       row.divider:ClearAllPoints()
       row.divider:SetPoint('TOPLEFT', 8, dividerY)
       row.divider:SetPoint('TOPRIGHT', -8, dividerY)
       row.divider:Show()
 
-      local rowHeight = math.max(dividerY + 1 + rowGap, 40)
+      local rowHeight = math.max(dividerY + 1 + rowGap, 44)
       row:SetSize(scrollW - 30, rowHeight)
       y = y - rowHeight
     end

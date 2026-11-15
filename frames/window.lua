@@ -414,6 +414,14 @@ function ShowWindowMenu(anchor, windowConfig)
       notCheckable = true,
     },
     {
+      text = 'Edit Categories…',
+      value = 'edit_categories',
+      func = function()
+        editModals.OpenCategoryEditor()
+      end,
+      notCheckable = true,
+    },
+    {
       text = 'Window Settings',
       value = 'window_settings',
       func = function()

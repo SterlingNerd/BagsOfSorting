@@ -15,6 +15,8 @@ local itemFrames = addon:NewModule('ItemFrames')
 local constants = addon:GetModule('Constants')
 local pool = addon:GetModule('Pool')
 local dropdown = addon:GetModule('Dropdown')
+local db = addon:GetModule('DB')
+local pipeline = addon:GetModule('Pipeline')
 
 local SIZE = constants.BUTTON_SIZE
 
@@ -183,8 +185,60 @@ function itemFrames.Warm(count)
   end
 end
 
+-- Enabled manual categories, sorted (issue #71). Mirrors getCategoryList in editmodals.lua but
+-- restricted to kind == 'manual', since rule-based categories are not editable here.
+local function manualCategories()
+  local cats = db.Categories()
+  local out = {}
+  for name, cat in pairs(cats) do
+    if cat.kind == 'manual' and cat.enabled ~= false then
+      out[#out + 1] = name
+    end
+  end
+  table.sort(out)
+  return out
+end
+
 -- Show item menu on Ctrl+Right-click
 function ShowItemMenu(anchorFrame, item)
+  local cats = db.Categories()
+  local itemID = item.itemID
+
+  -- Add to Category: every enabled manual category that does not already own the item
+  local addSub = {}
+  for _, name in ipairs(manualCategories()) do
+    local cat = cats[name]
+    if not cat.itemIDs or not cat.itemIDs[itemID] then
+      addSub[#addSub + 1] = {
+        text = name,
+        notCheckable = true,
+        func = function()
+          db.AddItemToCategory(name, itemID)
+          db.NotifyModelChanged()
+          pipeline.Refresh('add-to-category')
+          dropdown.Close()
+        end,
+      }
+    end
+  end
+
+  -- Remove from Category: every category that owns the item's ID
+  local remSub = {}
+  for name, cat in pairs(cats) do
+    if cat.itemIDs and cat.itemIDs[itemID] then
+      remSub[#remSub + 1] = {
+        text = name,
+        notCheckable = true,
+        func = function()
+          db.RemoveItemFromCategory(name, itemID)
+          db.NotifyModelChanged()
+          pipeline.Refresh('remove-from-category')
+          dropdown.Close()
+        end,
+      }
+    end
+  end
+
   local entries = {
     {
       text = item.link or ('Item ' .. item.itemID),
@@ -221,6 +275,25 @@ function ShowItemMenu(anchorFrame, item)
       value = 'clear_ignore',
       notCheckable = true,
       disabled = true,  -- TODO: implement
+    },
+    { text = ' ', isTitle = true, notCheckable = true },
+    -- Issue #71: edit this item's manual-category membership
+    {
+      text = 'Add to Category',
+      notCheckable = true,
+      hasArrow = true,
+      menuList = addSub,
+    },
+    {
+      text = 'Remove from Category',
+      notCheckable = true,
+      hasArrow = true,
+      menuList = remSub,
+    },
+    {
+      text = 'Exclude from category',
+      notCheckable = true,
+      disabled = true,
     },
   }
   dropdown.Show(anchorFrame, entries)

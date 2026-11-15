@@ -47,7 +47,11 @@ function editModals.OpenSectionEdit(model, windowConfig)
     sectionEditFrame:Hide()
   end
 
-  sectionEditFrame = CreateFrame('Frame', 'BagsOfSortingSectionEdit', UIParent, 'BasicFrameTemplateWithInset')
+  sectionEditFrame = CreateFrame('Frame', 'BagsOfSortingSectionEdit', UIParent)
+
+  -- Match the category editor: translucent dialog background + Dialog NineSlice border.
+  local border = CreateFrame('Frame', nil, sectionEditFrame, 'DialogBorderTranslucentTemplate')
+  border:SetAllPoints(sectionEditFrame)
   sectionEditFrame:SetSize(350, 450)
   sectionEditFrame:SetPoint('CENTER')
   sectionEditFrame:SetFrameStrata('DIALOG')
@@ -56,7 +60,15 @@ function editModals.OpenSectionEdit(model, windowConfig)
   sectionEditFrame:RegisterForDrag('LeftButton')
   sectionEditFrame:SetScript('OnDragStart', sectionEditFrame.StartMoving)
   sectionEditFrame:SetScript('OnDragStop', sectionEditFrame.StopMovingOrSizing)
+  sectionEditFrame.TitleText = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+  sectionEditFrame.TitleText:SetPoint('TOP', 0, -14)
   sectionEditFrame.TitleText:SetText('Edit Section: ' .. model.name)
+
+  local closeBtn = CreateFrame('Button', nil, sectionEditFrame, 'UIPanelCloseButton')
+  closeBtn:SetPoint('TOPRIGHT', -6, 6)
+  closeBtn:SetScript('OnClick', function()
+    sectionEditFrame:Hide()
+  end)
 
   -- Name edit box
   local nameLabel = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
@@ -152,6 +164,8 @@ function editModals.OpenSectionEdit(model, windowConfig)
     pipeline.Refresh('section-edit')
     sectionEditFrame:Hide()
   end)
+
+  sectionEditFrame:Show()
 end
 
 --- Open the window edit modal.

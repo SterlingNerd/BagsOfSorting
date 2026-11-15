@@ -65,7 +65,7 @@ function editModals.OpenSectionEdit(model, windowConfig)
   sectionEditFrame.TitleText:SetText('Edit Section: ' .. model.name)
 
   local closeBtn = CreateFrame('Button', nil, sectionEditFrame, 'UIPanelCloseButton')
-  closeBtn:SetPoint('TOPRIGHT', -6, 6)
+  closeBtn:SetPoint('TOPRIGHT', -10, 8)
   closeBtn:SetScript('OnClick', function()
     sectionEditFrame:Hide()
   end)
@@ -88,7 +88,7 @@ function editModals.OpenSectionEdit(model, windowConfig)
   catLabel:SetText('Categories (multi-select):')
 
   local catContainer = CreateFrame('Frame', nil, sectionEditFrame)
-  catContainer:SetSize(320, 250)
+  catContainer:SetSize(290, 250)
   catContainer:SetPoint('TOPLEFT', catLabel, 'BOTTOMLEFT', 0, -5)
 
   -- Scroll frame for categories
@@ -315,7 +315,7 @@ function editModals.OpenCategoryEditor()
   categoryEditorFrame:Show()
 
   local closeBtn = CreateFrame('Button', nil, categoryEditorFrame, 'UIPanelCloseButton')
-  closeBtn:SetPoint('TOPRIGHT', -6, 6)
+  closeBtn:SetPoint('TOPRIGHT', -10, 10)
   closeBtn:SetScript('OnClick', function()
     categoryEditorFrame:Hide()
   end)

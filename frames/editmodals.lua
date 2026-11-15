@@ -695,6 +695,7 @@ if StaticPopupDialogs then
           break
         end
       end
+      if sectionEditFrame then sectionEditFrame:Hide() end
       db.NotifyModelChanged()
       pipeline.Refresh('delete-section')
     end,

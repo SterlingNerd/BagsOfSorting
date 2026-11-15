@@ -149,20 +149,20 @@ if type(CloseAllBags) == 'function' then
   hooksecurefunc('CloseAllBags', clearNewItemsIfClosed)
 end
 
---- Issue #39, the other half: with Clear New on Close **off**, a hover is the only thing that takes an
---- item out of the New section, so the hover is the one clear we have to see happen. It is not
---- distinguishable from the client's other clear — `ContainerFrame_OnHide` runs `UpdateNewItemList`,
---- which clears the flag of every button that frame was showing (`ContainerFrame.lua:817`, `:393`),
---- including the frames our own vendor and bank suppression hides — from the data alone, because
---- `C_NewItems` has no way to put a flag back. So we watch the hover itself:
---- `ContainerFrameItemButtonTemplate` calls this global from its own `OnEnter` (`ContainerFrame.xml:164`),
---- which is what our pooled buttons carry too (`frames/item.lua`), and `GetBagID`/`GetID` are the pair
---- the client's own clear uses (`ContainerFrame.lua:1724`). A hide therefore changes nothing about the
---- section; only a hover, or a close while the setting is on, does.
+--- Issue #39, the other half: `ContainerFrameItemButton_OnEnter` runs `C_NewItems.RemoveNewItem` on
+--- the real slot, so hovering clears the client's flag. That clear is indistinguishable from the
+--- client's other clear — `ContainerFrame_OnHide` runs `UpdateNewItemList`, which clears the flag of
+--- every button that frame was showing (`ContainerFrame.lua:817`, `:393`), including the frames our
+--- own vendor and bank suppression hides — and `C_NewItems` has no way to put a flag back. So we
+--- still watch the hover itself (`ContainerFrame.xml:164`, which our pooled buttons carry via
+--- `frames/item.lua`), but we no longer clear our record on it: doing so moved items out of the New
+--- section and caused reflow when the bags were closed and reopened. Closing the bags is the clear
+--- instead (see `clearNewItemsIfClosed` above); a hide changes nothing about the section.
 if type(ContainerFrameItemButton_OnEnter) == 'function' then
-  hooksecurefunc('ContainerFrameItemButton_OnEnter', function(button)
-    if db.Settings().display.clearNewOnClose then return end
-    harvest.ForgetNewItemSession(button:GetBagID(), button:GetID())
+  hooksecurefunc('ContainerFrameItemButton_OnEnter', function()
+    -- Intentionally empty: clearing the new-item record on hover moves items out of the New
+    -- section and causes reflow when the bags are closed and reopened. Closing the bags is the
+    -- clear instead (see clearNewItemsIfClosed above).
   end)
 end
 

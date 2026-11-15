@@ -1377,10 +1377,11 @@ local function testNewSection()
   pipeline.Refresh('new-toggle-off')
   check('and does not resurrect an item the player already hovered past', countSection(backpack(), 'New'), 0)
 
-  -- The mode the toggle exists for: a hover is the only thing that clears. The client's own list cannot
-  -- serve it, because a container frame hide runs UpdateNewItemList over every button that frame was
-  -- showing (ContainerFrame.lua:817, :393) and C_NewItems has no way to put a flag back — so the record
-  -- in data/harvest.lua is what the section runs on.
+  -- With the toggle off, the client's own list cannot serve the section either: a container frame hide
+  -- runs UpdateNewItemList over every button that frame was showing (ContainerFrame.lua:817, :393) and
+  -- C_NewItems has no way to put a flag back — so the record in data/harvest.lua is what the section
+  -- runs on. A hover no longer clears it: items stay in the New section across close/reopen so they
+  -- do not reflow when the bags come back.
   newItemsBagged = { [0] = { [1] = true } }
   pipeline.Refresh('new-off-flagged')
   check('with the toggle off a new item gets a New section too', countSection(backpack(), 'New'), 1)
@@ -1402,7 +1403,7 @@ local function testNewSection()
   check('closing the bags does not empty it either while the toggle is off', countSection(backpack(), 'New'), 1)
   hoverItemButton(0, 1)
   pipeline.Refresh('new-off-hovered')
-  check('while a hover does empty it', countSection(backpack(), 'New'), 0)
+  check('a hover does not empty it either', countSection(backpack(), 'New'), 1)
 
   -- Back to the default, where closing the bags is the clear (AC-39). Known state again: the frames have
   -- to be open for CloseAllBags to really be a close.

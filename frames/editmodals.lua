@@ -434,23 +434,32 @@ function editModals.OpenCategoryEditor()
             idEntries[i] = entry
           end
           entry.label:SetText(link)
-          -- Show before measuring: GetStringWidth returns 0 on a label still
-          -- hidden (we hid every entry in the clear loop above). textWidth is a
-          -- conservative floor if the font has not applied yet.
+          -- Measure the link's true rendered width so items and their X buttons
+          -- never collide. Show and position the label first so GetStringWidth
+          -- returns the real width (0 on a not-yet-laid-out label).
           entry.label:Show()
-          local measuredW = entry.label:GetStringWidth()
-          local estimatedW = textWidth(link)
-          local actualW = math.max(measuredW, estimatedW)
-          entry.label:SetWidth(actualW)
+          entry.label:ClearAllPoints()
+          entry.label:SetPoint('TOPLEFT', x, lineY - 2)
+          local actualW = entry.label:GetStringWidth()
+          if actualW == 0 then
+            actualW = textWidth(link)
+          end
           local entryWidth = actualW + 6 + 4 + 18 + idGap
           -- wrap if this item won't fit on the current line (and it's not the first)
           if x + entryWidth > maxRight and x > idStartX then
             x = idStartX
             lineY = lineY + lineHeight
+            entry.label:SetPoint('TOPLEFT', x, lineY - 2)
           end
-          entry.label:ClearAllPoints()
-          entry.label:SetPoint('TOPLEFT', x, lineY - 2)
-          entry.label:Show()
+          entry.remove:ClearAllPoints()
+          entry.remove:SetPoint('TOPLEFT', x + actualW + 6, lineY - 2)
+          entry.remove.id = itemID
+          entry.remove:SetScript('OnClick', function(self)
+            db.RemoveItemFromCategory(catName, self.id)
+            pipeline.Refresh('category-editor')
+            refresh()
+          end)
+          entry.remove:Show()
           -- Tooltip shows the hovered item, not the last id from the refresh loop.
           entry.label:SetScript('OnEnter', function(self)
             GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
@@ -460,15 +469,6 @@ function editModals.OpenCategoryEditor()
           entry.label:SetScript('OnLeave', function(self)
             GameTooltip:Hide()
           end)
-          entry.remove:ClearAllPoints()
-          entry.remove:SetPoint('TOPLEFT', x + actualW + 4, lineY - 2)
-          entry.remove.id = itemID
-          entry.remove:SetScript('OnClick', function(self)
-            db.RemoveItemFromCategory(catName, self.id)
-            pipeline.Refresh('category-editor')
-            refresh()
-          end)
-          entry.remove:Show()
           rowBottom = math.max(rowBottom, lineY + lineHeight)
           x = x + entryWidth
         end
@@ -492,12 +492,9 @@ function editModals.OpenCategoryEditor()
           row.addEdit:SetAutoFocus(false)
           row.addEdit:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
         end
-        -- Add input + Add button continue the item flow; wrap to a new line if needed
-        local addWidth = 80 + 4 + 50 + idGap
-        if x + addWidth > maxRight and x > idStartX then
-          x = idStartX
-          lineY = lineY + lineHeight
-        end
+        -- Add input + Add button on their own line below the items.
+        lineY = lineY + lineHeight
+        x = idStartX
         row.addEdit:ClearAllPoints()
         row.addEdit:SetPoint('TOPLEFT', x, lineY)
         row.addEdit:SetText('')

@@ -413,11 +413,14 @@ function editModals.OpenCategoryEditor()
             idEntries[i] = entry
           end
           entry.label:SetText(link)
-          -- textWidth is the proven, consistent estimate for link width (GetStringWidth
-          -- under-reports the rendered link area and causes items to collide).
-          local actualW = textWidth(link)
+          -- Measure the link's true rendered width, but never trust a single
+          -- estimator: GetStringWidth is exact for the loaded font, textWidth is a
+          -- floor estimate. max() guarantees we never under-estimate and collide.
+          local measuredW = entry.label:GetStringWidth()
+          local estimatedW = textWidth(link)
+          local actualW = math.max(measuredW, estimatedW)
           entry.label:SetWidth(actualW)
-          local entryWidth = actualW + 4 + 18 + idGap
+          local entryWidth = actualW + 6 + 4 + 18 + idGap
           -- wrap if this item won't fit on the current line (and it's not the first)
           if x + entryWidth > maxRight and x > idStartX then
             x = idStartX

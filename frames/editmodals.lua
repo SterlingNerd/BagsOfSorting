@@ -444,7 +444,8 @@ function editModals.OpenCategoryEditor()
           if actualW == 0 then
             actualW = textWidth(link)
           end
-          local entryWidth = actualW + 6 + 4 + 18 + idGap
+          entry.label:SetWidth(actualW)
+          local entryWidth = actualW + 4 + 18 + idGap
           -- wrap if this item won't fit on the current line (and it's not the first)
           if x + entryWidth > maxRight and x > idStartX then
             x = idStartX
@@ -452,7 +453,7 @@ function editModals.OpenCategoryEditor()
             entry.label:SetPoint('TOPLEFT', x, lineY - 2)
           end
           entry.remove:ClearAllPoints()
-          entry.remove:SetPoint('TOPLEFT', x + actualW + 6, lineY - 2)
+          entry.remove:SetPoint('TOPLEFT', x + actualW + 4, lineY - 2)
           entry.remove.id = itemID
           entry.remove:SetScript('OnClick', function(self)
             db.RemoveItemFromCategory(catName, self.id)

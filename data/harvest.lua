@@ -58,11 +58,21 @@ local constants = addon:GetModule('Constants')
 ---@field containerName string?
 ---@field containerKind string?  -- the kind of the container it came from; pipeline.Assign uses it to keep the bank out of the backpack windows
 ---@field dataReady boolean
+---@field isNew boolean?  -- the client's own new-item flag for this slot, as data/harvest.lua records it; the field registry exposes it as `isNew` and the New category binds it (issue #39)
 ---@field owner string?
 ---@field trace any
 
 ---@type BoSContainer[]
 local discovered
+
+-- Session record of which slots held new items, keyed `bagID:slot` -> the itemID that was new there.
+-- The client's own flag is too fragile to build a section on (it dies on a hover and on every
+-- container-frame hide, and `C_NewItems` cannot put one back), so this record is what the New section
+-- follows. Only `core/interactions.lua` removes from it: closing the bags, or a hover when the window
+-- menu's Clear New on Close is off. The itemID is what stops a different item moving into a slot that
+-- once held something new from inheriting the flag.
+---@type table<string, number>
+local newItemSession = {}
 
 ---@type table<string, number>?
 local freeSlots
@@ -151,6 +161,16 @@ function harvest.Items()
       local ok, info = pcall(C_Container.GetContainerItemInfo, container.index, slot)
       if ok and info and info.itemID then
         local questOK, quest = pcall(C_Container.GetContainerItemQuestInfo, container.index, slot)
+        -- Issue #39: the client's flag is how we learn a slot went new; what the New section
+        -- **follows** is our record, because the flag is not durable. `C_NewItems.RemoveNewItem` runs
+        -- on a hover (`ContainerFrameItemButton_OnEnter`, ContainerFrame.lua:1724) *and* on every
+        -- `ContainerFrame_OnHide` (`UpdateNewItemList`, :817, :393) — including the container frames our
+        -- own vendor/bank suppression hides — and `C_NewItems` offers no way to put a flag back.
+        -- Which record the hover and the close paths clear is `display.clearNewOnClose`'s business
+        -- (core/interactions.lua); this function only reports what is new now.
+        local isNew = harvest.IsNewItem(container.index, slot)
+        if isNew then harvest.MarkNewItemSession(container.index, slot, info.itemID) end
+        isNew = isNew or harvest.WasNewInSession(container.index, slot, info.itemID)
         items[#items + 1] = {
           bagID = container.index,
           slot = slot,
@@ -167,6 +187,7 @@ function harvest.Items()
           containerName = container.name,
           containerKind = container.kind,
           dataReady = false,
+          isNew = isNew,
         }
       else
         -- A slot the client reports no item for is a free slot: ContainerItemInfo.itemID is
@@ -267,6 +288,52 @@ end
 ---@return boolean
 function harvest.BankOpen()
   return bankOpen
+end
+
+--- Issue #39: the client's own answer for "is this slot new", read-only — we never call
+--- RemoveNewItem or AddNewItem ourselves. Hovering our button runs the client's own
+--- ContainerFrameItemButton_OnEnter, which does clear it (AC-39).
+---@param bagID number
+---@param slot number
+---@return boolean
+function harvest.IsNewItem(bagID, slot)
+  if C_NewItems and C_NewItems.IsNewItem then
+    local ok, isNew = pcall(C_NewItems.IsNewItem, bagID, slot)
+    if ok then return isNew end
+  end
+  return false
+end
+
+--- Record that this slot held a new item, tagged with the item that was new there.
+---@param bagID number
+---@param slot number
+---@param itemID number
+function harvest.MarkNewItemSession(bagID, slot, itemID)
+  newItemSession[bagID .. ':' .. slot] = itemID
+end
+
+--- True when this slot held *this* item while it was new. The itemID comparison is what stops a
+--- different item moving into a slot that once held something new from being listed as new.
+---@param bagID number
+---@param slot number
+---@param itemID number
+---@return boolean
+function harvest.WasNewInSession(bagID, slot, itemID)
+  return newItemSession[bagID .. ':' .. slot] == itemID
+end
+
+--- Forget one slot: this is the hover path, where the player cleared the client's flag themselves
+--- and the window menu's Clear New on Close is off, so a hover is the only thing that clears.
+---@param bagID number
+---@param slot number
+function harvest.ForgetNewItemSession(bagID, slot)
+  newItemSession[bagID .. ':' .. slot] = nil
+end
+
+--- Empty the record. Closing the bags is the only thing that does this (issue #39, AC-39), and it
+--- is what makes the New section mean "new since you last closed your bags".
+function harvest.ClearNewItemSession()
+  newItemSession = {}
 end
 
 return harvest

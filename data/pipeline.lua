@@ -91,7 +91,7 @@ end
 function pipeline.Assign(placements)
   local models = {}
   local shown = {}
-  local placed = {}
+  local placedByNonDuplicate = {}
   local counted = {}
 
   for _, config in ipairs(db.Windows()) do
@@ -166,7 +166,7 @@ function pipeline.Assign(placements)
               for _, s in ipairs(sets) do
                 if s == catName then
                   items[#items + 1] = item
-                  placed[item] = true
+                  placedByNonDuplicate[item] = true
                   break
                 end
               end
@@ -176,8 +176,10 @@ function pipeline.Assign(placements)
               local category = db.Categories()[categoryName]
               for _, item in ipairs(placements[categoryName] or {}) do
                 if (item.containerKind == 'bank') == isBank
-                  and (not placed[item] or (category and category.duplicate)) then
-                  placed[item] = true
+                  and (not placedByNonDuplicate[item] or (category and category.duplicate)) then
+                  if not (category and category.duplicate) then
+                    placedByNonDuplicate[item] = true
+                  end
                   items[#items + 1] = item
                 end
               end

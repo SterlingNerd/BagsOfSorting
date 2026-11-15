@@ -81,7 +81,9 @@ BagsOfSortingDB = {
                                       -- is the value C_Container.GetContainerNumFreeSlots answers.
       color    = nil,                 -- optional section title color
     },
-    ["Recent Items"] = { priority = 1, kind = "rules",
+    -- The shipped New category (issue #39): the client's own per-slot new flag as data/harvest.lua
+    -- records it, and `duplicate` so a new item keeps the category its own rules gave it.
+    ["New"] = { priority = 1, kind = "rules", duplicate = true,
       rules = { op="all", children={ {field="isNew", cmp="=", value=true} } } },
     ["__catchall"] = { priority = 999, kind = "rules",
       rules = { op="all", children={ {field="none", cmp="=", value=true} } } },
@@ -97,8 +99,9 @@ BagsOfSortingDB = {
       showIlvl = true, ilvlOnGearOnly = true, ilvlMin = 0, ilvlPos = "bottomright",
       ilvlQualityColor = false,        -- hides entirely for an item not in the cache (FR-103)
       showNew=true, newDuration=420,
-      clearNewOnClose = true,          -- FR-47: false keeps the highlight until cleared by
-                                       -- keybind / context menu / `/bos new`
+      clearNewOnClose = true,          -- FR-47, and issue #39 for the New section: closing the bags
+                                       -- clears new-ness; false leaves it to keybind / context menu /
+                                       -- `/bos new`, and a hover in the New section either way
       showQuestMarker=true,
       showEmptySlots="compact"|"slots"|"off", emptySlotFamilyIcons=true },
     stacking  = { showStacks="merged"|"always"|"session"|"vendor",  -- FR-43; "session" = merged but

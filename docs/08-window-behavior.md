@@ -117,6 +117,22 @@ Partial stacks of one item draw as one cell carrying the true total — 3 × 20 
 | A total above 9999 draws as `*` | the client's own `GetFormattedItemQuantity` cap on the count fontstring — the same rendering it gives a real oversized stack |
 | `showStacks` reads `merged` or `always` today | `always` is what the toggle writes and what the profile keeps; `session` and `vendor` (docs/04) arrive with the mode picker |
 
+## New items
+
+The default backpack window opens with a **New** section (issue #39): a category at priority 1 whose
+rule is the client's own per-slot new flag as `data/harvest.lua` records it, and `duplicate = true`.
+
+| Rule | Why |
+|---|---|
+| First section of the default backpack window, and nowhere else | AC-39. The bank mirror does not carry it — what you just picked up is not a bank fact (issue #39) |
+| A new item is drawn in **New and in its own category** | `duplicate = true` (FR-15). `Pipeline.Assign` only marks an item as placed for a non-duplicate category, so the New section cannot claim a slot and the category it would otherwise land in still draws it |
+| The section follows our record, not the client's list | the client's list is cleared by a hover **and** by any container frame hide — measured on this client at `39c → 39d` (issue #39) — and `C_NewItems` is `IsNewItem` · `RemoveNewItem` · `ClearAll` with no way to put a flag back (`containers-and-bags.md`). The record is `bagID:slot` tagged with the item id, so a later item in that slot is not new |
+| Hovering clears the client's flag; whether it clears the **listing** is the toggle | `ContainerFrameItemButton_OnEnter` runs `C_NewItems.RemoveNewItem` on the real slot and our pooled buttons carry that template (issue #35). With *Clear New on Close* on (the default) the record keeps the cell drawn (AC-39); with it off `core/interactions.lua` watches the same call and forgets the record too, so a hover is the only thing that clears. That a `hooksecurefunc` sees the call for **our** buttons is source-verified only until issue #39's round 2 |
+| Closing the bags empties the record while the setting is on | `ToggleAllBags` / `CloseAllBags` observed with the client's own `IsAnyBagOpen` read after the call (`core/interactions.lua`). The same close has already cleared the client's flags in the client's own doing (`39c → 39d`), so emptying the section in that mode needs no `C_NewItems.ClearAll`. With the setting off the record is what the listing reads, and a hide that took the client's flag leaves our listing standing |
+| The glow is the client's and reads the client's list | `frames/item.lua` re-derives it from the template's `UpdateNewItem` on every paint (issue #35), and that method is gated on `C_NewItems.IsNewItem`. So a close or a hover unglows an item our record may still list — measured for the close at `39c → 39d`. Drawing the glow from our own record is `FR-47`'s half at M2 (`docs/06`), not this story's |
+| The record is in memory | a reload rebuilds it from whatever the client still flags, so a hide before a reload does end new-ness for those items |
+| An empty New section is not drawn | a section draws for content or for the bag its category pairs with (FR-44); `New` pairs with no bag, so nothing shows when nothing is new (AC-39) |
+
 ## Item state we borrow rather than own
 
 | State | Ours |
@@ -129,8 +145,8 @@ Partial stacks of one item draw as one cell carrying the true total — 3 × 20 
 ## Bank windows
 
 The default profile mirrors every preset backpack window as a `kind = "bank"` window: same sections,
-same category bindings, same order (issue #47). What differs is which half of the character it draws
-and how it looks.
+same category bindings, same order (issue #47) — bar the **New** section, which is a backpack-side
+fact (issue #39). What differs is which half of the character it draws and how it looks.
 
 | Rule | Why |
 |---|---|

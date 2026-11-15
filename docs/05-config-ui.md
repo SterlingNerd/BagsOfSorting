@@ -326,11 +326,18 @@ failed change?*
   Options, because you decide these by looking at the bags you are looking at. Defaults look like stock
   bags.
 - **Show stacks** (`FR-43`): the window context menu — reached from the title or from the bag-icon
-  portrait — carries *Show Stacks* as its first entry with the client's own divider line under it
-  (issue #59). Ticked draws every partial stack on its own button (`always`); unticked is merged, the
-  default. The mode is a profile setting, so it survives a reload. `session` (un-merge until the bags
-  close) and `vendor` (un-merge while a vendor is open) and the section-header menu are the mode
-  picker's work. Nothing here changes which real slot holds what.
+  portrait — carries *Show Stacks* as its first entry (issue #59). Ticked draws every partial stack on
+  its own button (`always`); unticked is merged, the default. The mode is a profile setting, so it
+  survives a reload. `session` (un-merge until the bags close) and `vendor` (un-merge while a vendor is
+  open) and the section-header menu are the mode picker's work. Nothing here changes which real slot
+  holds what.
+- **Clear New on Close** (`FR-47`, issue #39): the menu's second entry, the two toggles sitting above
+  the client's own divider line. Ticked (`display.clearNewOnClose = true`, the default) is what empties
+  the New section when the bags close. Unticked makes a **hover** the only thing that takes an item out
+  of it — neither closing the bags nor opening a vendor or the bank does, because those clear the
+  client's own list and `C_NewItems` cannot put a flag back (docs/08). The **glow** is the client's and
+  follows its own list either way. It is a profile setting like *Show Stacks*, so a reload keeps the
+  choice.
 - **New-item highlight** (`FR-47`): cleared by keybind, by the section/window context menu, by
   `/bos new`, or automatically on close, depending on `clearNewOnClose`.
 - **Selling a section** (`FR-65`): deliberately the most cautious action in the UI. Vendor buyback is
@@ -350,6 +357,7 @@ failed change?*
 | link / unlink a window to its twin | window context menu → *Link to…* / *Unlink* | `window.link`, `window.unlink` |
 | quality / item-level appearance | window context menu → *Appearance* modal | `display.set` |
 | show or hide merged stacks | window context menu: the title or the bag-icon portrait | `stacking.setShowStacks` |
+| clear new items when the bags close, or not | window context menu: the title or the bag-icon portrait | `display.setClearNewOnClose` |
 | clear new-item highlights | keybind, section/window context menu, `/bos new` | `items.clearNew` |
 | delete window | window context menu `✕` with confirm | `window.delete` |
 | create section | `+ section` in configure mode | `section.create` |

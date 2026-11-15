@@ -129,6 +129,43 @@ if type(OpenAllBags) == 'function' then
   end)
 end
 
+--- Issue #39: with Clear New on Close **on** (the default), closing the bags is what empties the New
+--- section, and `ToggleAllBags` / `CloseAllBags` are the client's two calls that close every bag
+--- (origin/forever `ContainerFrame.lua:2113`, `:2222`). `IsAnyBagOpen()` is the client's own answer to
+--- whether anything is left open (`:2175` -> `CheckIsBagOpen_Internal` ->
+--- `ContainerFrameCombinedBags:IsBagOpen`, which only reads `IsShown` — hard rule 8), and reading it
+--- after the call is what makes both hooks safe: `ToggleAllBags` opens as often as it closes, and
+--- `CloseAllBags` has a path that closes nothing at all. shortcut: hiding our own windows with the X
+--- or the keybind is not a closed bag, so the record survives a show/hide cycle; the upgrade is the
+--- `ContainerFrame.CloseAllBags` EventRegistry callback this file already names above.
+local function clearNewItemsIfClosed()
+  if not db.Settings().display.clearNewOnClose then return end
+  if not IsAnyBagOpen() then harvest.ClearNewItemSession() end
+end
+if type(ToggleAllBags) == 'function' then
+  hooksecurefunc('ToggleAllBags', clearNewItemsIfClosed)
+end
+if type(CloseAllBags) == 'function' then
+  hooksecurefunc('CloseAllBags', clearNewItemsIfClosed)
+end
+
+--- Issue #39, the other half: with Clear New on Close **off**, a hover is the only thing that takes an
+--- item out of the New section, so the hover is the one clear we have to see happen. It is not
+--- distinguishable from the client's other clear — `ContainerFrame_OnHide` runs `UpdateNewItemList`,
+--- which clears the flag of every button that frame was showing (`ContainerFrame.lua:817`, `:393`),
+--- including the frames our own vendor and bank suppression hides — from the data alone, because
+--- `C_NewItems` has no way to put a flag back. So we watch the hover itself:
+--- `ContainerFrameItemButtonTemplate` calls this global from its own `OnEnter` (`ContainerFrame.xml:164`),
+--- which is what our pooled buttons carry too (`frames/item.lua`), and `GetBagID`/`GetID` are the pair
+--- the client's own clear uses (`ContainerFrame.lua:1724`). A hide therefore changes nothing about the
+--- section; only a hover, or a close while the setting is on, does.
+if type(ContainerFrameItemButton_OnEnter) == 'function' then
+  hooksecurefunc('ContainerFrameItemButton_OnEnter', function(button)
+    if db.Settings().display.clearNewOnClose then return end
+    harvest.ForgetNewItemSession(button:GetBagID(), button:GetID())
+  end)
+end
+
 ---@return boolean
 function interactions.Suppressing()
   return suppressing

@@ -17,7 +17,7 @@ local constants = addon:GetModule('Constants')
 
 local BAG = constants.BAG_FAMILY
 
-db.CURRENT_VERSION = 7
+db.CURRENT_VERSION = 9
 
 ---@class BoSSettings
 -- Only settings something actually reads are present (FR-80: a setting with no UI home is
@@ -29,6 +29,9 @@ local DEFAULT_SETTINGS = {
   -- FR-43: merged is the default. 'always' is what the window menu's Show stacks toggle writes.
   -- 'session' and 'vendor' (docs/04) arrive with the mode picker, not before it.
   stacking = { showStacks = 'merged' },
+  -- FR-47 / issue #39: closing the bags is what clears new-ness, which is what empties the New
+  -- section. false leaves the hover as the only thing that takes an item out of it.
+  display = { clearNewOnClose = true },
   debug = false,
 }
 
@@ -66,6 +69,7 @@ local DEFAULT_PROFILE = {
       compact = false,
       scale = 1.0,
       sections = {
+        { id = 's_new', name = 'New', categories = { 'New' } },
         { id = 's1', name = 'Junk', categories = { 'Junk' } },
         { id = 's2', name = 'Armor', categories = { 'Armor' } },
         { id = 's3', name = 'Everything else', categories = { '__catchall' } },
@@ -247,6 +251,18 @@ local DEFAULT_PROFILE = {
   categories = {
     -- Priority is the ladder the classifier walks, ascending (docs/04 §Precedence 1). A quest item
     -- must never fall to a generic rule, and a curated manual list beats a generic rule too.
+    -- Issue #39: the New section (docs/02 FR-21 lists `isNew` in the v1 field set). Highest
+    -- priority so it is the first rule walked, and `duplicate = true` so a new item stays in the
+    -- category its own rules put it in -- the same slot is drawn in both places (FR-15).
+    -- The rule is the client's own flag as the harvest recorded it (data/harvest.lua); this is a
+    -- category with a real rule, not a code path.
+    ['New'] = {
+      priority = 1,
+      kind = 'rules',
+      enabled = true,
+      duplicate = true,
+      rules = { op = 'all', children = { { field = 'isNew', cmp = '=', value = true } } },
+    },
     ['Quest Items'] = {
       priority = 5,
       kind = 'rules',
@@ -444,6 +460,46 @@ local MIGRATIONS = {
     end
   end,
 
+  -- Issue #39: add New category and New section to profiles created before the New items feature.
+  [8] = function(profile)
+    profile.categories = profile.categories or {}
+    if not profile.categories['New'] then
+      profile.categories['New'] = deepCopy(DEFAULT_PROFILE.categories['New'])
+    end
+    for _, window in ipairs(profile.windows or {}) do
+      if window.id == 'w1' then
+        local hasNew = false
+        for _, section in ipairs(window.sections or {}) do
+          if section.id == 's_new' then hasNew = true break end
+        end
+        if not hasNew then
+          -- Insert at position 1 (top of backpack)
+          table.insert(window.sections, 1, { id = 's_new', name = 'New', categories = { 'New' }, collapsed = false })
+        end
+      end
+    end
+  end,
+
+  -- A first cut of the New category carried a `none` leaf, which is true for every item at the top
+  -- of the ladder -- so every item landed in the New section -- and carried its setting as
+  -- `newItems.clearOnClose` instead of the `display.clearNewOnClose` (docs/04 §settings) FR-47 is
+  -- written against. A profile that ran migration 8 gets both put back.
+  [9] = function(profile)
+    local cat = profile.categories and profile.categories['New']
+    local leaf = cat and cat.rules and cat.rules.children and cat.rules.children[1]
+    if leaf and leaf.field == 'none' then
+      cat.rules = deepCopy(DEFAULT_PROFILE.categories['New'].rules)
+    end
+    local settings = profile.settings
+    if settings and settings.newItems then
+      settings.display = settings.display or {}
+      if settings.display.clearNewOnClose == nil then
+        settings.display.clearNewOnClose = settings.newItems.clearOnClose
+      end
+      settings.newItems = nil
+    end
+  end,
+
 }
 
 function db.Migrate()
@@ -565,6 +621,22 @@ function db.SetShowStacks(mode)
   local stacking = db.Settings().stacking
   if stacking.showStacks == mode then return false end
   stacking.showStacks = mode
+  db.NotifyModelChanged()
+  return true
+end
+
+--- FR-47 / issue #39: the window menu's Clear New on Close. Off leaves the New section tracking the
+--- client's own list, so a hover is the only thing that takes an item out of it.
+---@param enabled boolean
+---@return boolean changed
+function db.SetClearNewOnClose(enabled)
+  local display = db.Settings().display
+  if display.clearNewOnClose == enabled then return false end
+  display.clearNewOnClose = enabled
+  -- Turning the mode off starts the record clean: from there only a hover clears, and a record kept
+  -- from the mode that was clearing on close would otherwise list items the player already hovered
+  -- away (docs/08).
+  if not enabled then addon:GetModule('Harvest').ClearNewItemSession() end
   db.NotifyModelChanged()
   return true
 end

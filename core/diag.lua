@@ -820,6 +820,120 @@ local HELPERS = {
 -- ---------------------------------------------------------------------------
 local tests = {}
 
+-- Part of the pending test 39 entry below: delete it with the entry.
+--
+-- Round 1 (ingested 2026-11-12) settled the client half: a Blizzard bag close clears the client's own
+-- new-item flags (`39c → 39d`), and our vendor suppression hiding Blizzard's frames is the same hide
+-- (`39c → 39e`). What it could not measure is our own half - our windows were closed for `a`-`d`, so no
+-- stage recorded what the New section draws while something is new. Round 2 runs the same stages with our
+-- windows open, with Clear New on Close **off**, and answers the three things that decide the design:
+-- whether our record keeps an item listed across a close that took the client's flag, whether a hover takes
+-- it out of the listing in that mode (the `ContainerFrameItemButton_OnEnter` hook is source-verified only),
+-- and what our background hide does to the client's list.
+-- shortcut: over constants.ASYNC_ITEM_THRESHOLD items the refresh below finishes after these lines are
+-- written, so keep the bag under 60 items for this one.
+local function newItemsStageCapture()
+  local pipeline = addon:GetModule('Pipeline')
+  local constants = addon:GetModule('Constants')
+  local interactions = addon:GetModule('Interactions')
+
+  probes[18]()                      -- the client's own list, read before we refresh anything of ours
+  pipeline.Refresh('test-39')
+
+  local total = NUM_CONTAINER_FRAMES or (constants.NUM_TOTAL_EQUIPPED_BAG_SLOTS + 2)
+  local shown = 0
+  for i = 1, total do
+    local frame = _G['ContainerFrame' .. i]
+    if frame and frame:IsShown() then shown = shown + 1 end
+  end
+  local combined = _G.ContainerFrameCombinedBags
+  record('blizzard bags: combined', tostring(combined and combined:IsShown()),
+    'ContainerFrame1-N shown', shown, 'of', total)
+  record('IsAnyBagOpen', tostring(IsAnyBagOpen and IsAnyBagOpen()),
+    'suppressing', tostring(interactions.Suppressing()),
+    'clearNewOnClose', tostring(db.Settings().display.clearNewOnClose))
+  for _, name in ipairs({ 'MerchantFrame', 'BankFrame' }) do
+    local frame = _G[name]
+    if frame and frame.IsShown then record('interaction frame', name, tostring(frame:IsShown())) end
+  end
+
+  local ourShown, ourTotal = 0, 0
+  for _, window in ipairs(db.Windows()) do
+    ourTotal = ourTotal + 1
+    local frame = _G['BagsOfSortingWindow' .. window.id]
+    if frame and frame:IsShown() then ourShown = ourShown + 1 end
+  end
+  record('our windows shown', ourShown, 'of', ourTotal)
+  local focus = GetMouseFocus and GetMouseFocus()
+  record('mouse focus', focus and (focus.GetName and focus:GetName() or focus:GetObjectType()) or 'none')
+
+  for _, window in ipairs(pipeline.Model() or {}) do
+    if window.kind == 'backpack' then
+      local order = {}
+      for _, section in ipairs(window.sections) do order[#order + 1] = section.name end
+      record('drawn sections:', table.concat(order, ' | '))
+      local drawn = false
+      for _, section in ipairs(window.sections) do
+        if section.categories[1] == 'New' then
+          drawn = true
+          record('New holds', #section.items)
+          for _, item in ipairs(section.items) do
+            local okNew, flagged = pcall(C_NewItems.IsNewItem, item.bagID, item.slot)
+            record(' ', item.name or item.itemID, 'bag', item.bagID, 'slot', item.slot,
+              'client flag', tostring(okNew and flagged))
+          end
+        end
+      end
+      -- An empty New section is not drawn at all, so its absence needs a line of its own.
+      if not drawn then record('New section drawn: no') end
+    end
+  end
+end
+
+local function newItemsSetupCapture()
+  record('apis: IsNewItem', tostring(type(C_NewItems and C_NewItems.IsNewItem) == 'function'),
+    'ToggleAllBags', tostring(type(ToggleAllBags) == 'function'),
+    'CloseAllBags', tostring(type(CloseAllBags) == 'function'),
+    'IsAnyBagOpen', tostring(type(IsAnyBagOpen) == 'function'),
+    'ItemButton_OnEnter', tostring(type(ContainerFrameItemButton_OnEnter) == 'function'))
+  record('the run: hover no bag cell except at the two hover steps, and each looted item stays where it landed')
+  newItemsStageCapture()
+end
+
+tests[39] = {
+  issue = 39,
+  what = 'round 2, Clear New on Close OFF: does our record keep the New listing across a close, does a '
+    .. 'hover end it, and what our background hide does to the client\'s list',
+  needs = 'Clear New on Close UNTICKED before step a; our windows open (if a says our windows shown 0, press '
+    .. 'B and run 39a again); one fresh kill, then the rest OUT OF COMBAT (our suppression leaves Blizzard\'s '
+    .. 'frames alone in combat, issue #38); under 60 items in the bag; loot something the bags do not already '
+    .. 'hold (round 1 looted 769 into a slot that already held 769); a merchant, not the bank (issue #47)',
+  steps = {
+    { text = 'untick Clear New on Close in a window menu (top-right of any window)', run = nil },
+    { text = 'capture: the mode, our windows and the bags before anything is looted',
+      run = newItemsSetupCapture },
+    { text = 'loot one item your bags do not already hold - hover no bag cell on the way back', run = nil },
+    { text = 'capture: the looted item, its client flag and our listing', run = newItemsStageCapture },
+    { text = "press CTRL-B: Blizzard opens its own bag window (b says it is closed, so this press opens)",
+      run = nil },
+    { text = "capture: Blizzard open, the flag still on, our listing still drawn", run = newItemsStageCapture },
+    { text = 'press CTRL-B again: Blizzard closes that window', run = nil },
+    { text = 'capture: the close with the toggle OFF - is the item still listed, and what is its client flag?',
+      run = newItemsStageCapture },
+    { text = 'hover that item in our New section', run = nil },
+    { text = 'capture: what the hover did to the flag and to our listing', run = newItemsStageCapture },
+    { text = 'loot a second new item - hover no bag cell', run = nil },
+    { text = 'press CTRL-B: Blizzard opens its bag window again', run = nil },
+    { text = 'capture: both new items flagged with Blizzard open (the precondition for the hide step)',
+      run = newItemsStageCapture },
+    { text = 'talk to a merchant so our suppression hides Blizzard\'s frames in the background', run = nil },
+    { text = 'capture: our hide against the client flags and our listing', run = newItemsStageCapture },
+    { text = 'close the merchant window', run = nil },
+    { text = "capture: the last state - if our windows closed with the merchant, press B and run 39h again",
+      run = newItemsStageCapture },
+  },
+}
+
 -- ---------------------------------------------------------------------------
 -- The pending list. `/bos test` prints these; `/bos test <id>` prints one run sheet.
 -- ---------------------------------------------------------------------------

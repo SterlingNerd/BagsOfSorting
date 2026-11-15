@@ -140,7 +140,13 @@ end
 --- `ContainerFrame.CloseAllBags` EventRegistry callback this file already names above.
 local function clearNewItemsIfClosed()
   if not db.Settings().display.clearNewOnClose then return end
-  if not IsAnyBagOpen() then harvest.ClearNewItemSession() end
+  if not IsAnyBagOpen() then
+    harvest.ClearNewItemSession()
+    -- The record is empty now; re-render so the New section drops its items.
+    -- Without this the close clears the record but nothing repaints, so the
+    -- section looks stale until the next BAG_UPDATE forces a refresh.
+    pipeline.Refresh('new-items-on-close')
+  end
 end
 if type(ToggleAllBags) == 'function' then
   hooksecurefunc('ToggleAllBags', clearNewItemsIfClosed)

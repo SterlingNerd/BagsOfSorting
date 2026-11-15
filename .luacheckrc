@@ -72,6 +72,7 @@ globals = {
 
     "GetTime",
     "GetBuildInfo",
+    "GetItemInfo",
     "issecure",
     "GetCursorInfo",
     "GetCVar",

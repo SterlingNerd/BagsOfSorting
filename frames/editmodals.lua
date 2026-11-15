@@ -396,21 +396,30 @@ function editModals.OpenCategoryEditor()
       if row.emptyLabel then row.emptyLabel:Hide() end
       if row.divider then row.divider:Hide() end
 
-      local x = idStartX
-      local lineY = -7
-      local rowBottom = -7
+      -- Band 1: category name (top of row). Kept at a fixed offset so every row
+      --   starts at the same visual height.
+      local band1Y = 0
+      local band1H = lineHeight        -- name label height
+
+      -- Band 2: content below the name band. Rule-based shows a read-only label;
+      --   manual shows item links (+Remove) then an inline Add input. All content
+      --   flows downward from band2Y.
+      local band2Y = band1Y + band1H + 8          -- 8px gap under the name band
+      local contentBottom = band2Y                -- track the lowest content edge
+      local x = idStartX                          -- running X cursor for items
 
       if not isManual then
-        -- Rule-based / dynamic category: read-only label
+        -- Rule-based / dynamic category: read-only status label
         if not row.statusLabel then
           row.statusLabel = row:CreateFontString(nil, 'OVERLAY', 'GameFontDisable')
         end
-        row.statusLabel:SetPoint('TOPLEFT', x, -7)
+        row.statusLabel:SetPoint('TOPLEFT', idStartX, band2Y)
         row.statusLabel:SetText('(rule-based — read-only)')
         row.statusLabel:Show()
-        rowBottom = -7 + lineHeight
+        contentBottom = math.max(contentBottom, band2Y + lineHeight)
       else
-        -- Manual category: list item IDs as clickable links horizontally, wrapping when needed
+        -- Manual category: list item IDs as clickable links horizontally,
+        --   wrapping when needed, then an inline Add input below.
         local idEntries = row.idEntries or {}
         row.idEntries = idEntries
         local ids = {}
@@ -419,6 +428,7 @@ function editModals.OpenCategoryEditor()
         end
         table.sort(ids)
 
+        local lineY = band2Y
         for i, id in ipairs(ids) do
           local itemID = id  -- capture per-iteration so tooltips and removals keep the right item
           local link = itemLinkFor(itemID)
@@ -434,16 +444,10 @@ function editModals.OpenCategoryEditor()
             idEntries[i] = entry
           end
           entry.label:SetText(link)
-          -- Measure the link's true rendered width so items and their X buttons
-          -- never collide. Show and position the label first so GetStringWidth
-          -- returns the real width (0 on a not-yet-laid-out label).
           entry.label:Show()
           entry.label:ClearAllPoints()
-          entry.label:SetPoint('TOPLEFT', x, lineY - 2)
-          -- Measure after Show+position so GetStringWidth returns the real
-          -- rendered width (0 on a not-yet-laid-out label). Use it for
-          -- positioning only; the label renders at its natural width so text
-          -- never gets clipped into the X button.
+          entry.label:SetPoint('TOPLEFT', x, lineY)
+
           local actualW = entry.label:GetStringWidth()
           if actualW == 0 then
             actualW = textWidth(link)
@@ -453,10 +457,11 @@ function editModals.OpenCategoryEditor()
           if x + entryWidth > maxRight and x > idStartX then
             x = idStartX
             lineY = lineY + lineHeight
-            entry.label:SetPoint('TOPLEFT', x, lineY - 2)
+            entry.label:SetPoint('TOPLEFT', x, lineY)
           end
+
           entry.remove:ClearAllPoints()
-          entry.remove:SetPoint('TOPLEFT', x + actualW + 4, lineY - 2)
+          entry.remove:SetPoint('TOPLEFT', x + actualW + 4, lineY)
           entry.remove.id = itemID
           entry.remove:SetScript('OnClick', function(self)
             db.RemoveItemFromCategory(catName, self.id)
@@ -464,7 +469,7 @@ function editModals.OpenCategoryEditor()
             refresh()
           end)
           entry.remove:Show()
-          -- Tooltip shows the hovered item, not the last id from the refresh loop.
+
           entry.label:SetScript('OnEnter', function(self)
             GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
             GameTooltip:SetItemByID(itemID)
@@ -473,7 +478,8 @@ function editModals.OpenCategoryEditor()
           entry.label:SetScript('OnLeave', function(self)
             GameTooltip:Hide()
           end)
-          rowBottom = math.max(rowBottom, lineY + lineHeight)
+
+          contentBottom = math.max(contentBottom, lineY + lineHeight)
           x = x + entryWidth
         end
 
@@ -483,27 +489,26 @@ function editModals.OpenCategoryEditor()
             row.emptyLabel:SetText('(none)')
           end
           row.emptyLabel:ClearAllPoints()
-          row.emptyLabel:SetPoint('TOPLEFT', x, -7)
+          row.emptyLabel:SetPoint('TOPLEFT', x, band2Y)
           row.emptyLabel:Show()
-          rowBottom = math.max(rowBottom, -7 + lineHeight)
+          contentBottom = math.max(contentBottom, band2Y + lineHeight)
         elseif row.emptyLabel then
           row.emptyLabel:Hide()
         end
 
+        -- Add input + button on their own line below the items.
+        lineY = lineY + lineHeight
         if not row.addEdit then
           row.addEdit = CreateFrame('EditBox', nil, row, 'InputBoxTemplate')
           row.addEdit:SetSize(80, 22)
           row.addEdit:SetAutoFocus(false)
           row.addEdit:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
         end
-        -- Add input + Add button on their own line below the items.
-        lineY = lineY + lineHeight
-        x = idStartX
         row.addEdit:ClearAllPoints()
-        row.addEdit:SetPoint('TOPLEFT', x, lineY)
+        row.addEdit:SetPoint('TOPLEFT', idStartX, lineY)
         row.addEdit:SetText('')
         row.addEdit:Show()
-        rowBottom = math.max(rowBottom, lineY + 26)
+        contentBottom = math.max(contentBottom, lineY + 26)
 
         if not row.addBtn then
           row.addBtn = CreateFrame('Button', nil, row, 'UIPanelButtonTemplate')
@@ -511,7 +516,7 @@ function editModals.OpenCategoryEditor()
           row.addBtn:SetText('Add')
         end
         row.addBtn:ClearAllPoints()
-        row.addBtn:SetPoint('TOPLEFT', x + 86, lineY - 2)
+        row.addBtn:SetPoint('TOPLEFT', idStartX + 86, lineY - 2)
         row.addBtn:SetScript('OnClick', function()
           local text = row.addEdit:GetText():trim()
           local num = tonumber(text)
@@ -530,8 +535,8 @@ function editModals.OpenCategoryEditor()
         row.addBtn:Show()
       end
 
-      -- Divider line between categories
-      local dividerY = rowBottom + 6  -- content bottom + small gap
+      -- Band 3: divider rule between categories
+      local dividerY = contentBottom + 10   -- 10px gap under content
       if not row.divider then
         row.divider = row:CreateTexture(nil, 'ARTWORK')
         row.divider:SetHeight(1)
@@ -542,7 +547,9 @@ function editModals.OpenCategoryEditor()
       row.divider:SetPoint('TOPRIGHT', -8, dividerY)
       row.divider:Show()
 
-      local rowHeight = math.max(dividerY + 1 + rowGap, 44)
+      -- Row height: divider bottom + gap, with a floor so short rows are still
+      --   tall enough to tap and read comfortably.
+      local rowHeight = math.max(dividerY + 1 + 14, band1H + 16 + 44)
       row:SetSize(scrollW - 30, rowHeight)
       y = y - rowHeight
     end

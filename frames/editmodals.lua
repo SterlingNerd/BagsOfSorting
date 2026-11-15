@@ -378,7 +378,7 @@ function editModals.OpenCategoryEditor()
         row.removeCatBtn:ClearAllPoints()
         row.removeCatBtn:SetPoint('TOPLEFT', 8 + nameW + 5, -6)
         row.removeCatBtn:SetScript('OnClick', function(self)
-          StaticPopup_Show('BOS_CONFIRM_REMOVE_CATEGORY', catName)
+          StaticPopup_Show('BOS_CONFIRM_REMOVE_CATEGORY', catName, nil, catName)
         end)
         row.removeCatBtn:Show()
       elseif row.removeCatBtn then

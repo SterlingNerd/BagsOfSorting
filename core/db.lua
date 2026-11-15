@@ -627,6 +627,37 @@ function db.RemoveItemFromCategory(name, itemID)
   return true
 end
 
+--- Add a new category (issue #71). Refuses duplicate names. Manual categories start with an
+--- empty item ID list; rule-based categories start with no rules. Commits immediately.
+---@param name string
+---@param kind string  -- 'manual' | 'rules'
+---@return boolean added
+function db.AddCategory(name, kind)
+  local cats = db.Categories()
+  if not name or name:trim() == '' then return false end
+  name = name:trim()
+  if cats[name] then return false end
+  if kind ~= 'manual' and kind ~= 'rules' then kind = 'manual' end
+  local cat = { priority = 99, kind = kind, enabled = true, duplicate = false }
+  if kind == 'manual' then cat.itemIDs = {} end
+  cats[name] = cat
+  db.NotifyModelChanged()
+  return true
+end
+
+--- Remove a category (issue #71). Refuses __catchall and unknown names. Commits immediately.
+--- Items that belonged to it fall through to the catchall on the next classify.
+---@param name string
+---@return boolean removed
+function db.RemoveCategory(name)
+  local cats = db.Categories()
+  if not name or name == '__catchall' then return false end
+  if not cats[name] then return false end
+  cats[name] = nil
+  db.NotifyModelChanged()
+  return true
+end
+
 --- A dragged window keeps its saved point, and that point is the only thing that overrides the
 --- layout rule (FR-41). The placement tests need the default placement, so this hands the windows
 --- back to it. It clears nothing else: `hidden`, sections and scale stay as they are.

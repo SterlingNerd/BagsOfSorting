@@ -364,6 +364,24 @@ function editModals.OpenCategoryEditor()
       end
       row.nameLabel:SetText(catName)
 
+      -- Remove this whole category (X next to the name; __catchall is never listed)
+      if not row.removeCatBtn then
+        row.removeCatBtn = CreateFrame('Button', nil, row, 'UIPanelButtonTemplate')
+        row.removeCatBtn:SetSize(16, 16)
+        row.removeCatBtn:SetText('×')
+      end
+      local nameW = row.nameLabel:GetStringWidth()
+      if nameW == 0 then nameW = textWidth(catName) end
+      row.removeCatBtn:ClearAllPoints()
+      row.removeCatBtn:SetPoint('TOPLEFT', 8 + nameW + 5, -6)
+      row.removeCatBtn:SetScript('OnClick', function(self)
+        if not db.RemoveCategory(catName) then return end
+        pipeline.Refresh('category-editor')
+        categoryList = getCategoryList()
+        refresh()
+      end)
+      row.removeCatBtn:Show()
+
       -- Clear per-row dynamic children (id entries + add controls), keeping the name label
       for _, entry in ipairs(row.idEntries or {}) do
         entry.label:Hide()
@@ -539,6 +557,55 @@ function editModals.OpenCategoryEditor()
   end
 
   refresh()
+
+  -- Footer: add a brand-new category (below the scroll, left of Close)
+  local footer = CreateFrame('Frame', nil, categoryEditorFrame)
+  footer:SetSize(340, 38)
+  footer:SetPoint('BOTTOMLEFT', 14, 16)
+
+  local newCatLabel = footer:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+  newCatLabel:SetPoint('TOPLEFT', 2, -6)
+  newCatLabel:SetText('New category:')
+
+  local newCatName = CreateFrame('EditBox', nil, footer, 'InputBoxTemplate')
+  newCatName:SetSize(110, 20)
+  newCatName:SetPoint('TOPLEFT', 2, -24)
+  newCatName:SetAutoFocus(false)
+
+  local newCatKind = CreateFrame('Frame', nil, footer, 'UIDropDownMenuTemplate')
+  UIDropDownMenu_SetWidth(newCatKind, 70)
+  newCatKind:SetPoint('TOPLEFT', 118, -26)
+  UIDropDownMenu_Initialize(newCatKind, function(self, level)
+    for _, k in ipairs({ 'manual', 'rules' }) do
+      local info = UIDropDownMenu_CreateInfo()
+      info.text = k
+      info.value = k
+      info.func = function(btn)
+        UIDropDownMenu_SetSelectedValue(newCatKind, btn.value)
+        newCatKind.selectedValue = btn.value
+      end
+      info.checked = (k == 'manual')
+      UIDropDownMenu_AddButton(info, level)
+    end
+  end)
+  UIDropDownMenu_SetSelectedValue(newCatKind, 'manual')
+  newCatKind.selectedValue = 'manual'
+
+  local newCatBtn = CreateFrame('Button', nil, footer, 'UIPanelButtonTemplate')
+  newCatBtn:SetSize(100, 22)
+  newCatBtn:SetPoint('TOPLEFT', 194, -24)
+  newCatBtn:SetText('Add Category')
+  newCatBtn:SetScript('OnClick', function()
+    local name = newCatName:GetText():trim()
+    if not db.AddCategory(name, newCatKind.selectedValue or 'manual') then
+      print('|cff00ff00BagsOfSorting|r: Could not add category "' .. tostring(name) .. '" (empty or duplicate)')
+      return
+    end
+    newCatName:SetText('')
+    pipeline.Refresh('category-editor')
+    categoryList = getCategoryList()
+    refresh()
+  end)
 
   -- Close: hides the dialog. Edits commit immediately, there is no Cancel.
   local doneBtn = CreateFrame('Button', nil, categoryEditorFrame, 'UIPanelButtonTemplate')

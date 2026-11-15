@@ -280,7 +280,7 @@ function editModals.OpenCategoryEditor()
   local sw, sh = GetScreenWidth(), GetScreenHeight()
   local width, height = math.floor(sw * 0.5), math.floor(sh * 0.5)
 
-  categoryEditorFrame = CreateFrame('Frame', 'BagsOfSortingCategoryEditor', UIParent, 'BasicFrameTemplateWithInset')
+  categoryEditorFrame = CreateFrame('Frame', 'BagsOfSortingCategoryEditor', UIParent)
   categoryEditorFrame:SetSize(width, height)
   categoryEditorFrame:SetPoint('CENTER')
   categoryEditorFrame:SetFrameStrata('DIALOG')
@@ -289,15 +289,26 @@ function editModals.OpenCategoryEditor()
   categoryEditorFrame:RegisterForDrag('LeftButton')
   categoryEditorFrame:SetScript('OnDragStart', categoryEditorFrame.StartMoving)
   categoryEditorFrame:SetScript('OnDragStop', categoryEditorFrame.StopMovingOrSizing)
+
+  -- Match the HUD Edit Mode window: translucent dialog background + Dialog NineSlice border.
+  local border = CreateFrame('Frame', nil, categoryEditorFrame, 'DialogBorderTranslucentTemplate')
+  border:SetAllPoints(categoryEditorFrame)
+
+  categoryEditorFrame.TitleText = categoryEditorFrame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+  categoryEditorFrame.TitleText:SetPoint('TOP', 0, -14)
   categoryEditorFrame.TitleText:SetText('Edit Categories')
+
   categoryEditorFrame:Show()
 
   local closeBtn = CreateFrame('Button', nil, categoryEditorFrame, 'UIPanelCloseButton')
   closeBtn:SetPoint('TOPRIGHT', -6, 6)
+  closeBtn:SetScript('OnClick', function()
+    categoryEditorFrame:Hide()
+  end)
 
   local scrollFrame = CreateFrame('ScrollFrame', nil, categoryEditorFrame, 'UIPanelScrollFrameTemplate')
-  scrollFrame:SetPoint('TOPLEFT', 18, -44)
-  scrollFrame:SetPoint('BOTTOMRIGHT', -18, 76)
+  scrollFrame:SetPoint('TOPLEFT', 14, -42)
+  scrollFrame:SetPoint('BOTTOMRIGHT', -14, 70)
 
   local scrollChild = CreateFrame('Frame', nil, scrollFrame)
   scrollChild:SetSize(width - 36, 1)
@@ -388,40 +399,40 @@ function editModals.OpenCategoryEditor()
         table.sort(ids)
 
         for i, id in ipairs(ids) do
-          local link = itemLinkFor(id)
-          local labelW = textWidth(link)
-          local entryWidth = labelW + 4 + 20 + idGap
-          -- wrap if this item won't fit on the current line (and it's not the first)
-          if x + entryWidth > maxRight and x > idStartX then
-            x = idStartX
-            lineY = lineY + lineHeight
-          end
+          local itemID = id  -- capture per-iteration so tooltips and removals keep the right item
+          local link = itemLinkFor(itemID)
+
           local entry = idEntries[i]
           if not entry then
-            local label = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-            label:SetJustifyH('LEFT')
-            label:SetScript('OnEnter', function(self)
-              GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
-              GameTooltip:SetItemByID(id)
-              GameTooltip:Show()
-            end)
-            label:SetScript('OnLeave', function(self)
-              GameTooltip:Hide()
-            end)
+            local lbl = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+            lbl:SetJustifyH('LEFT')
             local remove = CreateFrame('Button', nil, row, 'UIPanelButtonTemplate')
             remove:SetSize(18, 16)
             remove:SetText('×')
-            entry = { label = label, remove = remove }
+            entry = { label = lbl, remove = remove }
             idEntries[i] = entry
           end
           entry.label:SetText(link)
-          entry.label:SetWidth(labelW)
+          local actualW = entry.label:GetStringWidth()
+          if actualW == 0 then
+            actualW = textWidth(link)
+          end
+          entry.label:SetWidth(actualW)
           entry.label:ClearAllPoints()
           entry.label:SetPoint('TOPLEFT', x, lineY - 2)
           entry.label:Show()
+          -- Tooltip shows the hovered item, not the last id from the refresh loop.
+          entry.label:SetScript('OnEnter', function(self)
+            GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+            GameTooltip:SetItemByID(itemID)
+            GameTooltip:Show()
+          end)
+          entry.label:SetScript('OnLeave', function(self)
+            GameTooltip:Hide()
+          end)
           entry.remove:ClearAllPoints()
-          entry.remove:SetPoint('TOPLEFT', x + labelW + 3, lineY - 2)
-          entry.remove.id = id
+          entry.remove:SetPoint('TOPLEFT', x + actualW + 4, lineY - 2)
+          entry.remove.id = itemID
           entry.remove:SetScript('OnClick', function(self)
             db.RemoveItemFromCategory(catName, self.id)
             pipeline.Refresh('category-editor')
@@ -429,7 +440,7 @@ function editModals.OpenCategoryEditor()
           end)
           entry.remove:Show()
           rowBottom = math.max(rowBottom, lineY + lineHeight)
-          x = x + labelW + 3 + 18 + idGap
+          x = x + actualW + 4 + 18 + idGap
         end
 
         if #ids == 0 then
@@ -441,18 +452,20 @@ function editModals.OpenCategoryEditor()
           row.emptyLabel:SetPoint('TOPLEFT', x, -7)
           row.emptyLabel:Show()
           rowBottom = math.max(rowBottom, -7 + lineHeight)
-          x = x + 50
         elseif row.emptyLabel then
           row.emptyLabel:Hide()
         end
 
-        -- Add input + Add button, always last on its own line
         if not row.addEdit then
           row.addEdit = CreateFrame('EditBox', nil, row, 'InputBoxTemplate')
           row.addEdit:SetSize(80, 22)
           row.addEdit:SetAutoFocus(false)
           row.addEdit:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
         end
+        -- Add input + Add button on their own line below the items so they never sit
+        -- beside (and spill over) the last item or the empty label.
+        lineY = lineY + lineHeight
+        x = idStartX
         row.addEdit:ClearAllPoints()
         row.addEdit:SetPoint('TOPLEFT', x, lineY)
         row.addEdit:SetText('')

@@ -479,6 +479,8 @@ function editModals.OpenCategoryEditor()
         row.addBtn:Show()
       end
 
+      row:SetSize(scrollW - 30, math.max(rowBottom + 12, 24))
+
       y = y - (rowBottom + 6 + rowGap)
       print(string.format('|cff00ff00BagsOfSorting|r: row %s manual=%s ids=%d bottom=%d y=%d', catName, tostring(isManual), idCount, rowBottom, y))
     end
@@ -494,7 +496,8 @@ function editModals.OpenCategoryEditor()
 
     scrollChild:SetHeight(math.max(-y + 10, 1))
     scrollChild:SetWidth(width - 36)
-    print(string.format('|cff00ff00BagsOfSorting|r: scrollChild height=%d', math.max(-y + 10, 1)))
+    scrollFrame:UpdateScrollChildRect()
+    print(string.format('|cff00ff00BagsOfSorting|r: scrollChild height=%d scrollFrame %dx%d range=%d', math.max(-y + 10, 1), scrollFrame:GetWidth(), scrollFrame:GetHeight(), scrollFrame:GetVerticalScrollRange()))
   end
 
   refresh()

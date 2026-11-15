@@ -308,10 +308,10 @@ function editModals.OpenCategoryEditor()
 
   local scrollFrame = CreateFrame('ScrollFrame', nil, categoryEditorFrame, 'UIPanelScrollFrameTemplate')
   scrollFrame:SetPoint('TOPLEFT', 14, -42)
-  scrollFrame:SetPoint('BOTTOMRIGHT', -34, 70)
+  scrollFrame:SetPoint('BOTTOMRIGHT', -36, 70)
 
   local scrollChild = CreateFrame('Frame', nil, scrollFrame)
-  scrollChild:SetSize(width - 52, 1)
+  scrollChild:SetSize(width - 56, 1)
   scrollFrame:SetScrollChild(scrollChild)
 
   local cats = db.Categories()
@@ -413,10 +413,9 @@ function editModals.OpenCategoryEditor()
             idEntries[i] = entry
           end
           entry.label:SetText(link)
-          local actualW = entry.label:GetStringWidth()
-          if actualW == 0 then
-            actualW = textWidth(link)
-          end
+          -- textWidth is the proven, consistent estimate for link width (GetStringWidth
+          -- under-reports the rendered link area and causes items to collide).
+          local actualW = textWidth(link)
           entry.label:SetWidth(actualW)
           local entryWidth = actualW + 4 + 18 + idGap
           -- wrap if this item won't fit on the current line (and it's not the first)

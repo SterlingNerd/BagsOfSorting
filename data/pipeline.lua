@@ -171,9 +171,11 @@ function pipeline.Assign(placements)
           -- priority ties, so the section bound to the higher-priority category claims first.
           local minCatPrio = 100
           for _, cn in ipairs(names) do
-            local c = db.Categories()[cn]
-            local cp = (c and c.priority) or 100
-            if cp < minCatPrio then minCatPrio = cp end
+            if cn ~= '__catchall' then
+              local c = db.Categories()[cn]
+              local cp = (c and c.priority) or 100
+              if cp < minCatPrio then minCatPrio = cp end
+            end
           end
           local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = {}, collapsed = sectionConfig.collapsed or false, priority = sectionConfig.priority or 0 }
           window.sections[#window.sections + 1] = section
@@ -202,18 +204,16 @@ function pipeline.Assign(placements)
     end
   end
 
-  -- Rank sections for item claiming: higher section priority first; ties broken by the best
-  -- (lowest) category priority the section binds, then saved array order. This lets section
-  -- priority control which section claims an item that matches several categories.
+  -- Phase A: claim items from specific (non-__catchall) category placements.
+  -- Sections ranked by section priority (higher wins), ties broken by the best (lowest)
+  -- specific category priority bound, then saved array order. __catchall is excluded:
+  -- it is the fallback for items that match no specific category, handled in phase B.
   table.sort(allSections, function(a, b)
     if a.priority ~= b.priority then return a.priority > b.priority end
     if a.minCatPrio ~= b.minCatPrio then return a.minCatPrio < b.minCatPrio end
     if a.windowOrder ~= b.windowOrder then return a.windowOrder < b.windowOrder end
     return a.sectionIndex < b.sectionIndex
   end)
-
-  -- Claim items: sections in rank order claim items from their bound categories. An item is
-  -- drawn once (placedByNonDuplicate) unless its category opted into duplication.
   for _, entry in ipairs(allSections) do
     local section = entry.section
     if entry.isEquipmentWindow then
@@ -229,19 +229,53 @@ function pipeline.Assign(placements)
       end
     else
       for _, categoryName in ipairs(entry.names) do
-        local category = db.Categories()[categoryName]
-        for _, item in ipairs(placements[categoryName] or {}) do
-          if (item.containerKind == 'bank') == entry.isBank
-            and (not placedByNonDuplicate[item] or (category and category.duplicate)) then
-            if not (category and category.duplicate) then
-              placedByNonDuplicate[item] = true
+        if categoryName ~= '__catchall' then
+          local category = db.Categories()[categoryName]
+          for _, item in ipairs(placements[categoryName] or {}) do
+            if (item.containerKind == 'bank') == entry.isBank
+              and (not placedByNonDuplicate[item] or (category and category.duplicate)) then
+              if not (category and category.duplicate) then
+                placedByNonDuplicate[item] = true
+              end
+              section.items[#section.items + 1] = item
             end
-            section.items[#section.items + 1] = item
           end
         end
       end
     end
-    -- Issue #44: free-slot count and the show/hide decision, now that items are placed.
+  end
+
+  -- Phase B: claim __catchall items (items that matched no specific category). These go
+  -- to __catchall sections in saved array order (window order, then section index), never
+  -- by section priority -- so a high-priority section can't sweep every unmatched item just
+  -- because it also binds __catchall.
+  local catchallSections = {}
+  for _, entry in ipairs(allSections) do
+    for _, cn in ipairs(entry.names) do
+      if cn == '__catchall' then
+        catchallSections[#catchallSections + 1] = entry
+        break
+      end
+    end
+  end
+  table.sort(catchallSections, function(a, b)
+    if a.windowOrder ~= b.windowOrder then return a.windowOrder < b.windowOrder end
+    return a.sectionIndex < b.sectionIndex
+  end)
+  for _, entry in ipairs(catchallSections) do
+    local section = entry.section
+    local category = db.Categories()['__catchall']
+    for _, item in ipairs(placements['__catchall'] or {}) do
+      if (item.containerKind == 'bank') == entry.isBank and not placedByNonDuplicate[item] then
+        placedByNonDuplicate[item] = true
+        section.items[#section.items + 1] = item
+      end
+    end
+  end
+
+  -- Issue #44: free-slot count and the show/hide decision, now that all items are placed.
+  for _, entry in ipairs(allSections) do
+    local section = entry.section
     local free, slot = sectionFreeSlots(entry.names, entry.isBank and 'bank' or 'backpack')
     local hasEmptyCategory = false
     for _, categoryName in ipairs(entry.names) do

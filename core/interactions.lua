@@ -129,24 +129,26 @@ if type(OpenAllBags) == 'function' then
   end)
 end
 
---- Issue #39: with Clear New on Close **on** (the default), closing the bags is what empties the New
---- section, and `ToggleAllBags` / `CloseAllBags` are the client's two calls that close every bag
---- (origin/forever `ContainerFrame.lua:2113`, `:2222`). `IsAnyBagOpen()` is the client's own answer to
---- whether anything is left open (`:2175` -> `CheckIsBagOpen_Internal` ->
---- `ContainerFrameCombinedBags:IsBagOpen`, which only reads `IsShown` — hard rule 8), and reading it
---- after the call is what makes both hooks safe: `ToggleAllBags` opens as often as it closes, and
---- `CloseAllBags` has a path that closes nothing at all. shortcut: hiding our own windows with the X
---- or the keybind is not a closed bag, so the record survives a show/hide cycle; the upgrade is the
---- `ContainerFrame.CloseAllBags` EventRegistry callback this file already names above.
+--- Issue #39: closing the bags empties the New section when Clear New on Close is on; with it
+--- off, only items the player hovered over are emptied. `ToggleAllBags` / `CloseAllBags` are the
+--- client's two calls that close every bag (origin/forever `ContainerFrame.lua:2113`, `:2222`).
+--- `IsAnyBagOpen()` is the client's own answer to whether anything is left open (`:2175` ->
+--- `CheckIsBagOpen_Internal` -> `ContainerFrameCombinedBags:IsBagOpen`, which only reads `IsShown`
+--- — hard rule 8), and reading it after the call is what makes both hooks safe: `ToggleAllBags`
+--- opens as often as it closes, and `CloseAllBags` has a path that closes nothing at all.
+--- shortcut: hiding our own windows with the X or the keybind is not a closed bag, so the record
+--- survives a show/hide cycle.
 local function clearNewItemsIfClosed()
-  if not db.Settings().display.clearNewOnClose then return end
-  if not IsAnyBagOpen() then
+  if IsAnyBagOpen() then return end
+  if db.Settings().display.clearNewOnClose then
     harvest.ClearNewItemSession()
-    -- The record is empty now; re-render so the New section drops its items.
-    -- Without this the close clears the record but nothing repaints, so the
-    -- section looks stale until the next BAG_UPDATE forces a refresh.
-    pipeline.Refresh('new-items-on-close')
+  else
+    harvest.ClearHoveredNewItems()
   end
+  -- The record changed; re-render so the New section drops its items.
+  -- Without this the close clears the record but nothing repaints, so the
+  -- section looks stale until the next BAG_UPDATE forces a refresh.
+  pipeline.Refresh('new-items-on-close')
 end
 if type(ToggleAllBags) == 'function' then
   hooksecurefunc('ToggleAllBags', clearNewItemsIfClosed)
@@ -161,14 +163,13 @@ end
 --- every button that frame was showing (`ContainerFrame.lua:817`, `:393`), including the frames our
 --- own vendor and bank suppression hides — and `C_NewItems` has no way to put a flag back. So we
 --- still watch the hover itself (`ContainerFrame.xml:164`, which our pooled buttons carry via
---- `frames/item.lua`), but we no longer clear our record on it: doing so moved items out of the New
---- section and caused reflow when the bags were closed and reopened. Closing the bags is the clear
---- instead (see `clearNewItemsIfClosed` above); a hide changes nothing about the section.
+--- `frames/item.lua`), but we no longer clear our record on it immediately: doing so moved items
+--- out of the New section and caused reflow mid-session. Instead we mark the slot as hovered so it
+--- leaves the New section on close instead (see `clearNewItemsIfClosed` above); the player can
+--- interact with the item in the New section while the bags are open.
 if type(ContainerFrameItemButton_OnEnter) == 'function' then
-  hooksecurefunc('ContainerFrameItemButton_OnEnter', function()
-    -- Intentionally empty: clearing the new-item record on hover moves items out of the New
-    -- section and causes reflow when the bags are closed and reopened. Closing the bags is the
-    -- clear instead (see clearNewItemsIfClosed above).
+  hooksecurefunc('ContainerFrameItemButton_OnEnter', function(button)
+    harvest.MarkHoveredNewItem(button:GetBagID(), button:GetID())
   end)
 end
 

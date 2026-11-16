@@ -697,7 +697,11 @@ function db.SetClearNewOnClose(enabled)
   -- Turning the mode off starts the record clean: from there only a hover clears, and a record kept
   -- from the mode that was clearing on close would otherwise list items the player already hovered
   -- away (docs/08).
-  if not enabled then addon:GetModule('Harvest').ClearNewItemSession() end
+  local harvest = addon:GetModule('Harvest')
+  if not enabled then
+    harvest.ClearNewItemSession()
+    harvest.ClearHoveredNewItems()
+  end
   db.NotifyModelChanged()
   return true
 end

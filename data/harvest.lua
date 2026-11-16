@@ -74,6 +74,13 @@ local discovered
 ---@type table<string, number>
 local newItemSession = {}
 
+--- Slots that held new items and were hovered this session. Hovering marks a slot here
+--- but does not remove it from newItemSession: items stay in the New section during the
+--- session (no reflow on hover) and leave on close instead. Only core/interactions.lua
+--- removes from it: closing the bags clears hovered slots when Clear New on Close is off.
+---@type table<string, boolean>
+local hoveredNewItems = {}
+
 ---@type table<string, number>?
 local freeSlots
 ---@type table<string, BoSFreeSlot>?
@@ -330,10 +337,27 @@ function harvest.ForgetNewItemSession(bagID, slot)
   newItemSession[bagID .. ':' .. slot] = nil
 end
 
---- Empty the record. Closing the bags is the only thing that does this (issue #39, AC-39), and it
---- is what makes the New section mean "new since you last closed your bags".
+--- Empty the record. Closing the bags with Clear New on Close on does this (issue #39, AC-39),
+--- and it is what makes the New section mean "new since you last closed your bags".
 function harvest.ClearNewItemSession()
   newItemSession = {}
+end
+
+--- Mark this slot as hovered while new. On close (with Clear New on Close off) hovered slots are
+--- removed from newItemSession so they leave the New section then, not when they were hovered.
+---@param bagID number
+---@param slot number
+function harvest.MarkHoveredNewItem(bagID, slot)
+  hoveredNewItems[bagID .. ':' .. slot] = true
+end
+
+--- Remove every hovered slot from newItemSession, then clear the hovered set. Called on bag close
+--- when Clear New on Close is off: hovered items leave the New section then, not when hovered.
+function harvest.ClearHoveredNewItems()
+  for key in pairs(hoveredNewItems) do
+    newItemSession[key] = nil
+  end
+  hoveredNewItems = {}
 end
 
 return harvest

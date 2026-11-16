@@ -1380,8 +1380,8 @@ local function testNewSection()
   -- With the toggle off, the client's own list cannot serve the section either: a container frame hide
   -- runs UpdateNewItemList over every button that frame was showing (ContainerFrame.lua:817, :393) and
   -- C_NewItems has no way to put a flag back — so the record in data/harvest.lua is what the section
-  -- runs on. A hover no longer clears it: items stay in the New section across close/reopen so they
-  -- do not reflow when the bags come back.
+  -- runs on. A hover marks the slot but does not clear it now: items stay in the New section during
+  -- the session (no reflow on hover). They leave on close instead (see ClearHoveredNewItems).
   newItemsBagged = { [0] = { [1] = true } }
   pipeline.Refresh('new-off-flagged')
   check('with the toggle off a new item gets a New section too', countSection(backpack(), 'New'), 1)
@@ -1404,6 +1404,14 @@ local function testNewSection()
   hoverItemButton(0, 1)
   pipeline.Refresh('new-off-hovered')
   check('a hover does not empty it either', countSection(backpack(), 'New'), 1)
+
+  -- A hovered item leaves the New section on close even with the toggle off:
+  _G.ContainerFrameCombinedBags:Show()
+  _G.ContainerFrame1:Show()
+  _G.ContainerFrame6:Show()
+  CloseAllBags()
+  pipeline.Refresh('new-off-hovered-closed')
+  check('a hovered item leaves the New section on close', countSection(backpack(), 'New'), 0)
 
   -- Back to the default, where closing the bags is the clear (AC-39). Known state again: the frames have
   -- to be open for CloseAllBags to really be a close.

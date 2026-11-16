@@ -217,14 +217,19 @@ function pipeline.Assign(placements)
   for _, entry in ipairs(allSections) do
     local section = entry.section
     if entry.isEquipmentWindow then
-      local catName = entry.names[1]
+      -- Claim items whose equipment set is one this section binds (a wildcard
+      -- binding like `Equipment.*` expands to every equipment category).
       for item, sets in pairs(entry.equipmentItemSets) do
+        local bound = false
         for _, s in ipairs(sets) do
-          if s == catName then
-            section.items[#section.items + 1] = item
-            placedByNonDuplicate[item] = true
-            break
+          for _, cn in ipairs(entry.names) do
+            if s == cn then bound = true break end
           end
+          if bound then break end
+        end
+        if bound then
+          section.items[#section.items + 1] = item
+          placedByNonDuplicate[item] = true
         end
       end
     else

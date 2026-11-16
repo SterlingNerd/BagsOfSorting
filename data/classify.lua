@@ -89,11 +89,6 @@ end
 function classify.Run(items, categories)
   local ordered = classify.Ordered(categories)
 
-  local anyDuplicate = false
-  for _, entry in ipairs(ordered) do
-    if entry.cat.duplicate then anyDuplicate = true break end
-  end
-
   local placements = {}
 
   for _, item in ipairs(items) do
@@ -101,20 +96,24 @@ function classify.Run(items, categories)
     ---@type BoSTrace
     local trace = { tested = {} }
 
+    -- Walk every category so an item is eligible for every one it matches. Sections,
+    -- ranked by section priority, then compete for it in pipeline.Assign; the item is
+    -- drawn once thanks to placedByNonDuplicate there. item.owner stays the first
+    -- non-duplicate match so the `none`/catch-all rule and the trace still report a single owner.
     for _, entry in ipairs(ordered) do
       local ok, matched, decidedBy = pcall(rules.Evaluate, entry.tree, item)
       if not ok then
         log.Error('category', entry.name, 'errored during classify:', matched)
       elseif matched then
-        trace.matched = entry.name
-        trace.matchedBy = decidedBy and rules.Sentence(decidedBy) or nil
-        if entry.cat.duplicate then
-          place(placements, entry.name, item)
-        elseif not item.owner then
-          item.owner = entry.name
-          place(placements, entry.name, item)
+        if not trace.matched then
+          trace.matched = entry.name
+          trace.matchedBy = decidedBy and rules.Sentence(decidedBy) or nil
         end
-        if item.owner and not anyDuplicate then break end
+        place(placements, entry.name, item)
+        -- Only a non-duplicate category takes ownership; duplicates add a placement without
+        -- consuming it (docs/04 §Precedence 3). The first non-duplicate match is the owner,
+        -- which the `none`/catch-all rule and the trace report.
+        if not entry.cat.duplicate and not item.owner then item.owner = entry.name end
       else
         trace.tested[#trace.tested + 1] = entry.name
       end

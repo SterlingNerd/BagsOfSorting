@@ -93,6 +93,10 @@ function pipeline.Assign(placements)
   local shown = {}
   local placedByNonDuplicate = {}
   local counted = {}
+  -- Every section across every window, ranked so item claiming is decided by section
+  -- priority (higher wins), ties broken by the best category priority the section binds,
+  -- then saved array order. Sections keep their saved (display) order inside each window.
+  local allSections = {}
 
   for _, config in ipairs(db.Windows()) do
     -- config.hidden is the window's own X: closed windows are not in the model at all, which
@@ -156,74 +160,32 @@ function pipeline.Assign(placements)
         end
       end
 
-      -- Section priority decides which section claims an item first: higher priority wins ties.
-      -- Equal priority keeps saved array order. Equipment windows build sections by name.
-      local orderedSections
-      if isEquipmentWindow then
-        orderedSections = sectionConfigs
-      else
-        orderedSections = {}
-        for i, sc in ipairs(sectionConfigs) do orderedSections[#orderedSections + 1] = { sc = sc, i = i } end
-        table.sort(orderedSections, function(a, b)
-          local pa, pb = (a.sc.priority or 0), (b.sc.priority or 0)
-          if pa ~= pb then return pa > pb end
-          return a.i < b.i
-        end)
-        for k = 1, #orderedSections do orderedSections[k] = orderedSections[k].sc end
-      end
-
-      for _, sectionConfig in ipairs(orderedSections) do
+      -- Build every section skeleton in saved array order (its display order) and collect
+      -- all sections across windows so item claiming is ranked by section priority.
+      local sectionOrder = 0
+      for _, sectionConfig in ipairs(sectionConfigs) do
         if not sectionConfig.hidden then
+          sectionOrder = sectionOrder + 1
           local names = pipeline.ResolveBindings(sectionConfig.categories)
-          local items = {}
-          if isEquipmentWindow then
-            local catName = names[1]
-            for item, sets in pairs(equipmentItemSets) do
-              for _, s in ipairs(sets) do
-                if s == catName then
-                  items[#items + 1] = item
-                  placedByNonDuplicate[item] = true
-                  break
-                end
-              end
-            end
-          else
-            for _, categoryName in ipairs(names) do
-              local category = db.Categories()[categoryName]
-              for _, item in ipairs(placements[categoryName] or {}) do
-                if (item.containerKind == 'bank') == isBank
-                  and (not placedByNonDuplicate[item] or (category and category.duplicate)) then
-                  if not (category and category.duplicate) then
-                    placedByNonDuplicate[item] = true
-                  end
-                  items[#items + 1] = item
-                end
-              end
-            end
+          -- Best (lowest) category priority this section binds: tiebreak when section
+          -- priority ties, so the section bound to the higher-priority category claims first.
+          local minCatPrio = 100
+          for _, cn in ipairs(names) do
+            local c = db.Categories()[cn]
+            local cp = (c and c.priority) or 100
+            if cp < minCatPrio then minCatPrio = cp end
           end
-          -- Issue #44: the section's own count comes from the bag its category pairs with, and a bag
-          -- with free slots keeps its section on screen even when the category holds nothing — the
-          -- cell is the drop target, and a hidden section hides it (`/bos test 44d`).
-          local free, slot = sectionFreeSlots(names, config.kind)
-          -- A category can also ask for its section to stay drawn while empty (`_showEmpty`). An
-          -- equipment set never does: an empty set is an Equipment Manager header with no cells under
-          -- it, so an equipment window draws a set only when that set holds something.
-          local hasEmptyCategory = false
-          for _, categoryName in ipairs(names) do
-            local cat = db.Categories()[categoryName]
-            if cat and cat._showEmpty then hasEmptyCategory = true break end
-          end
-          local showSection
-          if isEquipmentWindow then
-            showSection = #items > 0
-          else
-            showSection = #items > 0 or free > 0 or hasEmptyCategory or db.Settings().display.showEmptySections
-          end
-          if showSection then
-            local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = items, collapsed = sectionConfig.collapsed or false, priority = sectionConfig.priority or 0 }
-            if free > 0 then section.emptySlots = free; section.emptySlot = slot end
-            window.sections[#window.sections + 1] = section
-          end
+          local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = {}, collapsed = sectionConfig.collapsed or false, priority = sectionConfig.priority or 0 }
+          window.sections[#window.sections + 1] = section
+          allSections[#allSections + 1] = {
+            section = section, names = names, isBank = isBank,
+            isEquipmentWindow = isEquipmentWindow,
+            equipmentItemSets = equipmentItemSets,
+            priority = section.priority,
+            minCatPrio = minCatPrio,
+            windowOrder = #models,
+            sectionIndex = sectionOrder,
+          }
         end
       end
 
@@ -238,6 +200,77 @@ function pipeline.Assign(placements)
       models[#models + 1] = window
       shown[config.id] = true
     end
+  end
+
+  -- Rank sections for item claiming: higher section priority first; ties broken by the best
+  -- (lowest) category priority the section binds, then saved array order. This lets section
+  -- priority control which section claims an item that matches several categories.
+  table.sort(allSections, function(a, b)
+    if a.priority ~= b.priority then return a.priority > b.priority end
+    if a.minCatPrio ~= b.minCatPrio then return a.minCatPrio < b.minCatPrio end
+    if a.windowOrder ~= b.windowOrder then return a.windowOrder < b.windowOrder end
+    return a.sectionIndex < b.sectionIndex
+  end)
+
+  -- Claim items: sections in rank order claim items from their bound categories. An item is
+  -- drawn once (placedByNonDuplicate) unless its category opted into duplication.
+  for _, entry in ipairs(allSections) do
+    local section = entry.section
+    if entry.isEquipmentWindow then
+      local catName = entry.names[1]
+      for item, sets in pairs(entry.equipmentItemSets) do
+        for _, s in ipairs(sets) do
+          if s == catName then
+            section.items[#section.items + 1] = item
+            placedByNonDuplicate[item] = true
+            break
+          end
+        end
+      end
+    else
+      for _, categoryName in ipairs(entry.names) do
+        local category = db.Categories()[categoryName]
+        for _, item in ipairs(placements[categoryName] or {}) do
+          if (item.containerKind == 'bank') == entry.isBank
+            and (not placedByNonDuplicate[item] or (category and category.duplicate)) then
+            if not (category and category.duplicate) then
+              placedByNonDuplicate[item] = true
+            end
+            section.items[#section.items + 1] = item
+          end
+        end
+      end
+    end
+    -- Issue #44: free-slot count and the show/hide decision, now that items are placed.
+    local free, slot = sectionFreeSlots(entry.names, entry.isBank and 'bank' or 'backpack')
+    local hasEmptyCategory = false
+    for _, categoryName in ipairs(entry.names) do
+      local cat = db.Categories()[categoryName]
+      if cat and cat._showEmpty then hasEmptyCategory = true break end
+    end
+    local showSection
+    if entry.isEquipmentWindow then
+      showSection = #section.items > 0
+    else
+      showSection = #section.items > 0 or free > 0 or hasEmptyCategory or db.Settings().display.showEmptySections
+    end
+    if not showSection then
+      section._hide = true
+    elseif free > 0 then
+      section.emptySlots = free; section.emptySlot = slot
+    end
+  end
+
+  -- Drop sections that ended up empty, keeping display (saved array) order.
+  for _, window in ipairs(models) do
+    local kept = {}
+    for _, section in ipairs(window.sections) do
+      if not section._hide then
+        section._hide = nil
+        kept[#kept + 1] = section
+      end
+    end
+    window.sections = kept
   end
 
   return models, shown

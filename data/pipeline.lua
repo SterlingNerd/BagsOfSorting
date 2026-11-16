@@ -156,7 +156,23 @@ function pipeline.Assign(placements)
         end
       end
 
-      for _, sectionConfig in ipairs(sectionConfigs) do
+      -- Section priority decides which section claims an item first: higher priority wins ties.
+      -- Equal priority keeps saved array order. Equipment windows build sections by name.
+      local orderedSections
+      if isEquipmentWindow then
+        orderedSections = sectionConfigs
+      else
+        orderedSections = {}
+        for i, sc in ipairs(sectionConfigs) do orderedSections[#orderedSections + 1] = { sc = sc, i = i } end
+        table.sort(orderedSections, function(a, b)
+          local pa, pb = (a.sc.priority or 0), (b.sc.priority or 0)
+          if pa ~= pb then return pa > pb end
+          return a.i < b.i
+        end)
+        for k = 1, #orderedSections do orderedSections[k] = orderedSections[k].sc end
+      end
+
+      for _, sectionConfig in ipairs(orderedSections) do
         if not sectionConfig.hidden then
           local names = pipeline.ResolveBindings(sectionConfig.categories)
           local items = {}
@@ -209,25 +225,6 @@ function pipeline.Assign(placements)
             window.sections[#window.sections + 1] = section
           end
         end
-      end
-
-      -- Order sections within the window by section priority (higher sorts first). Sections with
-      -- equal priority fall back to their first category name. When every section shares the same
-      -- priority (the default 0) the saved array order is kept, so default behaviour is unchanged.
-      local allEqual = true
-      for i = 2, #window.sections do
-        if (window.sections[i].priority or 0) ~= (window.sections[1].priority or 0) then
-          allEqual = false
-          break
-        end
-      end
-      if not allEqual then
-        table.sort(window.sections, function(a, b)
-          local pa, pb = (a.priority or 0), (b.priority or 0)
-          if pa ~= pb then return pa > pb end
-          local ca, cb = (a.categories and a.categories[1]) or '', (b.categories and b.categories[1]) or ''
-          return ca < cb
-        end)
       end
 
       local side = isBank and 'bank' or 'backpack'

@@ -82,9 +82,26 @@ function editModals.OpenSectionEdit(model, windowConfig)
   nameEdit:SetAutoFocus(false)
   nameEdit:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
 
+  -- Priority slider
+  local prioLabel = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+  prioLabel:SetPoint('TOPLEFT', nameEdit, 'BOTTOMLEFT', 0, -15)
+  prioLabel:SetText('Priority: ' .. (model.priority or 0))
+
+  local prioSlider = CreateFrame('Slider', nil, sectionEditFrame, 'OptionsSliderTemplate')
+  prioSlider:SetSize(300, 20)
+  prioSlider:SetPoint('TOPLEFT', prioLabel, 'BOTTOMLEFT', 0, -5)
+  prioSlider:SetMinMaxValues(-5, 5)
+  prioSlider:SetValueStep(1)
+  prioSlider:SetValue(model.priority or 0)
+  prioSlider:SetScript('OnValueChanged', function(self, value)
+    local ival = math.floor(value + 0.5)
+    prioLabel:SetText('Priority: ' .. ival)
+    self.value = ival
+  end)
+
   -- Categories multi-select
   local catLabel = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-  catLabel:SetPoint('TOPLEFT', nameEdit, 'BOTTOMLEFT', 0, -15)
+  catLabel:SetPoint('TOPLEFT', prioSlider, 'BOTTOMLEFT', 0, -15)
   catLabel:SetText('Categories (multi-select):')
 
   local catContainer = CreateFrame('Frame', nil, sectionEditFrame)
@@ -156,6 +173,7 @@ function editModals.OpenSectionEdit(model, windowConfig)
       if sectionConfig.id == model.id then
         sectionConfig.name = newName
         sectionConfig.categories = newCategories
+        sectionConfig.priority = prioSlider.value or (sectionConfig.priority or 0)
         break
       end
     end

@@ -651,6 +651,7 @@ function editModals.AddSectionBelow(model, windowConfig)
     name = 'New Section',
     categories = { '__catchall' },
     collapsed = false,
+    priority = 0,
   }
 
   -- Find insertion index
@@ -675,6 +676,7 @@ function editModals.AddSectionToWindow(windowConfig)
     name = 'New Section',
     categories = { '__catchall' },
     collapsed = false,
+    priority = 0,
   }
 
   table.insert(windowConfig.sections, newSection)

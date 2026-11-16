@@ -153,18 +153,26 @@ function sectionFrames.Render(section, model, parent, offsetY, windowConfig)
   return section
 end
 
+-- Find the section config this menu was opened for, so priority edits write back to the right row.
+local function sectionConfigFor(windowConfig, sectionId)
+  for _, sectionConfig in ipairs(windowConfig.sections or {}) do
+    if sectionConfig.id == sectionId then return sectionConfig end
+  end
+end
+
 -- Show the section header context menu
 function ShowSectionMenu(anchorFrame, model, windowConfig)
   local isCollapsed = model.collapsed or false
+  local sectionConfig = sectionConfigFor(windowConfig, model.id)
   local entries = {
     {
       text = isCollapsed and 'Uncompress' or 'Compress',
       value = 'toggle_collapse',
       func = function()
         -- Find the section config in the window and toggle collapsed
-        for _, sectionConfig in ipairs(windowConfig.sections or {}) do
-          if sectionConfig.id == model.id then
-            sectionConfig.collapsed = not isCollapsed
+        for _, cfg in ipairs(windowConfig.sections or {}) do
+          if cfg.id == model.id then
+            cfg.collapsed = not isCollapsed
             break
           end
         end
@@ -188,6 +196,32 @@ function ShowSectionMenu(anchorFrame, model, windowConfig)
       func = function()
         AddSectionBelow(model, windowConfig)
       end,
+      notCheckable = true,
+    },
+    {
+      text = 'Priority',
+      value = 'priority',
+      hasArrow = true,
+      menuList = (function()
+        local out = {}
+        for v = -5, 5 do
+          local val = v -- capture per iteration so each entry keeps its own value
+          out[#out + 1] = {
+            text = tostring(val),
+            value = val,
+            checked = function() return (sectionConfig and sectionConfig.priority or 0) == val end,
+            func = function()
+              if sectionConfig then
+                sectionConfig.priority = val
+                db.NotifyModelChanged()
+                pipeline.Refresh('section-priority')
+              end
+            end,
+            notCheckable = true,
+          }
+        end
+        return out
+      end)(),
       notCheckable = true,
     },
   }

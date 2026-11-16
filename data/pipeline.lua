@@ -204,11 +204,30 @@ function pipeline.Assign(placements)
             showSection = #items > 0 or free > 0 or hasEmptyCategory or db.Settings().display.showEmptySections
           end
           if showSection then
-            local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = items, collapsed = sectionConfig.collapsed or false }
+            local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = items, collapsed = sectionConfig.collapsed or false, priority = sectionConfig.priority or 0 }
             if free > 0 then section.emptySlots = free; section.emptySlot = slot end
             window.sections[#window.sections + 1] = section
           end
         end
+      end
+
+      -- Order sections within the window by section priority (higher sorts first). Sections with
+      -- equal priority fall back to their first category name. When every section shares the same
+      -- priority (the default 0) the saved array order is kept, so default behaviour is unchanged.
+      local allEqual = true
+      for i = 2, #window.sections do
+        if (window.sections[i].priority or 0) ~= (window.sections[1].priority or 0) then
+          allEqual = false
+          break
+        end
+      end
+      if not allEqual then
+        table.sort(window.sections, function(a, b)
+          local pa, pb = (a.priority or 0), (b.priority or 0)
+          if pa ~= pb then return pa > pb end
+          local ca, cb = (a.categories and a.categories[1]) or '', (b.categories and b.categories[1]) or ''
+          return ca < cb
+        end)
       end
 
       local side = isBank and 'bank' or 'backpack'

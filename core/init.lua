@@ -15,6 +15,7 @@ local harvest = addon:GetModule('Harvest')
 local enrich = addon:GetModule('Enrich')
 local pipeline = addon:GetModule('Pipeline')
 local windows = addon:GetModule('WindowFrames')
+local interactions = addon:GetModule('Interactions')
 local options = addon:GetModule('AddonOptions')
 local itemFrames = addon:GetModule('ItemFrames')
 local pool = addon:GetModule('Pool')
@@ -106,6 +107,7 @@ end
 
 function init.Toggle()
   if init.IsShowing() then
+    interactions.ClearNewItemsIfClosed('toggle')
     db.SetWindowsOpen(false)
     windows.HideAll()
   else
@@ -145,6 +147,7 @@ function init.Slash(input)
   elseif cmd == 'show' then
     init.Show()
   elseif cmd == 'hide' then
+    interactions.ClearNewItemsIfClosed('slash-hide')
     db.SetWindowsOpen(false)
     windows.HideAll()
   elseif cmd == 'unplace' then

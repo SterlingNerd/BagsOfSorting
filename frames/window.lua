@@ -173,6 +173,9 @@ local function create(config)
   frame.onCloseCallback = function()
     config.hidden = true
     log.Debug('closed window', config.id)
+    -- Clear hovered new items when a BOS window is closed directly (not via Blizzard's bags).
+    local interactions = addon:GetModule('Interactions')
+    if interactions then interactions.ClearNewItemsIfClosed('window-x') end
     return true
   end
 

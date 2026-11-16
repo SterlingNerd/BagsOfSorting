@@ -178,4 +178,11 @@ function interactions.Suppressing()
   return suppressing
 end
 
+--- Clear the new-item record when the bags close. Called by Blizzard's CloseAllBags/ToggleAllBags
+--- hooks and by BOS's own close paths (window X, /bos hide, keybind toggle).
+---@param reason string?
+function interactions.ClearNewItemsIfClosed(reason)
+  clearNewItemsIfClosed()
+end
+
 return interactions

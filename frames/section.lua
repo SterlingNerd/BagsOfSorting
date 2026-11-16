@@ -160,6 +160,29 @@ local function sectionConfigFor(windowConfig, sectionId)
   end
 end
 
+-- Build the priority submenu entries (-5 … +5, default 0).
+local function priorityEntries(sectionConfig)
+  local out = {}
+  for v = -5, 5 do
+    local val = v -- capture per iteration so each entry keeps its own value
+    out[#out + 1] = {
+      text = tostring(val),
+      value = val,
+      checked = function() return (sectionConfig and sectionConfig.priority or 0) == val end,
+      func = function()
+        if sectionConfig then
+          sectionConfig.priority = val
+          db.NotifyModelChanged()
+          pipeline.Refresh('section-priority')
+        end
+        if CloseDropDownMenus then CloseDropDownMenus() end
+      end,
+      notCheckable = true,
+    }
+  end
+  return out
+end
+
 -- Show the section header context menu
 function ShowSectionMenu(anchorFrame, model, windowConfig)
   local isCollapsed = model.collapsed or false
@@ -201,27 +224,13 @@ function ShowSectionMenu(anchorFrame, model, windowConfig)
     {
       text = 'Priority',
       value = 'priority',
-      hasArrow = true,
-      menuList = (function()
-        local out = {}
-        for v = -5, 5 do
-          local val = v -- capture per iteration so each entry keeps its own value
-          out[#out + 1] = {
-            text = tostring(val),
-            value = val,
-            checked = function() return (sectionConfig and sectionConfig.priority or 0) == val end,
-            func = function()
-              if sectionConfig then
-                sectionConfig.priority = val
-                db.NotifyModelChanged()
-                pipeline.Refresh('section-priority')
-              end
-            end,
-            notCheckable = true,
-          }
-        end
-        return out
-      end)(),
+      func = function()
+        -- EasyMenu is not on this client, so hasArrow/menuList submenus repeat the
+        -- top-level menu instead of nesting. Close this menu and open a fresh one
+        -- with just the -5 … +5 range (dropdown.Show handles closing on click).
+        dropdown.Close()
+        dropdown.Show(anchorFrame, priorityEntries(sectionConfig))
+      end,
       notCheckable = true,
     },
   }

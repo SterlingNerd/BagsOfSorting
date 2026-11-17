@@ -27,7 +27,10 @@ local setItemMap = {}
 ---@param item BoSItem
 ---@return table<string, boolean>?
 function equipment.scanTooltipForEquipmentSets(item)
-  if not item.link or not item.equipSlot or item.equipSlot == '' then return nil end
+  -- equipSlot isn't populated until enrich runs, which happens after the initial
+  -- equipment.Refresh() at login. tooltip scanning only needs the link, so drop
+  -- the equipSlot guard so bag items can be matched before the first refresh.
+  if not item.link then return nil end
 
   local scanner = _G.BagsOfSortingTooltipScanner
   if not scanner then

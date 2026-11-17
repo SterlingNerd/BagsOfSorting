@@ -42,7 +42,8 @@ function equipment.scanTooltipForEquipmentSets(item)
   scanner:ClearLines()
   scanner:SetHyperlink(item.link)
 
-  for i = 2, scanner:NumLines() do
+  local numLines = scanner:NumLines() or 0
+  for i = 2, numLines do
     local line = _G['BagsOfSortingTooltipScannerTextLeft' .. i]
     if line then
       local text = line:GetText()

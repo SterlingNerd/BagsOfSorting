@@ -1471,6 +1471,100 @@ end
 
 testNewSectionMigration()
 
+--- Section priority decides which section claims an item that matches several categories.
+--- Higher section priority wins; equal priority keeps saved array order.
+local function testSectionPriorityClaims()
+  local db = addon.modules['DB']
+  local pipeline = addon.modules['Pipeline']
+
+  -- Two categories that both match item 1006 (Linen Cloth, bag 1 slot 2).
+  db.Categories()['S_Prio_High_Cat'] = { priority = 99, kind = 'manual', enabled = true, itemIDs = { [1006] = true } }
+  db.Categories()['S_Prio_Low_Cat'] = { priority = 99, kind = 'manual', enabled = true, itemIDs = { [1006] = true } }
+
+  table.insert(db.Windows()[1].sections,
+    { id = 's_sp_high', name = 'High Prio', categories = { 'S_Prio_High_Cat' }, collapsed = false, priority = 10 })
+  table.insert(db.Windows()[1].sections,
+    { id = 's_sp_low', name = 'Low Prio', categories = { 'S_Prio_Low_Cat' }, collapsed = false, priority = 0 })
+
+  pipeline.Refresh('section-priority-claim')
+  local models = pipeline.Model()
+  local backpack = windowIn(models, 'Backpack')
+  check('higher-priority section claims the item', countSection(backpack, 'High Prio'), 1)
+  check('lower-priority section gets nothing', countSection(backpack, 'Low Prio'), 0)
+
+  table.remove(db.Windows()[1].sections)
+  table.remove(db.Windows()[1].sections)
+  db.Categories()['S_Prio_High_Cat'] = nil
+  db.Categories()['S_Prio_Low_Cat'] = nil
+  pipeline.Refresh('section-priority-cleanup')
+end
+
+testSectionPriorityClaims()
+
+--- __catchall items are claimed by __catchall sections in saved array order,
+--- never by section priority. A high-priority __catchall section cannot sweep
+--- an item away from an earlier __catchall section.
+local function testCatchallArrayOrder()
+  local db = addon.modules['DB']
+  local pipeline = addon.modules['Pipeline']
+
+  -- Item 1005 (never seen) matches nothing specific: it lands in __catchall only.
+  -- The Backpack window already has Everything else (__catchall) as its last
+  -- section. Add a high-priority __catchall section after it.
+  local before = countSection(windowIn(pipeline.Model(), 'Backpack'), 'Everything else')
+  table.insert(db.Windows()[1].sections,
+    { id = 's_cc_high', name = 'High Catch', categories = { '__catchall' }, collapsed = false, priority = 10 })
+
+  pipeline.Refresh('catchall-array-order')
+  local models = pipeline.Model()
+  local backpack = windowIn(models, 'Backpack')
+  check('high-priority __catchall does not sweep from array-order section',
+    countSection(backpack, 'High Catch'), 0)
+  check('array-order __catchall section keeps its item',
+    countSection(backpack, 'Everything else'), before)
+
+  table.remove(db.Windows()[1].sections)
+  pipeline.Refresh('catchall-cleanup')
+end
+
+testCatchallArrayOrder()
+
+--- Equipment claiming checks every bound category name, not just names[1].
+--- An item matching any equipment category the section binds is claimed.
+local function testEquipmentMultiCategory()
+  local db = addon.modules['DB']
+  local pipeline = addon.modules['Pipeline']
+
+  -- Equipment.TestCat matches item 1006. The Equipment window binds Equipment.*
+  -- which expands to all Equipment.* categories.
+  db.Categories()['Equipment.TestCat'] = {
+    priority = 14, kind = 'manual', enabled = true, duplicate = false,
+    itemIDs = { [1006] = true }, _equipmentSetID = 1,
+  }
+
+  pipeline.Refresh('equipment-multi-category')
+  local models = pipeline.Model()
+  local equipment = windowIn(models, 'Equipment')
+  check('equipment section claims item matching a bound category',
+    countSection(equipment, 'TestCat'), 1)
+
+  db.Categories()['Equipment.TestCat'] = nil
+  pipeline.Refresh('equipment-cleanup')
+end
+
+testEquipmentMultiCategory()
+
+--- scanTooltipForEquipmentSets works with just a link (equipSlot not required).
+--- enrich runs after the initial equipment.Refresh(), so bag items have no
+--- equipSlot at that point.
+local function testTooltipScanWithoutEquipSlot()
+  local equipment = addon.modules['Equipment']
+  local matched = equipment.scanTooltipForEquipmentSets({ link = '|Hitem:1001:::::::::::::::::::|h[x]|h', itemID = 1001 })
+  check('tooltip scan does not error without equipSlot', matched, nil)
+end
+
+testTooltipScanWithoutEquipSlot()
+
 for _, failure in ipairs(failures) do
   print('FAIL ' .. failure)
 end

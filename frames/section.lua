@@ -169,7 +169,7 @@ local function moveSection(direction, sectionConfig, windowConfig)
     if s.id == sectionConfig.id then idx = i; break end
   end
   if not idx then return end
-  local target = (direction == 'up') and (idx + 1) or (idx - 1)
+  local target = (direction == 'up') and (idx - 1) or (idx + 1)
   if target < 1 or target > #sections then return end
   sections[idx], sections[target] = sections[target], sections[idx]
   db.NotifyModelChanged()
@@ -244,7 +244,7 @@ function ShowSectionMenu(anchorFrame, model, windowConfig)
     {
       text = 'Move Up',
       value = 'move_up',
-      disabled = (sectionIdx >= sectionCount),
+      disabled = (sectionIdx <= 1),
       func = function()
         moveSection('up', sectionConfig, windowConfig)
         if CloseDropDownMenus then CloseDropDownMenus() end
@@ -254,7 +254,7 @@ function ShowSectionMenu(anchorFrame, model, windowConfig)
     {
       text = 'Move Down',
       value = 'move_down',
-      disabled = (sectionIdx <= 1),
+      disabled = (sectionIdx >= sectionCount),
       func = function()
         moveSection('down', sectionConfig, windowConfig)
         if CloseDropDownMenus then CloseDropDownMenus() end

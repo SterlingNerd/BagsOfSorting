@@ -160,6 +160,22 @@ local function sectionConfigFor(windowConfig, sectionId)
   end
 end
 
+-- Move a section one step up or down within windowConfig.sections (array order == display order).
+-- Swaps adjacent entries so the window repaints in the new order on the next refresh.
+local function moveSection(direction, sectionConfig, windowConfig)
+  local sections = windowConfig.sections or {}
+  local idx
+  for i, s in ipairs(sections) do
+    if s.id == sectionConfig.id then idx = i; break end
+  end
+  if not idx then return end
+  local target = (direction == 'up') and (idx - 1) or (idx + 1)
+  if target < 1 or target > #sections then return end
+  sections[idx], sections[target] = sections[target], sections[idx]
+  db.NotifyModelChanged()
+  pipeline.Refresh('section-move')
+end
+
 -- Build the priority submenu entries (-5 … +5, default 0).
 local function priorityEntries(sectionConfig)
   local out = {}
@@ -187,6 +203,10 @@ end
 function ShowSectionMenu(anchorFrame, model, windowConfig)
   local isCollapsed = model.collapsed or false
   local sectionConfig = sectionConfigFor(windowConfig, model.id)
+  local sectionIdx, sectionCount = 0, #(windowConfig.sections or {})
+  for i, s in ipairs(windowConfig.sections or {}) do
+    if s.id == model.id then sectionIdx = i; break end
+  end
   local entries = {
     {
       text = isCollapsed and 'Uncompress' or 'Compress',
@@ -218,6 +238,26 @@ function ShowSectionMenu(anchorFrame, model, windowConfig)
       value = 'add_section',
       func = function()
         AddSectionBelow(model, windowConfig)
+      end,
+      notCheckable = true,
+    },
+    {
+      text = 'Move Up',
+      value = 'move_up',
+      disabled = (sectionIdx <= 1),
+      func = function()
+        moveSection('up', sectionConfig, windowConfig)
+        if CloseDropDownMenus then CloseDropDownMenus() end
+      end,
+      notCheckable = true,
+    },
+    {
+      text = 'Move Down',
+      value = 'move_down',
+      disabled = (sectionIdx >= sectionCount),
+      func = function()
+        moveSection('down', sectionConfig, windowConfig)
+        if CloseDropDownMenus then CloseDropDownMenus() end
       end,
       notCheckable = true,
     },

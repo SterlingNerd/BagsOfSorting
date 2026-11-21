@@ -92,7 +92,7 @@ the draft rule** — that is the whole design trick, and it is why there is no p
 ```
 ┌ Category: Herbs ─────────────────────────────────────── [?] ─┐
 │ shown in: Crafting/Herbs, Bank Trade Goods/Herbs   [manage]  │
-│ priority [10 ▾]   ☐ allow duplicates   ☐ enabled             │
+│ ☐ allow duplicates   ☐ enabled                               │
 │ affinity  [Herb pouch ▾]                                     │
 │                                                              │
 │ MATCHES  ▸ any of                                            │
@@ -127,7 +127,7 @@ Rules that make it work:
 - **The item list is bidirectional.** Drag an item from the bags onto this list → it joins the ID
   list. Tick a row and press *Exclude* → it joins `EXCEPT itemID in {…}`. Drag-and-tick is the editor;
   chips are the refinement.
-- `⚠` marks an item the draft would claim but a higher-priority category owns, and names the winner on
+- `⚠` marks an item the draft would claim but a higher-priority section owns, and names the winner on
   hover. This is the preview's only genuinely new information.
 - Items whose data the client has not cached render with their tier-1 icon and a `…` name until
   `ITEM_DATA_LOAD_RESULT` resolves them (`FR-103`). Never a blank row.
@@ -195,12 +195,12 @@ own modified-click options (`FR-60b`).
 
 ```
 Linen Glyph
-  Placed in: Crafting / Herbs   (category priority 10)
+  Placed in: Crafting / Herbs   (section priority)
   Matched:   type = Tradeskill  ✓
              subtype starts with "Herb"  ✓
              quality ≥ Uncommon  ✓
-  Competed:  Backpack / Misc  (priority 40) — lost, higher priority won
-             Junk (priority 900) — not tested
+  Competed:  Backpack / Misc — lost, higher-priority section won
+             Junk — not tested
   Membership: rule match (not an ID list)
   [Move to category…]  [Exclude from this category]  [Disable this rule]
 ```
@@ -371,7 +371,7 @@ failed change?*
 | exclude one item from a category | Ctrl+right-click item → *Exclude from category* | `category.excludeItemID` |
 | assign an item to a category | drag item onto a section header | `category.addManual` |
 | create category from an item | Ctrl+right-click item → *Make a category for this item* | `category.createFromItem` |
-| priority / duplicate / enabled / affinity | category editor rows | `category.set` |
+| duplicate / enabled / affinity | category editor rows | `category.set` |
 | disable a category | category editor row | `category.setEnabled` |
 | delete a category | category editor with "used by 3 sections" confirm | `category.delete` |
 | bulk sell / deposit / move-to-window | section header context menu | `section.bulkMove` |
@@ -393,7 +393,7 @@ an invertible command, it does not ship.
 | **First run** | Preset windows/sections exist. A one-time banner on the backpack window: "This is a section. Click it in configure mode to rename it." Dismissable forever, not nagging. Plus a one-time note if our keybind collides with the default `B` (`docs/07` Q4). |
 | **Category matches nothing** | Category editor header: "Matches 0 of your items" in amber; the section header shows a dot. Not silent. |
 | **Category used by no section** | Options → AddOns → Find: "not shown anywhere" tag + *Add to a window*. (Baggins' most confusing failure.) |
-| **Draft rule would claim items a higher priority category owns** | `⚠` in the category editor's list, winner named on hover. |
+| **Draft rule would claim items a higher-priority section owns** | `⚠` in the category editor's list, winner named on hover. |
 | **Deleting something in use** | Confirm names the dependents: "3 sections use this category." |
 | **Item data not cached** | Tier-1 icon + `…` name + pending marker; resolves without a reload (`FR-103`). |
 | **Bank closed** | Bank windows simply do not exist on screen. There is no "search the bank from anywhere" state to design for — that feature is out of the product (`FR-109`, `docs/07` Q15) |

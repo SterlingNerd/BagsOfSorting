@@ -39,7 +39,7 @@ census on either side of the attempt answers it.
 | FR-10 | M | The user can create, rename, reorder and delete **windows** (custom bags). Each window has: name, kind (`backpack` \| `bank`), priority (ordering), `openWithAll` flag, column count, icon, saved position and scale. |
 | FR-10b | M | A window can be created **as a copy of another window** (typically a bank window copied from its backpack twin): same name pattern, same sections in the same order, same category bindings, then free to diverge. Copy is a command with an inverse. |
 | FR-10c | M | **Linked windows.** A window may be *linked* to another (typically a bank window linked to its backpack twin): the two share the same section list and category bindings, so adding, renaming, reordering or re-binding a section on one updates the other. Not shared: kind, columns, scale, position, compact, icon. A link is explicit, visible on both windows, breakable in one action (unlink keeps the current shape as a copy), and never implicit — `copyFrom` (`FR-10b`) records where a window came from; `link` is the thing that keeps them in step (`docs/07` Q11). |
-| FR-11 | M | Each window contains ordered **sections**. A section is a labeled block bound to **one or more categories** (`docs/07` Q3 resolved: B). Sections can be renamed, reordered, collapsed, hidden, and moved between windows. Multiple categories in one section are sub-ordered by category priority, then by the section's own sort rule. |
+| FR-11 | M | Each window contains ordered **sections**. A section is a labeled block bound to **one or more categories** (`docs/07` Q3 resolved: B). Sections can be renamed, reordered, collapsed, hidden, and moved between windows. Multiple categories in one section are laid out in the order the section binds them, then by the section's own sort rule. |
 | FR-11b | S | A section may bind a **category group** instead of a single category: binding `Tradeskills.Enchanting` pulls in `Tradeskills.Enchanting.Dust`, `.Essence`, `.Rod` — every category under that dotted prefix (`docs/07` Q8). Group membership comes from the name, so renaming a category out of the prefix moves it out of the section, and the UI says so at rename time. |
 | FR-12 | M | A **category** is a named classification rule set that can be referenced by zero or more sections. One category may appear in several windows/sections. |
 | FR-13 | M | Backpack and bank are both handled, with bank windows scoped by `kind = bank` and never shown when the bank is closed. |
@@ -67,13 +67,13 @@ configured.
 | FR-20 | M | Rules are a declarative tree: `any{...}`, `all{...}`, `none{...}`, each leaf `{field, op, value}`. The tree renders as one readable sentence and is editable without understanding evaluation order. |
 | FR-21 | M | v1 field set: `type`, `subtype`, `quality`, `ilvl`, `name`, `tooltip`, `equipSlot`, `bindType`, `itemID`, `classID`, `subclassID`, `containerFamily`, `bagID`, `isReagent`, `isQuestItem`, `isNew`, `category` (reference another category — the composition users actually rely on: 120 uses in the measured config, and the way a curated preset list gets pulled into a user category). **`expansion` is removed** (measured 2026-10-19, `/bos test expansion`): the value is readable and correctly positioned, but every item this Vanilla-ruleset client knows reports `0` (Classic), so a rule on it can never discriminate. Wherever another row names `expansion` as an example field, read it as `type` or `subtype`. |
 | FR-22 | M | v1 operators: `=`, `!=`, `>=`, `<=`, `contains`, `startsWith`, `in {…}`. String comparisons are case-insensitive. |
-| FR-23 | M | Categories have a numeric **priority**; the first matching category by priority owns the item. Ties broken deterministically (documented in `docs/04` §Precedence) and shown in the inspector. |
+| FR-23 | M | Sections have a numeric **priority**; when several sections can take an item, the first by section priority (higher wins, ties by saved array order) claims it. Categories carry no priority — they are a display grouping inside a section, never a precedence rule. |
 | FR-24 | M | `itemID in {…}` is a **leaf inside a rule tree**, so a category can be "type = Consumable AND NOT itemID in {…}" — the single most common shape in real configs. A category may also be a **manual list only** (drag an item in, drag it out) with no other rules. |
 | FR-24b | M | Item-ID entry is bulk-friendly: one paste box accepts IDs separated by newlines, commas, semicolons, spaces or tabs, mixed with item links and names, and reports "43 IDs, 2 unknown to this client" before applying. Applies as one command (one undo step). |
 | FR-24c | M | "Except this item" is a one-action edit: our item menu (Ctrl+right-click, `FR-60b`) → *Exclude from category* adds `NOT itemID` to that category. Exclusions outnumber conjunctions several to one in real configs; it must not require opening a rule editor. |
 | FR-25 | M | A category can be **dynamic**: one section per distinct value of a field (`type`, `subtype`, `expansion`), auto-created, auto-named, no per-value config. |
 | FR-26 | M | Editing any rule re-classifies only the affected categories, not the whole inventory. |
-| FR-27 | M | Every placed item can be explained: which category, which leaf matched, which higher-priority categories were tested and rejected. |
+| FR-27 | M | Every placed item can be explained: which category, which leaf matched, which categories were tested and rejected. |
 | FR-28 | S | Search expression authoring: a subset of a query language (`name`, `type`, `subtype`, `ilvl`, `quality`, `expansion`, `slot`, `tooltip`, `id`, `and/or/not`, parentheses, `= != >= <= contains`) that compiles to the same rule tree, and can be saved as a category. |
 | FR-29 | S | Rule linting: an empty rule, a rule whose field has no values, a category that matches nothing, and a category referenced by no section are all reported in the UI, not silently inert. |
 | FR-30 | S | `shortcut:`-documented escape hatch for a raw Lua predicate per category, with a visible "advanced, unsupported" marker. |
@@ -87,8 +87,8 @@ as one readable sentence and classifies correctly. **AC-24b** paste 43 IDs as on
 block and as one comma-separated block: same result, unknowns reported, one undo step. **AC-24c**
 right-click a misfiled item → Exclude from category → it is gone on the next refresh and survives
 `/reload`.
-**AC-23** two categories both matching an epic sword; changing priority 10→5 moves it, live, no
-reload. **AC-27** right-click any item → "Why here?" and confirm the named rule is the one you
+**AC-23** two sections both able to take an epic sword; changing section priority moves it,
+live, no reload. **AC-27** right-click any item → "Why here?" and confirm the named rule is the one you
 wrote. **AC-26** editing one rule re-classifies only the affected categories — verified by what actually re-classifies, not by a phase delta (`/bos perf` cannot time phases on this client, issue #20).
 **AC-28** save a search as a category; loot a new matching item; it lands in that category.
 **AC-29** create a category with no rules → UI says it matches nothing.

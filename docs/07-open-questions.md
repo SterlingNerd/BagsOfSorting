@@ -75,9 +75,10 @@ is not an advanced feature, it is how the config is actually written.
 
 Consequences, all of which must move together:
 - `docs/04`: `section.categories = { … }`.
-- Precedence is **unchanged**: ownership is still decided globally by category priority. Several
-  categories in one section is a *display* grouping, never a precedence rule (`docs/04` §Precedence 7).
-  This is the sentence that keeps the model from becoming Baggins' ordering puzzle.
+- Precedence is **section-level**: ownership of a placement is decided by section priority (higher
+  wins, ties by saved array order). Several categories in one section is a *display* grouping, never
+  a precedence rule (`docs/04` §Precedence 7). This is the sentence that keeps the model from
+  becoming Baggins' ordering puzzle.
 - `docs/05` §Screen 4: the section editor is a combo box + sortable list, exactly as asked for.
 - `layout/flow` must size a block whose contents come from N categories.
 - Baggins' `section.cats` maps 1:1 if we ever do migration (moot — Q5).

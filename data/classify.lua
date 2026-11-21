@@ -51,7 +51,10 @@ local function treeFor(name, cat)
   return cat.rules
 end
 
---- Categories sorted by priority ascending, then name for determinism (docs/04 §Precedence 1).
+--- Categories walked in name order for determinism. Category priority no longer decides
+--- ownership: priority is a section-level concept, and sections compete for an item in
+--- pipeline.Assign (docs/04 §Precedence). `__catchall` is always walked last so it stays
+--- the fallback for items no category matched.
 ---@param categories table<string, BoSCategory>
 ---@return BoSCategoryEntry[]
 function classify.Ordered(categories)
@@ -65,8 +68,8 @@ function classify.Ordered(categories)
     end
   end
   table.sort(ordered, function(a, b)
-    local pa, pb = a.cat.priority or 100, b.cat.priority or 100
-    if pa ~= pb then return pa < pb end
+    if a.name == '__catchall' then return false end
+    if b.name == '__catchall' then return true end
     return a.name < b.name
   end)
   return ordered
@@ -81,8 +84,10 @@ local function place(placements, name, item)
   list[#list + 1] = item
 end
 
---- Ownership is decided globally by category priority. Several categories in one section is a
---- display grouping, never a precedence rule (docs/04 §Precedence 7).
+--- Ownership is reported as the first matching category in classify order; it does not
+--- decide where an item goes. Sections, ranked by section priority, compete for the item
+--- in pipeline.Assign. Several categories in one section is a display grouping, never a
+--- precedence rule (docs/04 §Precedence 7).
 ---@param items BoSItem[]
 ---@param categories table<string, BoSCategory>
 ---@return table<string, BoSItem[]> placements

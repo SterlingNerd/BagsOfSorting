@@ -35,11 +35,16 @@ function pipeline.ResolveBindings(bindings)
   for _, binding in ipairs(bindings or {}) do
     if binding:sub(-1) == '*' then
       local prefix = binding:sub(1, -2)
+      local matches = {}
       for name in pairs(categories) do
         if name:sub(1, #prefix) == prefix and not seen[name] then
           seen[name] = true
-          out[#out + 1] = name
+          matches[#matches + 1] = name
         end
+      end
+      table.sort(matches)
+      for _, name in ipairs(matches) do
+        out[#out + 1] = name
       end
     elseif not seen[binding] then
       if not categories[binding] then
@@ -50,13 +55,6 @@ function pipeline.ResolveBindings(bindings)
     end
   end
 
-  -- Inside one section the categories lay out in category-priority order (FR-11).
-  table.sort(out, function(a, b)
-    local ca, cb = categories[a], categories[b]
-    local pa, pb = (ca and ca.priority) or 100, (cb and cb.priority) or 100
-    if pa ~= pb then return pa < pb end
-    return a < b
-  end)
   return out
 end
 
@@ -94,8 +92,8 @@ function pipeline.Assign(placements)
   local placedByNonDuplicate = {}
   local counted = {}
   -- Every section across every window, ranked so item claiming is decided by section
-  -- priority (higher wins), ties broken by the best category priority the section binds,
-  -- then saved array order. Sections keep their saved (display) order inside each window.
+  -- priority (higher wins), ties broken by saved array order. Sections keep their saved
+  -- (display) order inside each window.
   local allSections = {}
 
   for _, config in ipairs(db.Windows()) do
@@ -167,16 +165,6 @@ function pipeline.Assign(placements)
         if not sectionConfig.hidden then
           sectionOrder = sectionOrder + 1
           local names = pipeline.ResolveBindings(sectionConfig.categories)
-          -- Best (lowest) category priority this section binds: tiebreak when section
-          -- priority ties, so the section bound to the higher-priority category claims first.
-          local minCatPrio = 100
-          for _, cn in ipairs(names) do
-            if cn ~= '__catchall' then
-              local c = db.Categories()[cn]
-              local cp = (c and c.priority) or 100
-              if cp < minCatPrio then minCatPrio = cp end
-            end
-          end
           local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = {}, collapsed = sectionConfig.collapsed or false, priority = sectionConfig.priority or 0 }
           window.sections[#window.sections + 1] = section
           allSections[#allSections + 1] = {
@@ -184,7 +172,6 @@ function pipeline.Assign(placements)
             isEquipmentWindow = isEquipmentWindow,
             equipmentItemSets = equipmentItemSets,
             priority = section.priority,
-            minCatPrio = minCatPrio,
             windowOrder = #models,
             sectionIndex = sectionOrder,
           }
@@ -205,12 +192,11 @@ function pipeline.Assign(placements)
   end
 
   -- Phase A: claim items from specific (non-__catchall) category placements.
-  -- Sections ranked by section priority (higher wins), ties broken by the best (lowest)
-  -- specific category priority bound, then saved array order. __catchall is excluded:
-  -- it is the fallback for items that match no specific category, handled in phase B.
+  -- Sections ranked by section priority (higher wins), ties broken by saved array order
+  -- (window order, then section index). __catchall is excluded: it is the fallback for
+  -- items that match no specific category, handled in phase B.
   table.sort(allSections, function(a, b)
     if a.priority ~= b.priority then return a.priority > b.priority end
-    if a.minCatPrio ~= b.minCatPrio then return a.minCatPrio < b.minCatPrio end
     if a.windowOrder ~= b.windowOrder then return a.windowOrder < b.windowOrder end
     return a.sectionIndex < b.sectionIndex
   end)

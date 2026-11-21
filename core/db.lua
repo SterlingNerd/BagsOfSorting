@@ -49,7 +49,7 @@ local function tradeskill(subtypes, bagFamily)
     anySubtype.children[#anySubtype.children + 1] = { field = 'subtype', cmp = '=', value = subtype }
   end
   return {
-    priority = 15, kind = 'rules', enabled = true, duplicate = false,
+    kind = 'rules', enabled = true, duplicate = false,
     bagFamily = bagFamily,
     rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Trade Goods' }, anySubtype } },
   }
@@ -86,7 +86,7 @@ local DEFAULT_PROFILE = {
       compact = false,
       scale = 1.0,
       sections = {
-        { id = 's4', name = 'Quest Items', categories = { 'Quest Items' } },
+        { id = 's4', name = 'Quest Items', categories = { 'Quest Items' }, priority = 1 },
       },
     },
     -- Issue #41: Consumables and Tradeskills go between Quests and Tools. Array order IS screen
@@ -186,7 +186,7 @@ local DEFAULT_PROFILE = {
       compact = false,
       scale = 1.0,
       sections = {
-        { id = 's19', name = 'Quest Items', categories = { 'Quest Items' } },
+        { id = 's19', name = 'Quest Items', categories = { 'Quest Items' }, priority = 1 },
       },
     },
     {
@@ -251,22 +251,17 @@ local DEFAULT_PROFILE = {
     },
   },
   categories = {
-    -- Priority is the ladder the classifier walks, ascending (docs/04 §Precedence 1). A quest item
-    -- must never fall to a generic rule, and a curated manual list beats a generic rule too.
-    -- Issue #39: the New section (docs/02 FR-21 lists `isNew` in the v1 field set). Highest
-    -- priority so it is the first rule walked, and `duplicate = true` so a new item stays in the
-    -- category its own rules put it in -- the same slot is drawn in both places (FR-15).
-    -- The rule is the client's own flag as the harvest recorded it (data/harvest.lua); this is a
-    -- category with a real rule, not a code path.
+    -- Issue #39: the New section (docs/02 FR-21 lists `isNew` in the v1 field set). `duplicate = true`
+    -- so a new item stays in the category its own rules put it in -- the same slot is drawn in both
+    -- places (FR-15). The rule is the client's own flag as the harvest recorded it (data/harvest.lua);
+    -- this is a category with a real rule, not a code path.
     ['New'] = {
-      priority = 1,
       kind = 'rules',
       enabled = true,
       duplicate = true,
       rules = { op = 'all', children = { { field = 'isNew', cmp = '=', value = true } } },
     },
     ['Quest Items'] = {
-      priority = 5,
       kind = 'rules',
       enabled = true,
       duplicate = false,
@@ -275,14 +270,12 @@ local DEFAULT_PROFILE = {
       rules = { op = 'all', children = { { field = 'isQuestItem', cmp = '=', value = true } } },
     },
     ['Tools'] = {
-      priority = 8,
       kind = 'manual',
       enabled = true,
       duplicate = false,
       itemIDs = { [2901] = true, [6948] = true },   -- Mining Pick, Hearthstone
     },
     ['Junk'] = {
-      priority = 10,
       kind = 'rules',
       enabled = true,
       duplicate = false,
@@ -291,24 +284,17 @@ local DEFAULT_PROFILE = {
     -- Items the client keeps in the keyring (container index KEYRING_CONTAINER). The harvest
     -- stamps every slot with its container's kind as `containerKind`, so this matches items by
     -- where they live: no item-ID list to maintain, and a key moved out of the keyring leaves
-    -- the category on its own. Priority 7 sits above the type-based categories so a key stays
-    -- in the Keyring section even when its type matches another one (e.g. a consumable key);
-    -- retune if a preset wants keys intermingled with their type (issue #78).
+    -- the category on its own.
     ['Keyring'] = {
-      priority = 7,
       kind = 'rules',
       enabled = true,
       duplicate = false,
       rules = { op = 'all', children = { { field = 'containerKind', cmp = '=', value = 'keyring' } } },
     },
-    -- Issue #41's priority rule: Consumables outranks every tradeskill category, so a potion
-    -- crafted from herbs lands with the potions and not with the herbs. The class name is the
-    -- client's own — measured 2026-10-20 off the persisted item cache, where Minor Healing Potion
-    -- (118) reads type "Consumable" / subtype "Potions", Refreshing Spring Water (159) "Food &
+    -- Issue #41: Consumables owns every type "Consumable" / subtype "Potions", Refreshing Spring Water (159) "Food &
     -- Drink" and Linen Bandage (1251) "Bandages". One rule over the whole class covers all three
     -- plus the subtypes this character carries nothing of (flasks, elixirs, scrolls).
     ['Consumables'] = {
-      priority = 12,
       kind = 'rules',
       enabled = true,
       duplicate = false,
@@ -338,7 +324,6 @@ local DEFAULT_PROFILE = {
     -- their own types, so this one is the item list. `_showEmpty` keeps the section drawn while
     -- the bag holds no tackle -- it is where you drop the next one.
     ['Tradeskills.Fishing'] = {
-      priority = 9,
       kind = 'manual',
       enabled = true,
       duplicate = false,
@@ -346,7 +331,6 @@ local DEFAULT_PROFILE = {
       _showEmpty = true,
     },
     ['Armor'] = {
-      priority = 20,
       kind = 'rules',
       enabled = true,
       duplicate = false,
@@ -354,7 +338,6 @@ local DEFAULT_PROFILE = {
     },
     -- FR-16: the catch-all is a real category, not a special-cased code path.
     ['__catchall'] = {
-      priority = 999,
       kind = 'rules',
       enabled = true,
       duplicate = false,
@@ -675,7 +658,7 @@ function db.AddCategory(name, kind)
   name = name:trim()
   if cats[name] then return false end
   if kind ~= 'manual' and kind ~= 'rules' then kind = 'manual' end
-  local cat = { priority = 99, kind = kind, enabled = true, duplicate = false }
+  local cat = { kind = kind, enabled = true, duplicate = false }
   if kind == 'manual' then cat.itemIDs = {} end
   cats[name] = cat
   db.NotifyModelChanged()

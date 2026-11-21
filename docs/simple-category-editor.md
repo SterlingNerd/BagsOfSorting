@@ -21,7 +21,7 @@ name. Manual categories already carry an `itemIDs` set:
 
 ```lua
 ['Tools'] = {
-  priority = 8, kind = 'manual', enabled = true, duplicate = false,
+  kind = 'manual', enabled = true, duplicate = false,
   itemIDs = { [2901] = true, [6948] = true },   -- Mining Pick, Hearthstone
 },
 ```

@@ -33,8 +33,8 @@ BagsOfSortingDB = {
       name     = "Crafting",
       kind     = "backpack",          -- "backpack" | "bank"
       priority = 1,                   -- reserved: nothing sorts on it. Array order IS the layout
-                                      -- order; classification precedence lives in `categories`
-                                      -- alone (issue #28 decision 4)
+                                      -- order; classification precedence is a section-level concept
+                                      -- (sections carry priority; categories do not).
       openWithAll = true,             -- reserved: no code reads it yet
       hidden   = false,                -- closed with the window's own X; absent means open
       columns  = 5,
@@ -65,7 +65,6 @@ BagsOfSortingDB = {
 
   categories = {                       -- keyed by name; name is the identity
     ["Herbs"] = {
-      priority = 10,
       kind     = "rules",             -- "rules" | "manual" | "dynamic"
       rules    = <ruleTree>,
       dynamicField = nil,
@@ -83,9 +82,9 @@ BagsOfSortingDB = {
     },
     -- The shipped New category (issue #39): the client's own per-slot new flag as data/harvest.lua
     -- records it, and `duplicate` so a new item keeps the category its own rules gave it.
-    ["New"] = { priority = 1, kind = "rules", duplicate = true,
+    ["New"] = { kind = "rules", duplicate = true,
       rules = { op="all", children={ {field="isNew", cmp="=", value=true} } } },
-    ["__catchall"] = { priority = 999, kind = "rules",
+    ["__catchall"] = { kind = "rules",
       rules = { op="all", children={ {field="none", cmp="=", value=true} } } },
   },
 
@@ -128,14 +127,15 @@ BagsOfSortingDB = {
 Design notes:
 
 - **`windows` is an array, `categories` is a map.** Window order is meaningful and structural;
-  category order is not (priority is a number, so it survives map iteration).
+  category order is not meaningful — a section holds an ordered list of categories, and that
+  list is what determines layout within the section.
 - **Stable `id` for windows/sections**, name for categories. Renaming a window must not orphan its
   sections; renaming a category must rewrite every section reference (that is a command with an
   inverse, so undo works).
 - **A section holds a list of categories** (`docs/07` Q3, resolved: B). Inside one section the
-  categories lay out in category-priority order, then by the section's sort rule; the section title
-  is the section's own name, not a category name. This is what real Baggins configs use it for
-  (`Metals and Ores` → `Tradeskills.Metals` + `Tradeskills.Ore`).
+  categories lay out in the order the section binds them, then by the section's sort rule; the
+  section title is the section's own name, not a category name. This is what real Baggins configs
+  use it for (`Metals and Ores` → `Tradeskills.Metals` + `Tradeskills.Ore`).
 - **A trailing `*` on a binding means "the whole dotted group"** (`FR-11b`, `docs/07` Q8):
   `Tradeskills.Enchanting*` binds every category whose name starts with that prefix. It is resolved
   from names at classify time, so it costs nothing to add a child category — but renaming a category
@@ -144,8 +144,8 @@ Design notes:
   one action, and so a later *re-copy* can be offered. Nothing reads through it at runtime — runtime
   inheritance is how configs become spooky action at a distance. If real inheritance is ever wanted
   (`docs/07` Q11) it is a separate field with its own rules.
-- **`__catchall` is a real category**, not a special-cased code path. It has the lowest priority
-  and a rule that matches "nothing else matched". This keeps `FR-16` inside the normal model.
+- **`__catchall` is a real category**, not a special-cased code path. It is walked last at classify
+  time and matches only items no other category owns. This keeps `FR-16` inside the normal model.
 - **No `hideduplicates` global.** `FR-15` is per-category `duplicate = false`, default false. A
   global tri-state is how Baggins got 57 profile keys.
 - **Per-window `columns`**, not a global `columns`.
@@ -175,17 +175,21 @@ Constraints enforced by `data/rules.lua` on load and on every command:
 
 ### Precedence semantics (normative)
 
-1. Categories are sorted by `priority` ascending (1 wins), then by name for determinism.
-2. First category whose tree matches owns the item.
+1. Sections are ranked by section `priority` (higher wins); ties break by saved array order
+   (window order, then section index). Sections compete for an item, and the first section to
+   claim it wins.
+2. Within a section, categories lay out in the order the section binds them, then by the
+   section's sort rule. The first bound category whose tree matches an unclaimed item gets its
+   cell.
 3. `duplicate = true` categories do not consume ownership: they add a second placement.
 4. `kind = "dynamic"` categories expand at classify time into one virtual category per distinct
-   field value, inheriting the parent's priority.
+   field value.
 5. `__catchall` matches only if no other category owned the item.
 6. The full ordered list of categories tested, and each match/reject reason, is recorded in the
    per-harvest `trace` for the inspector (`FR-27`).
-7. A section bound to several categories does **not** re-run classification: ownership is decided
-   globally by priority, then each category's items are laid out inside the section in category
-   priority order. Two categories in one section are a *display* grouping, never a precedence rule.
+7. Priority is a **section-level** concept. Categories carry no priority: two categories in one
+   section are a *display* grouping, never a precedence rule, and category order never decides
+   which section an item lands in.
 
 `itemID in {…}` leaves are checked before the rest of their own tree (cheapest field, and the most
 likely to be the whole rule), and a manual-only category is equivalent to a single

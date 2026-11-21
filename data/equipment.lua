@@ -128,7 +128,6 @@ end
 local function upsertCategory(setID, info)
   local catName = 'Equipment.' .. info.name
   local category = {
-    priority = 14, -- Between Consumables (12) and Tradeskills (15)
     kind = 'manual',
     enabled = true,
     duplicate = false, -- Handled specially: items in multiple sets added post-classify

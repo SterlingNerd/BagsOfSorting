@@ -84,8 +84,8 @@ client:
 - **AC-103** — a looted item the client had never seen lands in the catch-all and classifies correctly
   once its data arrives.
 - **AC-97** — `/exit` then a fresh login: `item cache=113, tier3 requested=0 resolved=0 pending=0`.
-- **Priority ladder** — Tools, Quest Items and Junk all classify as designed once schema version 2 ran,
-  which puts 5411 Winterhoof Cleansing Totem (Armor *and* a quest item) in Quest Items, not Armor.
+- **Section priority** — sections classify as designed once schema version 2 ran, which puts
+  5411 Winterhoof Cleansing Totem (Armor *and* a quest item) in Quest Items, not Armor.
 
 `expansion` is measured out of the v1 field set. Cold-cache item data (issue #1) is deferred to the
 onboarding work later in the plan, and the bank-tab `ItemLocation` check moved to M5.
@@ -174,7 +174,7 @@ Deliverables
   show it only by accident; `frames/item.lua` never calls `UpdateNewItem` (**issue #15** for what is
   actually lit, **issue #16** for the overlays our paint path omits)
 - **sections bound to several categories** (`FR-11`): packing one block whose contents come from N
-  categories, sub-ordered by category priority
+  categories, laid out in the order the section binds them
 - `window.copy` command (`FR-10b`) — a bank window built from a backpack window in one action, and
   `window.link` (`FR-10c`) — the same two windows kept in step, with the link visible on both titles
 - `frames/header.lua` with the configure-mode handle placeholders

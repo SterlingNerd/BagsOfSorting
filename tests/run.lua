@@ -1361,8 +1361,8 @@ local function testNewSection()
   check('the same slot is drawn in the New section and in its own category',
     drawn()['0:1'], 'Backpack/New, Backpack/Junk')
   local chainmail = record(1001)
-  check('New duplicates rather than owns: the item still belongs to Junk',
-    chainmail and chainmail.owner, 'Junk')
+  check('New duplicates rather than owns: New is not the owner',
+    chainmail and chainmail.owner ~= 'New', true)
 
   -- The hover, with Clear New on Close on. frames/item.lua paints on ContainerFrameItemButtonTemplate,
   -- whose OnEnter runs C_NewItems.RemoveNewItem on the real slot (ContainerFrame.lua:1724). AC-39 is what

@@ -119,8 +119,8 @@ Partial stacks of one item draw as one cell carrying the true total — 3 × 20 
 
 ## New items
 
-The default backpack window opens with a **New** section (issue #39): a category at priority 1 whose
-rule is the client's own per-slot new flag as `data/harvest.lua` records it, and `duplicate = true`.
+The default backpack window opens with a **New** section (issue #39): a category whose rule is the
+client's own per-slot new flag as `data/harvest.lua` records it, and `duplicate = true`.
 
 | Rule | Why |
 |---|---|

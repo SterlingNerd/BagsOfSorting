@@ -43,7 +43,7 @@ One refresh, explicit phases (BetterBags' `Phase1..11` reduced to what we actual
 ```
 1 harvest   which containers belong to which kind (backpack/bank); read slots
 2 enrich    item info (async, cache-aware), expansion, equip slot, bind, quest, sets
-3 classify  for each item: evaluate categories by priority → owner category
+3 classify  for each item: test every category → per-category placement lists
 4 assign    category → section(s) → window(s); apply duplicate policy
 5 stack     merge virtual stacks per category policy
 6 sort      sections order + items within section
@@ -86,11 +86,13 @@ anything that needs tier 3.
 
 ```lua
 -- data/classify.lua
-owner = nil
-for _, cat in ipairs(categoriesByPriority) do
-  if cat:matches(item) then owner = cat; break end
+for _, cat in ipairs(categoriesByName) do   -- name order, `__catchall` last
+  if cat:matches(item) then
+    placements[cat.name][#placements[cat.name] + 1] = item
+    if not item.owner and not cat.duplicate then item.owner = cat.name end
+  end
 end
-trace = { tested = {...}, matched = owner, rejected = {...} }   -- feeds FR-27 inspector
+-- sections, ranked by section priority, then compete for placements in pipeline.Assign
 ```
 
 `trace` is kept per item for the current harvest only (not persisted). It is the single most
@@ -101,7 +103,6 @@ important debuggability feature in the design.
 ```lua
 category = {
   name     = "Crafting → Herbs",
-  priority = 10,
   kind     = "rules" | "manual" | "dynamic",
   rules    = { op = "all", children = {
                { op = "any", children = {

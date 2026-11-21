@@ -31,7 +31,7 @@ end
 
 local function catchall()
   return {
-    priority = 999, kind = 'rules', enabled = true,
+    kind = 'rules', enabled = true,
     rules = { op = 'all', children = { { field = 'none', cmp = '=', value = true } } },
   }
 end
@@ -51,13 +51,13 @@ local GEAR = {
 
 local function baseCategories()
   return {
-    ['Junk'] = { priority = 10, kind = 'rules', enabled = true,
+    ['Junk'] = { kind = 'rules', enabled = true,
       rules = { op = 'all', children = { { field = 'quality', cmp = '=', value = 0 } } } },
-    ['Quests'] = { priority = 15, kind = 'rules', enabled = true,
+    ['Quests'] = { kind = 'rules', enabled = true,
       rules = { op = 'all', children = { { field = 'isQuestItem', cmp = '=', value = true } } } },
-    ['Good Gear'] = { priority = 20, kind = 'rules', enabled = true, rules = GEAR },
-    ['Linens'] = { priority = 30, kind = 'manual', enabled = true, itemIDs = { [26042] = true } },
-    ['__catchall'] = catchall(),
+    ['Good Gear'] = { kind = 'rules', enabled = true, rules = GEAR },
+    ['Linens'] = { kind = 'manual', enabled = true, itemIDs = { [26042] = true } },
+    ['__catchall'] = catchall()
   }
 end
 
@@ -87,30 +87,28 @@ local function testPrecedence(state)
   local classify = addon:GetModule('Classify')
   local fixtures = addon:GetModule('Fixtures')
 
-  -- AC-23 shape: two categories match the same epic sword; the lower number owns it.
+  -- AC-23 moved to section level: priority is a section concept (docs/04 §Precedence),
+  -- decided in pipeline.Assign. classify walks categories in name order, so the category
+  -- priority field no longer decides which category owns an item.
   local categories = baseCategories()
-  categories['Also Gear'] = { priority = 25, kind = 'rules', enabled = true,
+  categories['Also Gear'] = { kind = 'rules', enabled = true,
     rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Weapon' } } } }
 
   local items = fixtures.Clone()
   classify.Run(items, categories)
-  check(state, 'priority 20 beats priority 25', ownerOf(items, 1002), 'Good Gear')
+  -- Name order: 'Also Gear' < 'Good Gear', so Also Gear is the first match and the owner.
+  check(state, 'owner is the first match in classify order', ownerOf(items, 1002), 'Also Gear')
 
-  categories['Good Gear'].priority = 30
+  -- Flipping the priority field must not move ownership.
+  categories['Also Gear'].priority = 1
+  categories['Good Gear'].priority = 99
   items = fixtures.Clone()
   classify.Run(items, categories)
-  check(state, 'moving priority 20->30 hands the item to the other category', ownerOf(items, 1002), 'Also Gear')
-
-  -- Tie-break is priority then name (docs/04 §Precedence 1).
-  categories['Good Gear'].priority = 20
-  categories['Also Gear'].priority = 20
-  items = fixtures.Clone()
-  classify.Run(items, categories)
-  check(state, 'equal priority breaks by name', ownerOf(items, 1002), 'Also Gear')
+  check(state, 'category priority does not move ownership', ownerOf(items, 1002), 'Also Gear')
 
   -- duplicate = true adds a placement without consuming ownership (docs/04 §Precedence 3).
   categories = baseCategories()
-  categories['Shown Twice'] = { priority = 50, kind = 'rules', enabled = true, duplicate = true,
+  categories['Shown Twice'] = { kind = 'rules', enabled = true, duplicate = true,
     rules = { op = 'all', children = { { field = 'quality', cmp = '>=', value = 2 } } } }
   items = fixtures.Clone()
   local placements = classify.Run(items, categories)

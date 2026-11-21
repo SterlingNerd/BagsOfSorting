@@ -20,6 +20,7 @@ local context = addon:GetModule('Context')
 local dropdown = addon:GetModule('Dropdown')
 local editModals = addon:GetModule('EditModals')
 local db = addon:GetModule('DB')
+local pipeline = addon:GetModule('Pipeline')
 
 ---@class BoSWindowFrame
 ---@field frame Frame
@@ -377,8 +378,29 @@ function windows.Count()
   return n
 end
 
+-- Move a window one step up or down within db.Windows() (array order == screen order,
+-- bottom-most first). Swaps adjacent entries so the windows repaint in the new order
+-- on the next refresh.
+local function moveWindow(direction, windowConfig)
+  local windowsList = db.Windows()
+  local idx
+  for i, w in ipairs(windowsList) do
+    if w.id == windowConfig.id then idx = i; break end
+  end
+  if not idx then return end
+  local target = (direction == 'up') and (idx - 1) or (idx + 1)
+  if target < 1 or target > #windowsList then return end
+  windowsList[idx], windowsList[target] = windowsList[target], windowsList[idx]
+  db.NotifyModelChanged()
+  pipeline.Refresh('window-move')
+end
+
 -- Show the window title context menu
 function ShowWindowMenu(anchor, windowConfig)
+  local windowIdx, windowCount = 0, #(db.Windows())
+  for i, w in ipairs(db.Windows()) do
+    if w.id == windowConfig.id then windowIdx = i; break end
+  end
   local entries = {
     -- Issue #59 (FR-43): the stack display choice, at the top of the menu and its own line below.
     -- Checked means the individual stacks are showing ('always'); unchecked is merged, the default.
@@ -421,6 +443,26 @@ function ShowWindowMenu(anchor, windowConfig)
       value = 'add_section',
       func = function()
         AddSectionToWindow(windowConfig)
+      end,
+      notCheckable = true,
+    },
+    {
+      text = 'Move Up',
+      value = 'move_up',
+      disabled = (windowIdx <= 1),
+      func = function()
+        moveWindow('up', windowConfig)
+        if CloseDropDownMenus then CloseDropDownMenus() end
+      end,
+      notCheckable = true,
+    },
+    {
+      text = 'Move Down',
+      value = 'move_down',
+      disabled = (windowIdx >= windowCount),
+      func = function()
+        moveWindow('down', windowConfig)
+        if CloseDropDownMenus then CloseDropDownMenus() end
       end,
       notCheckable = true,
     },

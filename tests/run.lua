@@ -328,21 +328,21 @@ local backpack = windowIn(model, 'Backpack')
 local quests = windowIn(model, 'Quests')
 local tools = windowIn(model, 'Tools')
 
-check('Backpack keeps its three sections', #backpack.sections, 3)
+check('Backpack keeps its four sections', #backpack.sections, 4)
 check('Quests is one section', #quests.sections, 1)
 check('Tools is one section', #tools.sections, 1)
-check('Backpack binds neither moved category', binds(backpack), 'Junk,Armor,__catchall')
+check('Backpack binds neither moved category', binds(backpack), 'Junk,Armor,Keyring,__catchall')
 check('Quests binds Quest Items', binds(quests), 'Quest Items')
 check('Tools binds Tools', binds(tools), 'Tools')
 
 check('Junk holds the grey item', countSection(backpack, 'Junk'), 1)
 check('Armor holds the cloth armour', countSection(backpack, 'Armor'), 1)
-check('catch-all holds the rest', countSection(backpack, 'Everything else'), 4)
+check('catch-all holds the rest', countSection(backpack, 'Everything else'), 3)
 check('Quest Items holds both quest items', countSection(quests, 'Quest Items'), 2)
 check('Tools holds the mining pick and the hearthstone', countSection(tools, 'Tools'), 2)
 
 local catchall = sectionIn(backpack, 'Everything else')
-check('catch-all packs 4 items into 4 columns', catchall and catchall.cols, 4)
+check('catch-all packs 3 items into 3 columns', catchall and catchall.cols, 3)
 check('catch-all needs one row', catchall and catchall.rows, 1)
 
 -- Each window is sized by flow from its own content, not from a shared template.
@@ -352,8 +352,8 @@ local TITLE = 40 -- constants.WINDOW_TITLE_HEIGHT: the band that clears the wind
 check('window is never narrower than its column budget', backpack.width, 5 * CELL + 16)
 check('Quests is sized to its one 2-item section and no money band',
   quests.height, TITLE + (18 + CELL) + 6 + 8)
-check('Backpack is sized to its three sections and its free-slot cell',
-  backpack.height, TITLE + 3 * (18 + CELL) + 3 * 6 + CELL + 8 + MONEY)
+check('Backpack is sized to its four sections and its free-slot cell',
+  backpack.height, TITLE + 4 * (18 + CELL) + 4 * 6 + CELL + 8 + MONEY)
 check('windows are sized independently', quests.height ~= backpack.height, true)
 
 -- Issue #36: the free-slot indicator. One slot at the end of the default backpack window carrying
@@ -369,7 +369,7 @@ check('the slot it points at travels with the count',
   backpack.emptySlot.bagID .. ':' .. backpack.emptySlot.slot, '0:12')
 check('the other backpack windows do not repeat the same number', quests.emptySlots, nil)
 check('the indicator gets its own cell after the last section',
-  backpack.emptyOffsetY, 3 * (18 + CELL + 6))
+  backpack.emptyOffsetY, 4 * (18 + CELL + 6))
 check('Quests is not sized for a cell it does not draw',
   quests.height, TITLE + (18 + CELL) + 6 + 8)
 
@@ -477,7 +477,7 @@ check('no other backpack window carries it',
   .. '/' .. tostring(tradeskills.showMoney) .. '/' .. tostring(tools.showMoney),
   'nil/nil/nil/nil')
 check('the backpack window is the only one sized for the money band',
-  backpack.height - (3 * (18 + CELL) + 3 * 6 + CELL + 8 + TITLE), MONEY)
+  backpack.height - (4 * (18 + CELL) + 4 * 6 + CELL + 8 + TITLE), MONEY)
 
 -- FR-15: with duplication off, every harvested item is drawn exactly once **across every window**.
 local drawn, seen = 0, {}
@@ -680,7 +680,7 @@ local function testFullBags()
   check('the window carries no count', full.emptySlots, nil)
   check('the window carries no slot', full.emptySlot, nil)
   check('no cell, so the window is the size it was before the indicator existed',
-    full.height, TITLE + 3 * (18 + CELL) + 3 * 6 + 8 + MONEY)
+    full.height, TITLE + 4 * (18 + CELL) + 4 * 6 + 8 + MONEY)
   slotCounts = saved
   harvest.Invalidate()
   pipeline.Refresh('free-space')
@@ -1096,7 +1096,7 @@ local function testBankWindows()
   check('no backpack window leaks a bank item',
     bankItemsIn(windowIn(models, 'Backpack')) + bankItemsIn(windowIn(models, 'Tradeskills')), 0)
   check('opening the bank leaves the backpack windows the size they were',
-    windowIn(models, 'Backpack').height, TITLE + 3 * (18 + CELL) + 3 * 6 + CELL + 8 + MONEY)
+    windowIn(models, 'Backpack').height, TITLE + 4 * (18 + CELL) + 4 * 6 + CELL + 8 + MONEY)
 
   -- The bag-level chrome (#42, #36, #47): one window per side carries the free-slot count, and only
   -- the backpack side carries the money bar — a coin row on a bank window reads as a second purse.
@@ -1204,14 +1204,15 @@ testEquipmentSetSections()
 
 -- Issue #59 (FR-43): partial stacks of one item draw as one button carrying the true total, and
 -- the window context menu's Show stacks toggle is what flips that back. The two extra Linen Cloth
--- stacks go in the keyring: it is the one container no window shows a free-slot count for, so every
--- count the tests above assert stays put while they are in.
+-- stacks go in free slots of the main backpack bag: the keyring now gathers keyring items into its
+-- own Keyring section, so all three stacks must share Tradeskills.Cloth for the merge checks below.
+-- Bag 0 has free slots and the harness cleans up afterwards.
 local LINEN = 2578  -- Linen Cloth: already one 20-stack in the Tradeskills Cloth section
 
 local function testCombineStacks()
   local db = addon.modules['DB']
-  contents[-1][2] = LINEN
-  contents[-1][3] = LINEN
+  contents[0][12] = LINEN
+  contents[0][13] = LINEN
 
   local function cloth()
     return sectionIn(windowIn(pipeline.Model(), 'Tradeskills'), 'Cloth')
@@ -1237,12 +1238,12 @@ local function testCombineStacks()
   check('a single stack keeps its own count',
     itemIn(sectionIn(windowIn(pipeline.Model(), 'Consumables'), 'Consumables'), 159).stackCount, 5)
 
-  -- The group key is identity, not the item id: the stub answers keyring slot 3 with a link carrying
+  -- The group key is identity, not the item id: the stub answers bag 0 slot 13 with a link carrying
   -- a suffix the other two do not, so that copy is a different item and keeps its own cell.
   local realInfo = _G.C_Container.GetContainerItemInfo
   _G.C_Container.GetContainerItemInfo = function(bag, slot)
     local info = realInfo(bag, slot)
-    if info and bag == -1 and slot == 3 then info.hyperlink = info.hyperlink .. ':1234' end
+    if info and bag == 0 and slot == 13 then info.hyperlink = info.hyperlink .. ':1234' end
     return info
   end
   pipeline.Refresh('stacks-one-different-copy')
@@ -1290,7 +1291,7 @@ local function testCombineStacks()
   check('a profile written before the setting gets the merged default',
     db.Settings().stacking.showStacks, 'merged')
 
-  contents[-1][2], contents[-1][3] = nil, nil
+  contents[0][12], contents[0][13] = nil, nil
   harvest.Invalidate()
   pipeline.Refresh('stacks-cleaned')
   check('and the harness is left as it was found',
@@ -1471,6 +1472,21 @@ end
 
 testNewSectionMigration()
 
+-- Issue #78: a profile written before the Keyring category existed gets it from migration 10.
+local function testKeyringMigration()
+  local db = addon.modules['DB']
+  db.Profile().categories['Keyring'] = nil
+  db.sv.version = 9
+  db.Migrate()
+  check('a version-9 profile gets the Keyring category',
+    db.Profile().categories['Keyring'] ~= nil, true)
+  check('it matches the preset rule',
+    db.Profile().categories['Keyring'].rules.children[1].field, 'containerKind')
+  check('and it runs to the current version', db.sv.version, db.CURRENT_VERSION)
+end
+
+testKeyringMigration()
+
 --- Section priority decides which section claims an item that matches several categories.
 --- Higher section priority wins; equal priority keeps saved array order.
 local function testSectionPriorityClaims()
@@ -1508,9 +1524,8 @@ local function testCatchallArrayOrder()
   local db = addon.modules['DB']
   local pipeline = addon.modules['Pipeline']
 
-  -- Item 1005 (never seen) matches nothing specific: it lands in __catchall only.
-  -- The Backpack window already has Everything else (__catchall) as its last
-  -- section. Add a high-priority __catchall section after it.
+  -- Item 1005 (never seen) lives in the keyring, so it lands in the Keyring section, not
+  -- __catchall. Everything else holds the rest. Add a high-priority __catchall section after it.
   local before = countSection(windowIn(pipeline.Model(), 'Backpack'), 'Everything else')
   table.insert(db.Windows()[1].sections,
     { id = 's_cc_high', name = 'High Catch', categories = { '__catchall' }, collapsed = false, priority = 10 })

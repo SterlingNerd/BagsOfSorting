@@ -17,7 +17,7 @@ local constants = addon:GetModule('Constants')
 
 local BAG = constants.BAG_FAMILY
 
-db.CURRENT_VERSION = 9
+db.CURRENT_VERSION = 10
 
 ---@class BoSSettings
 -- Only settings something actually reads are present (FR-80: a setting with no UI home is
@@ -72,6 +72,7 @@ local DEFAULT_PROFILE = {
         { id = 's_new', name = 'New', categories = { 'New' } },
         { id = 's1', name = 'Junk', categories = { 'Junk' } },
         { id = 's2', name = 'Armor', categories = { 'Armor' } },
+        { id = 's11', name = 'Keyring', categories = { 'Keyring' } },
         { id = 's3', name = 'Everything else', categories = { '__catchall' } },
       },
     },
@@ -171,6 +172,7 @@ local DEFAULT_PROFILE = {
       sections = {
         { id = 's16', name = 'Junk', categories = { 'Junk' } },
         { id = 's17', name = 'Armor', categories = { 'Armor' } },
+        { id = 's31', name = 'Keyring', categories = { 'Keyring' } },
         { id = 's18', name = 'Everything else', categories = { '__catchall' } },
       },
     },
@@ -285,6 +287,19 @@ local DEFAULT_PROFILE = {
       enabled = true,
       duplicate = false,
       rules = { op = 'all', children = { { field = 'quality', cmp = '=', value = 0 } } },
+    },
+    -- Items the client keeps in the keyring (container index KEYRING_CONTAINER). The harvest
+    -- stamps every slot with its container's kind as `containerKind`, so this matches items by
+    -- where they live: no item-ID list to maintain, and a key moved out of the keyring leaves
+    -- the category on its own. Priority 7 sits above the type-based categories so a key stays
+    -- in the Keyring section even when its type matches another one (e.g. a consumable key);
+    -- retune if a preset wants keys intermingled with their type (issue #78).
+    ['Keyring'] = {
+      priority = 7,
+      kind = 'rules',
+      enabled = true,
+      duplicate = false,
+      rules = { op = 'all', children = { { field = 'containerKind', cmp = '=', value = 'keyring' } } },
     },
     -- Issue #41's priority rule: Consumables outranks every tradeskill category, so a potion
     -- crafted from herbs lands with the potions and not with the herbs. The class name is the
@@ -497,6 +512,28 @@ local MIGRATIONS = {
         settings.display.clearNewOnClose = settings.newItems.clearOnClose
       end
       settings.newItems = nil
+    end
+  end,
+
+  -- Issue #78: add the Keyring category and its section to profiles created before them.
+  [10] = function(profile)
+    profile.categories = profile.categories or {}
+    if not profile.categories['Keyring'] then
+      profile.categories['Keyring'] = deepCopy(DEFAULT_PROFILE.categories['Keyring'])
+    end
+    for _, window in ipairs(profile.windows or {}) do
+      local sectionID = window.id == 'w1' and 's11' or window.id == 'w6' and 's31'
+      if sectionID then
+        local hasKeyring = false
+        for _, section in ipairs(window.sections or {}) do
+          if section.id == sectionID then hasKeyring = true break end
+        end
+        if not hasKeyring then
+          window.sections[#window.sections + 1] = {
+            id = sectionID, name = 'Keyring', categories = { 'Keyring' }, collapsed = false,
+          }
+        end
+      end
     end
   end,
 

@@ -115,6 +115,15 @@ register({
   sentence = function(rule) return rule.value and 'is a new item' or 'is not a new item' end,
 })
 
+-- Which container an item was harvested from: 'backpack' | 'keyring' | 'reagent' | 'bank'
+-- (data/harvest.lua stamps every slot with its container's kind). A rule on this matches items
+-- by where they live instead of by what they are — that is what a Keyring category hangs on.
+register({
+  key = 'containerKind', label = 'Container kind', valueKind = 'string',
+  cmps = { '=', '!=' },
+  read = function(item) return item.containerKind end,
+})
+
 -- `itemID in {…}`: value is a set { [itemID] = true }, so the read is a hash lookup and the
 -- cost is O(1) no matter how many IDs were pasted (docs/04 §Size & performance notes).
 register({

@@ -388,7 +388,7 @@ local function moveWindow(direction, windowConfig)
     if w.id == windowConfig.id then idx = i; break end
   end
   if not idx then return end
-  local target = (direction == 'up') and (idx - 1) or (idx + 1)
+  local target = (direction == 'up') and (idx + 1) or (idx - 1)
   if target < 1 or target > #windowsList then return end
   windowsList[idx], windowsList[target] = windowsList[target], windowsList[idx]
   db.NotifyModelChanged()
@@ -449,7 +449,7 @@ function ShowWindowMenu(anchor, windowConfig)
     {
       text = 'Move Up',
       value = 'move_up',
-      disabled = (windowIdx <= 1),
+      disabled = (windowIdx >= windowCount),
       func = function()
         moveWindow('up', windowConfig)
         if CloseDropDownMenus then CloseDropDownMenus() end
@@ -459,7 +459,7 @@ function ShowWindowMenu(anchor, windowConfig)
     {
       text = 'Move Down',
       value = 'move_down',
-      disabled = (windowIdx >= windowCount),
+      disabled = (windowIdx <= 1),
       func = function()
         moveWindow('down', windowConfig)
         if CloseDropDownMenus then CloseDropDownMenus() end

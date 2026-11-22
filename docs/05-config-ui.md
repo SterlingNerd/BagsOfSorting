@@ -42,7 +42,8 @@ Everything the user can configure, and where it lives:
 | which categories a section contains | **section editor modal**: combo box + sortable list | no (it is a modal) |
 | a category's rules | **category editor modal** (§Screen 2) | no (it is a modal) |
 | a category's item ID list | category editor → *Item IDs* → paste box (§Screen 3) | no |
-| priority, duplicate, disable, affinity | chips/rows inside those two modals | no |
+| priority, duplicate | section editor modal | no |
+| disable, affinity | category editor modal | no |
 | add one item to / remove one item from a category | drag onto a section header; Ctrl+right-click an item → *Exclude from category* | no |
 | keybinds | the client's own Key Bindings panel (our frames are registered there) | no |
 | bulk sell / deposit / move-to-window | section header context menu | no |
@@ -92,7 +93,7 @@ the draft rule** — that is the whole design trick, and it is why there is no p
 ```
 ┌ Category: Herbs ─────────────────────────────────────── [?] ─┐
 │ shown in: Crafting/Herbs, Bank Trade Goods/Herbs   [manage]  │
-│ ☐ allow duplicates   ☐ enabled                               │
+│ ☐ enabled                               │
 │ affinity  [Herb pouch ▾]                                     │
 │                                                              │
 │ MATCHES  ▸ any of                                            │
@@ -161,31 +162,20 @@ not IDs are dropped with a reason. The whole paste is one command → one Undo.
 
 ## Screen 4 — Section editor
 
-`⇄`/`✎` on a header opens a modal with exactly two controls, because that is all a section is:
+`✎` on a header opens the section binding editor (spec: docs/09-section-config.md). A section binds a
+list of categories through a textbox with pills: type a binding (`Consumables`, `Consumables.*`,
+`!Consumables.Potions`), confirm with Enter and it becomes a green-tint include pill or a red-tint
+exclude pill. A side list shows every category; drag a row into the section (or click it) to add an
+include. Right-click a pill for Include / Exclude / Remove. Name, collapse and hidden stay in the
+same modal as before.
 
-```
-┌ Section: Ores · Metals ─────────────────────┐
-│ name  [ Ores · Metals                    ]  │
-│ categories, in order:                       │
-│   ⠿ Ores        [✕]                         │
-│   ⠿ Metals      [✕]                         │
-│   ⠿ Tradeskills.Enchanting ∗  [✕]          │
-│   [ add category ▾ ]  [ + new category ]    │
-│ ☐ collapse by default    ☐ hidden           │
-│                        [ Cancel ] [ Apply ] │
-└─────────────────────────────────────────────┘
-```
+- **`*` binds a whole group** (FR-11b): `Consumables.*` pulls in every category under that dotted
+  prefix — `.Food`, `.Water` — so adding a child category needs no re-binding. Resolved at classify
+  time from live category names (`pipeline.ResolveBindings`).
+- **`!` excludes** (FR-11c): `!Consumables.Potions` keeps `Consumables` in the section but keeps
+  potions out of it; excludes subtract from includes when sections claim items.
 
-Combo box for adding, drag to reorder, `✕` to unbind (the category itself survives, and the toast says
-so). Reordering *sections* is a drag on the bags, never in a list here — one place to do each thing.
-
-- **`∗` binds a whole group** (`FR-11b`): `Tradeskills.Enchanting ∗` pulls in every category under that
-  dotted prefix — `.Dust`, `.Essence`, `.Rod` — so adding a child category needs no re-binding. The
-  modal shows how many categories the group currently resolves to, and renaming a category out of the
-  prefix says so at rename time rather than silently dropping items out of the section.
-- **Name completion** (`FR-89`): typing `Tradeskills.` offers existing children, so the dotted
-  convention is supported without being mandatory. Nothing in the model requires a dot.
-
+Reordering *sections* is a drag on the bags, never in a list here — one place to do each thing.
 ## Screen 5 — Inspector (Ctrl+right-click an item → "Why is this here?")
 
 Naked right-click stays the stock item menu, and shift/alt-click stay the client's (`EXPANDITEM`,
@@ -371,7 +361,7 @@ failed change?*
 | exclude one item from a category | Ctrl+right-click item → *Exclude from category* | `category.excludeItemID` |
 | assign an item to a category | drag item onto a section header | `category.addManual` |
 | create category from an item | Ctrl+right-click item → *Make a category for this item* | `category.createFromItem` |
-| duplicate / enabled / affinity | category editor rows | `category.set` |
+| enabled / affinity | category editor rows | `category.set` |
 | disable a category | category editor row | `category.setEnabled` |
 | delete a category | category editor with "used by 3 sections" confirm | `category.delete` |
 | bulk sell / deposit / move-to-window | section header context menu | `section.bulkMove` |

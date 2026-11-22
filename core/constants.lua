@@ -72,4 +72,9 @@ constants.MAX_ITEM_CACHE = 4000
 -- docs/04 §Rule tree.
 constants.MAX_RULE_DEPTH = 2
 
+-- The Forever client runs Lua 5.1. Pure Lua modules (data/*, core/*) must avoid:
+--   `goto` / labels (5.2+), `//` integer division (5.3+), `local x <const>`/`<close>` (5.2/5.4+),
+--   bitwise `&`/`|`/`~` (5.3+). `luac` on this machine is Lua 5.5.1 and accepts all of these,
+--   so they are NOT caught by `luac -p` in deploy.sh — audit by eye instead.
+
 return constants

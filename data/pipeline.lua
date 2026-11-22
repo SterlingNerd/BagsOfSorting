@@ -24,38 +24,48 @@ local visible
 ---@type BoSContext?
 local last
 
---- A trailing `*` binds the whole dotted group (FR-11b). Resolved from names at classify
---- time, so adding a child category needs no re-binding.
+--- Resolves section category bindings into include and exclude sets (FR-11b, FR-11c).
+--- A trailing `*` or `.` binds the whole dotted group: a prefix match over category names,
+--- resolved at classify time, so adding a child category needs no re-binding.
+--- A `!` prefix excludes that binding from the section; excludes subtract from includes.
 ---@param bindings string[]?
----@return string[]
+---@return string[] includes  -- resolved include category names, sorted and deduped
+---@return string[] excludes  -- resolved exclude category names, sorted and deduped
 function pipeline.ResolveBindings(bindings)
   local categories = db.Categories()
-  local out, seen = {}, {}
+  local includes, excludes = {}, {}
+  local seenInc, seenExc = {}, {}
 
-  for _, binding in ipairs(bindings or {}) do
-    if binding:sub(-1) == '*' then
-      local prefix = binding:sub(1, -2)
-      local matches = {}
-      for name in pairs(categories) do
-        if name:sub(1, #prefix) == prefix and not seen[name] then
-          seen[name] = true
-          matches[#matches + 1] = name
-        end
+  local function add(list, seen, name)
+    if not seen[name] then
+      if not categories[name] then
+        log.Debug('section binds unknown category', name)
+      else
+        seen[name] = true
+        list[#list + 1] = name
       end
-      table.sort(matches)
-      for _, name in ipairs(matches) do
-        out[#out + 1] = name
-      end
-    elseif not seen[binding] then
-      if not categories[binding] then
-        log.Debug('section binds unknown category', binding)
-      end
-      seen[binding] = true
-      out[#out + 1] = binding
     end
   end
 
-  return out
+  for _, binding in ipairs(bindings or {}) do
+    local exclude = binding:sub(1, 1) == '!'
+    local pat = binding:sub(exclude and 2 or 1)
+    local list, seen = exclude and excludes or includes, exclude and seenExc or seenInc
+    if pat == '' then
+      log.Debug('section has empty binding', binding)
+    elseif pat:sub(-1) == '*' or pat:sub(-1) == '.' then
+      local prefix = pat:sub(1, -2):lower()
+      for name in pairs(categories) do
+        if name:lower():sub(1, #prefix) == prefix then add(list, seen, name) end
+      end
+    else
+      add(list, seen, pat)
+    end
+  end
+
+  table.sort(includes)
+  table.sort(excludes)
+  return includes, excludes
 end
 
 --- The free-slot count a section claims from the specialty bags its categories pair with
@@ -164,11 +174,19 @@ function pipeline.Assign(placements)
       for _, sectionConfig in ipairs(sectionConfigs) do
         if not sectionConfig.hidden then
           sectionOrder = sectionOrder + 1
-          local names = pipeline.ResolveBindings(sectionConfig.categories)
-          local section = { id = sectionConfig.id, name = sectionConfig.name, categories = names, items = {}, collapsed = sectionConfig.collapsed or false, priority = sectionConfig.priority or 0 }
+          local includes, excludes = pipeline.ResolveBindings(sectionConfig.categories)
+          local excludesSet = {}
+          for _, name in ipairs(excludes) do excludesSet[name] = true end
+          local effective = {}
+          for _, name in ipairs(includes) do
+            if not excludesSet[name] then effective[#effective + 1] = name end
+          end
+          local itemIDSet = {}
+          for _, id in ipairs(sectionConfig.items or {}) do itemIDSet[id] = true end
+          local section = { id = sectionConfig.id, name = sectionConfig.name, categories = includes, excludes = excludes, items = {}, itemIDSet = itemIDSet, collapsed = sectionConfig.collapsed or false, priority = sectionConfig.priority or 0, duplicate = sectionConfig.duplicate }
           window.sections[#window.sections + 1] = section
           allSections[#allSections + 1] = {
-            section = section, names = names, isBank = isBank,
+            section = section, names = effective, excludes = excludesSet, isBank = isBank,
             isEquipmentWindow = isEquipmentWindow,
             equipmentItemSets = equipmentItemSets,
             priority = section.priority,
@@ -219,17 +237,43 @@ function pipeline.Assign(placements)
         end
       end
     else
+      -- Item-level exclusion: an item that matches any excluded category is kept out of
+      -- this section even if it also matches an included category. `!Equipment.*` keeps
+      -- Equipment items out of an `Armor`-bound section, for example.
+      local excludedItems = {}
+      if entry.excludes then
+        for excludedCat in pairs(entry.excludes) do
+          for _, item in ipairs(placements[excludedCat] or {}) do
+            excludedItems[item] = true
+          end
+        end
+      end
+
       for _, categoryName in ipairs(entry.names) do
         if categoryName ~= '__catchall' then
-          local category = db.Categories()[categoryName]
           for _, item in ipairs(placements[categoryName] or {}) do
-            if (item.containerKind == 'bank') == entry.isBank
-              and (not placedByNonDuplicate[item] or (category and category.duplicate)) then
-              if not (category and category.duplicate) then
+            -- Item-level exclusion: an item matching any excluded category is kept out of
+            -- this section even if it also matches an included category. `!Equipment.*` keeps
+            -- Equipment items out of an `Armor`-bound section; __catchall may still claim it.
+            if not excludedItems[item]
+              and (item.containerKind == 'bank') == entry.isBank
+              and (not placedByNonDuplicate[item] or entry.section.duplicate) then
+              if not entry.section.duplicate then
                 placedByNonDuplicate[item] = true
               end
               section.items[#section.items + 1] = item
             end
+          end
+        end
+      end
+      -- Direct item bindings: item IDs bound straight to the section, not via a category.
+      if next(section.itemIDSet) then
+        for _, item in ipairs(harvest.Items()) do
+          if (item.containerKind == 'bank') == entry.isBank
+            and not placedByNonDuplicate[item]
+            and section.itemIDSet[item.itemID] then
+            section.items[#section.items + 1] = item
+            placedByNonDuplicate[item] = true
           end
         end
       end
@@ -311,7 +355,7 @@ end
 --- `stackedCount` is the total the cell shows; `stackCount` stays the count of the real slot the cell
 --- points at, which is the pile a click picks up. Like BetterBags' stack root, that slot is the
 --- **biggest** pile, so the click moves as much of the total as any one slot can. The record shown is
---- a copy for one reason: a category with `duplicate = true` places the same harvested item in two
+--- a copy for one reason: a section with `duplicate = true` places the same harvested item in two
 --- sections at once, and summing onto the shared record would count it twice.
 ---
 --- shortcut: one cell still points at one real slot, so a click moves that pile and not the total —
@@ -346,9 +390,31 @@ end
 --- Phases 3-7 for an already-enriched item list.
 ---@param ctx BoSContext
 ---@param items BoSItem[]
+--- Returns a predicate: true if a category consumes ownership (is bound to at least one
+-- non-duplicate section). Categories bound only to duplicate sections -- or to none -- add
+-- a placement without consuming it, so `__catchall` can still claim the item.
+local function sectionConsumesOwnership()
+  local boundToSection, boundToNonDup = {}, {}
+  for _, config in ipairs(db.Windows()) do
+    for _, sectionConfig in ipairs(config.sections or {}) do
+      if not sectionConfig.hidden then
+        for _, binding in ipairs(sectionConfig.categories or {}) do
+          local name = binding:sub(1, 1) == '!' and binding:sub(2) or binding
+          boundToSection[name] = true
+          if not sectionConfig.duplicate then boundToNonDup[name] = true end
+        end
+      end
+    end
+  end
+  return function(name)
+    if not boundToSection[name] then return true end
+    return boundToNonDup[name] == true
+  end
+end
+
 function pipeline.Finish(ctx, items)
   context.MarkPhase(ctx, 'enrich')
-  local placements = classify.Run(items, db.Categories())
+  local placements = classify.Run(items, db.Categories(), sectionConsumesOwnership())
   context.MarkPhase(ctx, 'classify')
   addon:GetModule('Equipment').DistributeMultiSetItems()
   local models, shown = pipeline.Assign(placements)

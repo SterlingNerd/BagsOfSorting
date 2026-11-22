@@ -15,7 +15,6 @@ local log = addon:GetModule('Log')
 ---@field kind string        -- 'rules' | 'manual' | 'dynamic'
 ---@field rules BoSRule?
 ---@field itemIDs table<number, boolean>?
----@field duplicate boolean?
 ---@field enabled boolean?
 
 ---@class BoSCategoryEntry
@@ -88,11 +87,19 @@ end
 --- decide where an item goes. Sections, ranked by section priority, compete for the item
 --- in pipeline.Assign. Several categories in one section is a display grouping, never a
 --- precedence rule (docs/04 §Precedence 7).
+---
+-- A category consumes ownership when it is bound to at least one non-duplicate section;
+-- categories bound only to duplicate sections (or to none) add a placement without
+-- consuming it, so `__catchall` can still claim the item (docs/04 §Precedence 3).
 ---@param items BoSItem[]
 ---@param categories table<string, BoSCategory>
+---@param consumesOwnership fun(name: string): boolean  -- true if the category claims ownership; defaults to always true
 ---@return table<string, BoSItem[]> placements
-function classify.Run(items, categories)
+function classify.Run(items, categories, consumesOwnership)
   local ordered = classify.Ordered(categories)
+  if not consumesOwnership then
+    consumesOwnership = function() return true end
+  end
 
   local placements = {}
 
@@ -102,9 +109,11 @@ function classify.Run(items, categories)
     local trace = { tested = {} }
 
     -- Walk every category so an item is eligible for every one it matches. Sections,
-    -- ranked by section priority, then compete for it in pipeline.Assign; the item is
-    -- drawn once thanks to placedByNonDuplicate there. item.owner stays the first
-    -- non-duplicate match so the `none`/catch-all rule and the trace still report a single owner.
+    -- ranked by section priority, then compete for it in pipeline.Assign; a section flagged
+    -- `duplicate` may claim an item another section already placed (docs/04 §Precedence 3).
+    -- item.owner stays the first match of a category that consumes ownership, so the
+    -- `none`/catch-all rule and the trace report a single owner; duplicate sections re-draw
+    -- the item in pipeline.Assign.
     for _, entry in ipairs(ordered) do
       local ok, matched, decidedBy = pcall(rules.Evaluate, entry.tree, item)
       if not ok then
@@ -115,10 +124,9 @@ function classify.Run(items, categories)
           trace.matchedBy = decidedBy and rules.Sentence(decidedBy) or nil
         end
         place(placements, entry.name, item)
-        -- Only a non-duplicate category takes ownership; duplicates add a placement without
-        -- consuming it (docs/04 §Precedence 3). The first non-duplicate match is the owner,
-        -- which the `none`/catch-all rule and the trace report.
-        if not entry.cat.duplicate and not item.owner then item.owner = entry.name end
+        -- Only a category that consumes ownership sets item.owner; a category bound only to
+        -- duplicate sections adds a placement without consuming it (docs/04 §Precedence 3).
+        if consumesOwnership(entry.name) and not item.owner then item.owner = entry.name end
       else
         trace.tested[#trace.tested + 1] = entry.name
       end

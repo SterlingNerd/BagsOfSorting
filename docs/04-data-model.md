@@ -52,7 +52,7 @@ BagsOfSortingDB = {
                                       -- scale, position, compact or icon. Explicit, visible, breakable.
                                       -- The usual shape: a bank window linked to its backpack twin.
       sections = {                    -- ordered array
-        { id="s1", categories={"Herbs"},         collapsed=false, hidden=false },
+        { id="s1", categories={"Herbs"},         collapsed=false, hidden=false, duplicate=false },
         { id="s2", categories={"Ores","Metals"}, collapsed=false, hidden=false },
         { id="s3", categories={"Tradeskills.Enchanting*"}, collapsed=false },  -- trailing `*` = bind
                                       -- the whole dotted group: every category under that prefix
@@ -70,7 +70,6 @@ BagsOfSortingDB = {
       dynamicField = nil,
       itemIDs  = nil,                 -- kind="manual": { [itemID]=true }. For kind="rules" the IDs
                                       -- live as an `itemID in {…}` leaf inside the tree instead.
-      duplicate = false,
       enabled  = true,
       affinity = nil,                 -- "herbalism"|"mining"|"engineering"|"soul"|"quiver"|… →
                                       -- preferred physical container for compaction (FR-66)
@@ -81,8 +80,9 @@ BagsOfSortingDB = {
       color    = nil,                 -- optional section title color
     },
     -- The shipped New category (issue #39): the client's own per-slot new flag as data/harvest.lua
-    -- records it, and `duplicate` so a new item keeps the category its own rules gave it.
-    ["New"] = { kind = "rules", duplicate = true,
+    -- records it. `duplicate = true` lives on the New section (w1/s_new), not the category: a new
+    -- item keeps the category its own rules gave it and is also drawn in New (FR-15).
+    ["New"] = { kind = "rules",
       rules = { op="all", children={ {field="isNew", cmp="=", value=true} } } },
     ["__catchall"] = { kind = "rules",
       rules = { op="all", children={ {field="none", cmp="=", value=true} } } },
@@ -146,7 +146,7 @@ Design notes:
   (`docs/07` Q11) it is a separate field with its own rules.
 - **`__catchall` is a real category**, not a special-cased code path. It is walked last at classify
   time and matches only items no other category owns. This keeps `FR-16` inside the normal model.
-- **No `hideduplicates` global.** `FR-15` is per-category `duplicate = false`, default false. A
+- **No `hideduplicates` global.** `FR-15` is per-section `duplicate = false`, default false. A
   global tri-state is how Baggins got 57 profile keys.
 - **Per-window `columns`**, not a global `columns`.
 - **No `theme` key.** We use the client's bag visuals (`docs/07` Q16).
@@ -181,7 +181,9 @@ Constraints enforced by `data/rules.lua` on load and on every command:
 2. Within a section, categories lay out in the order the section binds them, then by the
    section's sort rule. The first bound category whose tree matches an unclaimed item gets its
    cell.
-3. `duplicate = true` categories do not consume ownership: they add a second placement.
+3. `duplicate = true` sections do not consume ownership: they add a second placement.
+   A category bound only to duplicate sections does not set `item.owner`, so `__catchall`
+   can still claim the item (issue #39's New section is the shipped example).
 4. `kind = "dynamic"` categories expand at classify time into one virtual category per distinct
    field value.
 5. `__catchall` matches only if no other category owned the item.

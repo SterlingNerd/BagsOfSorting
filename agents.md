@@ -98,9 +98,9 @@ skill is what the next addon in this workspace reads, and `docs/` is what this p
 - **Style:** 2-space indent, `local x = 1`, module tables as `local mod = addon:NewModule('Mod')`.
   Follow BetterBags' annotation style (`---@class`, `---@field`) — it is the readable half of
   the two references.
-- **Worktrees:** one per issue, a sibling of this repo in the parent workspace, always
-  `BagsOfSorting-<issue>` (GitHub issue number, never a slug) — create, deploy, merge, restore the
-  shipped build and `cleanup.sh` are the `deploy-operations` skill's §The cycle.
+- **Worktrees:** always work in a worktree per issue unless instructed otherwise — one per
+  issue, sibling of this repo, always `BagsOfSorting-<issue>` (GitHub issue number, never a
+  slug); create, deploy, merge, restore shipped build, `cleanup.sh` per `deploy-operations`.
 - **Naming:** addon folder / `addonName` / repo = **`BagsOfSorting`**, TOC title **`Bags of Sorting`**
   (plural decided, `docs/07` Q1), SavedVariables `BagsOfSortingDB`, slash command `/bos`. The client
   writes the file as `SavedVariables/BagsOfSorting.lua`, named after the folder whatever the TOC

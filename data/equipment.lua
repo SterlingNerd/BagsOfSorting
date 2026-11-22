@@ -130,7 +130,6 @@ local function upsertCategory(setID, info)
   local category = {
     kind = 'manual',
     enabled = true,
-    duplicate = false, -- Handled specially: items in multiple sets added post-classify
     itemIDs = info.itemIDs,
     _equipmentSetID = setID,
   }

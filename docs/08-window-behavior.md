@@ -110,7 +110,7 @@ Partial stacks of one item draw as one cell carrying the true total — 3 × 20 
 
 | Rule | Why |
 |---|---|
-| Merging happens in `Pipeline.Finish`, after the sort, and changes nothing about which real slot holds what | `FR-43`. The merged record is a **copy** of the item, because a category with `duplicate = true` puts the same harvested record in two sections at once and summing onto the shared record counts it twice (issue #59) |
+| Merging happens in `Pipeline.Finish`, after the sort, and changes nothing about which real slot holds what | `FR-43`. The merged record is a **copy** of the item, because a section with `duplicate = true` puts the same harvested record in two sections at once and summing onto the shared record counts it twice (issue #59) |
 | One cell per **identity**, not per item id | the group key is the item's hyperlink — enchant, gems, suffix and bonus ids in it — so two pieces of gear with the same id and different stats never hide each other. `stackedCount` is the total the cell shows and `stackCount` the pile of the slot it points at |
 | Groups keep the order the sort gave them | a merged cell lands where that item's first stack was, so the sort order the player chose still reads the same |
 | The cell points at the **biggest** pile of that identity | every stock handler still resolves a real `bagID + slot` (`frames/item.lua`), so the icon is clickable — it picks up that pile, not the total the count shows. This is BetterBags' stack root (`data/stacks.lua`) and its click behaviour; #60 (`C_Container.CleanUpBags`) is the story that makes the physical bags match the number |
@@ -119,13 +119,13 @@ Partial stacks of one item draw as one cell carrying the true total — 3 × 20 
 
 ## New items
 
-The default backpack window opens with a **New** section (issue #39): a category whose rule is the
-client's own per-slot new flag as `data/harvest.lua` records it, and `duplicate = true`.
+The default backpack window opens with a **New** section (issue #39): a section whose category's rule is the
+client's own per-slot new flag as `data/harvest.lua` records it, with `duplicate = true` on the section.
 
 | Rule | Why |
 |---|---|
 | First section of the default backpack window, and nowhere else | AC-39. The bank mirror does not carry it — what you just picked up is not a bank fact (issue #39) |
-| A new item is drawn in **New and in its own category** | `duplicate = true` (FR-15). `Pipeline.Assign` only marks an item as placed for a non-duplicate category, so the New section cannot claim a slot and the category it would otherwise land in still draws it |
+| A new item is drawn in **New and in its own category** | `duplicate = true` (FR-15). `Pipeline.Assign` only marks an item as placed by a non-duplicate section, so the New section cannot claim a slot and the category it would otherwise land in still draws it |
 | The section follows our record, not the client's list | the client's list is cleared by a hover **and** by any container frame hide — measured on this client at `39c → 39d` (issue #39) — and `C_NewItems` is `IsNewItem` · `RemoveNewItem` · `ClearAll` with no way to put a flag back (`containers-and-bags.md`). The record is `bagID:slot` tagged with the item id, so a later item in that slot is not new |
 | Hovering clears the client's flag but never the **listing** | `ContainerFrameItemButton_OnEnter` runs `C_NewItems.RemoveNewItem` on the real slot and our pooled buttons carry that template (issue #35). With *Clear New on Close* on (the default) the record keeps the cell drawn (AC-39); with it off `core/interactions.lua` used to forget the record on hover too, but that moved items out of the New section and caused reflow when the bags were closed and reopened. Hover now leaves the record standing in both modes, so items stay in the New section across close/reopen and do not reflow. That a `hooksecurefunc` sees the call for **our** buttons is source-verified only until issue #39's round 2 |
 | Closing the bags empties the record while the setting is on | `ToggleAllBags` / `CloseAllBags` observed with the client's own `IsAnyBagOpen` read after the call (`core/interactions.lua`). The same close has already cleared the client's flags in the client's own doing (`39c → 39d`), so emptying the section in that mode needs no `C_NewItems.ClearAll`. With the setting off the record is what the listing reads, and a hide that took the client's flag leaves our listing standing |

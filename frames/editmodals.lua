@@ -7,6 +7,7 @@ local editModals = addon:NewModule('EditModals')
 
 local db = addon:GetModule('DB')
 local pipeline = addon:GetModule('Pipeline')
+local dropdown = addon:GetModule('Dropdown')
 
 ---@type Frame?
 local sectionEditFrame
@@ -28,31 +29,23 @@ local function getCategoryList()
   return list
 end
 
--- Create a simple checkbox for category selection
-local function createCategoryCheckbox(parent, categoryName, yOffset, onChange)
-  local cb = CreateFrame('CheckButton', nil, parent, 'InterfaceOptionsCheckButtonTemplate')
-  cb:SetPoint('TOPLEFT', 10, yOffset)
-  cb.Text:SetText(categoryName)
-  cb:SetScript('OnClick', function(self)
-    onChange(categoryName, self:GetChecked())
-  end)
-  return cb
-end
-
---- Open the section edit modal.
+-- Open the section edit modal.
+---
+-- Single add textbox: type a category binding (`Consumables`, `Consumables.*`,
+-- `!Consumables.Potions`) or an item ID, Enter commits it into the bound list below.
+-- The bound list flows like a comma-separated text area; right-click an entry for Remove.
+-- Drag an item from your bags onto the add textbox to bind by item ID.
+-- Right pane: searchable category browser (bound categories hidden); click a row to put
+-- it in the add textbox.
 ---@param model BoSSectionModel
 ---@param windowConfig any
 function editModals.OpenSectionEdit(model, windowConfig)
-  if sectionEditFrame then
-    sectionEditFrame:Hide()
-  end
+  if sectionEditFrame then sectionEditFrame:Hide() end
 
   sectionEditFrame = CreateFrame('Frame', 'BagsOfSortingSectionEdit', UIParent)
-
-  -- Match the category editor: translucent dialog background + Dialog NineSlice border.
   local border = CreateFrame('Frame', nil, sectionEditFrame, 'DialogBorderTranslucentTemplate')
   border:SetAllPoints(sectionEditFrame)
-  sectionEditFrame:SetSize(350, 450)
+  sectionEditFrame:SetSize(760, 520)
   sectionEditFrame:SetPoint('CENTER')
   sectionEditFrame:SetFrameStrata('DIALOG')
   sectionEditFrame:SetMovable(true)
@@ -66,29 +59,87 @@ function editModals.OpenSectionEdit(model, windowConfig)
 
   local closeBtn = CreateFrame('Button', nil, sectionEditFrame, 'UIPanelCloseButton')
   closeBtn:SetPoint('TOPRIGHT', -10, 8)
-  closeBtn:SetScript('OnClick', function()
-    sectionEditFrame:Hide()
-  end)
+  closeBtn:SetScript('OnClick', function() sectionEditFrame:Hide() end)
 
-  -- Name edit box
+  -- Resolve the section config being edited (raw bindings, incl. `!` excludes and `*` wildcards).
+  local sectionConfig
+  for _, sc in ipairs(windowConfig.sections or {}) do
+    if sc.id == model.id then sectionConfig = sc break end
+  end
+  sectionConfig = sectionConfig or { categories = model.categories or {}, items = {} }
+
+  local categoryList = getCategoryList()
+  local categories = db.Categories()
+  local leftX = 15
+  local rightX = 505
+  local bindW = rightX - leftX - 20
+
+  ---------- validation ----------
+  --- matchCategories returns (firstMatchingName, count).
+  -- For exact matches, firstMatchingName is the canonically-cased category name.
+  -- For wildcard (`*`/`.`) matches, firstMatchingName is nil and count is the number of
+  -- categories under the prefix; the binding keeps its `*` form.
+  local function matchCategories(token)
+    local exclude = token:sub(1, 1) == '!'
+    local pat = token:sub(exclude and 2 or 1)
+    if pat == '' then return nil, 0 end
+    local wildcard = pat:sub(-1) == '*' or pat:sub(-1) == '.'
+    local stem = (wildcard and pat:sub(1, -2) or pat):lower()
+    local first, n = nil, 0
+    for name in pairs(categories) do
+      local nameL = name:lower()
+      local ok = wildcard and nameL:sub(1, #stem) == stem or nameL == stem
+      if ok then
+        n = n + 1
+        if not wildcard and not first then first = name end
+      end
+    end
+    return first, n
+  end
+  local function validateToken(token)
+    local first, n = matchCategories(token)
+    if n == 0 then return false end
+    local exclude = token:sub(1, 1) == '!'
+    local pat = token:sub(exclude and 2 or 1)
+    local wildcard = pat:sub(-1) == '*' or pat:sub(-1) == '.'
+    -- Wildcards keep their `*` form (pipeline.ResolveBindings expands them at classify time).
+    -- Exact matches use the canonically-cased category name.
+    local bound = wildcard and pat or first
+    return true, exclude and 'exclude' or 'include', (exclude and '!' or '') .. bound
+  end
+  --- Canonical case + dedup key for a committed entry.
+  local function canonKey(entry)
+    if entry.kind == 'category' then
+      local ok, kind, bound = validateToken(entry.binding)
+      return ok and (kind .. ':' .. bound:lower()) or ('category:' .. entry.binding:lower())
+    end
+    return 'item:' .. tostring(entry.id)
+  end
+
+  local refreshBoundFlow, refreshSideList, refreshAddTint, commitAdd  -- forward declared
+
+  ---------- committed entries ----------
+  local committed = {}
+  for _, b in ipairs(sectionConfig.categories or {}) do committed[#committed + 1] = { kind = 'category', binding = b } end
+  for _, id in ipairs(sectionConfig.items or {}) do committed[#committed + 1] = { kind = 'item', id = id } end
+
+  ---------- Name / Priority ----------
   local nameLabel = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-  nameLabel:SetPoint('TOPLEFT', 15, -35)
+  nameLabel:SetPoint('TOPLEFT', leftX, -36)
   nameLabel:SetText('Section Name:')
 
   local nameEdit = CreateFrame('EditBox', nil, sectionEditFrame, 'InputBoxTemplate')
-  nameEdit:SetSize(300, 25)
+  nameEdit:SetSize(460, 25)
   nameEdit:SetPoint('TOPLEFT', nameLabel, 'BOTTOMLEFT', 0, -5)
   nameEdit:SetText(model.name)
   nameEdit:SetAutoFocus(false)
   nameEdit:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
 
-  -- Priority slider
   local prioLabel = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-  prioLabel:SetPoint('TOPLEFT', nameEdit, 'BOTTOMLEFT', 0, -15)
+  prioLabel:SetPoint('TOPLEFT', nameEdit, 'BOTTOMLEFT', 0, -16)
   prioLabel:SetText('Priority: ' .. (model.priority or 0))
-
   local prioSlider = CreateFrame('Slider', nil, sectionEditFrame, 'OptionsSliderTemplate')
-  prioSlider:SetSize(300, 20)
+  prioSlider:SetSize(bindW, 20)
   prioSlider:SetPoint('TOPLEFT', prioLabel, 'BOTTOMLEFT', 0, -5)
   prioSlider:SetMinMaxValues(-5, 5)
   prioSlider:SetValueStep(1)
@@ -99,37 +150,257 @@ function editModals.OpenSectionEdit(model, windowConfig)
     self.value = ival
   end)
 
-  -- Categories multi-select
-  local catLabel = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-  catLabel:SetPoint('TOPLEFT', prioSlider, 'BOTTOMLEFT', 0, -15)
-  catLabel:SetText('Categories (multi-select):')
+  local dupCheck = CreateFrame('CheckButton', nil, sectionEditFrame, 'InterfaceOptionsCheckButtonTemplate')
+  dupCheck:SetPoint('TOPLEFT', prioSlider, 'BOTTOMLEFT', 0, -10)
+  dupCheck.Text:SetText('Allow duplicates')
+  dupCheck:SetChecked(model.duplicate == true)
 
-  local catContainer = CreateFrame('Frame', nil, sectionEditFrame)
-  catContainer:SetSize(290, 250)
-  catContainer:SetPoint('TOPLEFT', catLabel, 'BOTTOMLEFT', 0, -5)
+  ---------- Add textbox (binding or item ID) ----------
+  local addLabel = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+  addLabel:SetPoint('TOPLEFT', dupCheck, 'BOTTOMLEFT', 0, -10)
+  addLabel:SetText('Add binding or item ID (Enter to commit)')
 
-  -- Scroll frame for categories
-  local scrollFrame = CreateFrame('ScrollFrame', nil, catContainer, 'UIPanelScrollFrameTemplate')
-  scrollFrame:SetAllPoints(catContainer)
+  local addEdit = CreateFrame('EditBox', nil, sectionEditFrame, 'InputBoxTemplate')
+  addEdit:SetSize(bindW, 25)
+  addEdit:SetPoint('TOPLEFT', addLabel, 'BOTTOMLEFT', 0, -5)
+  addEdit:SetAutoFocus(false)
+  addEdit:SetScript('OnEscapePressed', function(self) self:ClearFocus() end)
+  addEdit:SetScript('OnReceiveDrag', function(self)
+    local kind, id = GetCursorInfo()
+    if kind == 'item' and id then
+      self:SetText(tostring(id))
+      self:ClearFocus()
+      commitAdd()
+      ClearCursor()
+    end
+  end)
 
-  local scrollChild = CreateFrame('Frame', nil, scrollFrame)
-  scrollChild:SetSize(300, 1)
-  scrollFrame:SetScrollChild(scrollChild)
+  commitAdd = function()
+    local token = addEdit:GetText():trim()
+    if token == '' then return false end
+    local num = tonumber(token)
+    if num and num > 0 then
+      local entry = { kind = 'item', id = num }
+      for _, e in ipairs(committed) do if canonKey(e) == canonKey(entry) then addEdit:SetText(''); return true end end
+      committed[#committed + 1] = entry
+      addEdit:SetTextColor(1, 1, 1)
+      addEdit:SetText('')
+      refreshBoundFlow()
+      refreshSideList()
+      refreshAddTint()
+      return true
+    end
+    local ok, kind, bound = validateToken(token)
+    if not ok then
+      addEdit:SetTextColor(0.8, 0.2, 0.2)
+      print('|cffff0000Invalid binding or item ID:|r ' .. token)
+      return false
+    end
+    -- correct case to canonical and de-duplicate
+    local entry = { kind = 'category', binding = bound }
+    for _, e in ipairs(committed) do if canonKey(e) == canonKey(entry) then addEdit:SetText(''); return true end end
+    committed[#committed + 1] = entry
+    addEdit:SetTextColor(1, 1, 1)
+    addEdit:SetText('')
+    refreshBoundFlow()
+    refreshSideList()
+    refreshAddTint()
+    return true
+  end
+  addEdit:SetScript('OnEnterPressed', commitAdd)
 
-  -- Track selected categories
-  local selectedCategories = {}
-  for _, cat in ipairs(model.categories) do
-    selectedCategories[cat] = true
+  local addHint = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontDisable')
+  addHint:SetPoint('TOPLEFT', addEdit, 'BOTTOMLEFT', 0, -8)
+  addHint:SetSize(bindW, 16)
+  addHint:SetJustifyH('LEFT')
+  addHint:SetText('Enter commits   ·   drag an item here to bind by ID   ·   right-click a bound entry to remove')
+
+  refreshAddTint = function()
+    local text = addEdit:GetText()
+    if text == '' then addEdit:SetTextColor(1, 1, 1); return end
+    local num = tonumber(text)
+    local ok = (num and num > 0) or validateToken(text)
+    addEdit:SetTextColor(ok and 1 or 0.8, ok and 1 or 0.2, ok and 1 or 0.2)
+  end
+  addEdit:SetScript('OnTextChanged', refreshAddTint)
+
+  ---------- Bound list: flows like comma-separated text ----------
+  local boundLabel = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+  boundLabel:SetPoint('TOPLEFT', addHint, 'BOTTOMLEFT', 0, -12)
+  boundLabel:SetText('Bound items / categories')
+
+  local boundScroll = CreateFrame('ScrollFrame', 'BOSSectionBoundScroll', sectionEditFrame, 'UIPanelScrollFrameTemplate')
+  boundScroll:SetPoint('TOPLEFT', boundLabel, 'BOTTOMLEFT', 0, -8)
+  boundScroll:SetPoint('BOTTOMRIGHT', sectionEditFrame, 'BOTTOMLEFT', leftX + bindW - 16, 48)
+  local boundChild = CreateFrame('Frame', nil, boundScroll)
+  boundChild:SetSize(bindW - 16, 1)
+  boundScroll:SetScrollChild(boundChild)
+
+  local boundFlow = {}
+  local function entryTint(entry)
+    if entry.kind == 'category' then
+      return entry.binding:sub(1, 1) == '!' and { 0.45, 0.15, 0.15, 0.95 } or { 0.15, 0.35, 0.15, 0.95 }
+    end
+    return { 0.2, 0.3, 0.6, 0.9 }
+  end
+  local function entryText(entry)
+    if entry.kind == 'category' then return entry.binding end
+    return tostring(entry.id)
   end
 
-  local categoryList = getCategoryList()
-  for i, catName in ipairs(categoryList) do
-    local cb = createCategoryCheckbox(scrollChild, catName, -(i - 1) * 25, function(name, checked)
-      selectedCategories[name] = checked or nil
-    end)
-    cb:SetChecked(selectedCategories[catName] or false)
+  local function hideScrollbarIfUnneeded(scrollFrame)
+    local sb = _G[scrollFrame:GetName() .. 'ScrollBar']
+    if not sb then return end
+    local _, max = scrollFrame:GetVerticalScrollRange()
+    if not max or max <= 0 then
+      sb:Hide()
+    else
+      sb:Show()
+    end
   end
-  scrollChild:SetHeight(#categoryList * 25 + 10)
+
+refreshBoundFlow = function()
+    for _, f in ipairs(boundFlow) do f:Hide() f:SetParent(nil) end
+    boundFlow = {}
+    local x, y, rowH = 0, 0, 24
+    for idx, entry in ipairs(committed) do
+      local chip = CreateFrame('Button', nil, boundChild)
+      chip:SetHeight(22)
+      chip:EnableMouse(true)
+      chip:RegisterForClicks('RightButtonUp')
+
+      local bg = chip:CreateTexture(nil, 'BACKGROUND')
+      bg:SetAllPoints(chip)
+      bg:SetColorTexture(unpack(entryTint(entry)))
+
+      local text = chip:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+      text:SetPoint('LEFT', 6, 0)
+      text:SetPoint('RIGHT', -6, 0)
+      text:SetJustifyH('LEFT')
+      text:SetText(entryText(entry))
+
+      chip:SetWidth(text:GetStringWidth() + 14)
+
+      if x > 0 and x + chip:GetWidth() > bindW then
+        x, y = 0, y + rowH
+      end
+      chip:SetPoint('TOPLEFT', boundChild, 'TOPLEFT', x, -y)
+      x = x + chip:GetWidth()
+
+      if idx < #committed then
+        local comma = boundChild:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+        comma:SetText(', ')
+        -- Vertically centered on the chip row, not baseline-aligned.
+        comma:SetPoint('CENTER', chip, 'RIGHT', 2, 0)
+        local cw = comma:GetStringWidth()
+        x = x + cw + 4
+        if x > bindW then x, y = 0, y + rowH end
+      end
+
+      chip:SetScript('OnMouseUp', function(self, button)
+        if button ~= 'RightButton' then return end
+        dropdown.Show(self, {
+          { text = 'Remove', notCheckable = true,
+            func = function()
+              table.remove(committed, idx)
+              refreshBoundFlow()
+              refreshSideList()
+              if CloseDropDownMenus then CloseDropDownMenus() end
+            end },
+        })
+      end)
+
+      boundFlow[#boundFlow + 1] = chip
+    end
+    boundChild:SetHeight(math.max(y + rowH + 4, 1))
+    boundScroll:UpdateScrollChildRect()
+  end
+
+  refreshBoundFlow()
+
+  ---------- Right pane: searchable category browser ----------
+  local searchLabel = sectionEditFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+  searchLabel:SetPoint('TOPLEFT', rightX, -36)
+  searchLabel:SetText('Search categories')
+  local searchWidth = 240
+  local searchEdit = CreateFrame('EditBox', nil, sectionEditFrame, 'InputBoxTemplate')
+  searchEdit:SetSize(searchWidth, 25)
+  searchEdit:SetPoint('TOPLEFT', searchLabel, 'BOTTOMLEFT', 0, -5)
+  searchEdit:SetAutoFocus(false)
+
+  local sideScroll = CreateFrame('ScrollFrame', 'BOSSectionSideScroll', sectionEditFrame, 'UIPanelScrollFrameTemplate')
+  sideScroll:SetPoint('TOPLEFT', searchEdit, 'BOTTOMLEFT', 0, -8)
+  sideScroll:SetPoint('BOTTOMRIGHT', sectionEditFrame, 'BOTTOMRIGHT', -38, 48)
+  local sideChild = CreateFrame('Frame', nil, sideScroll)
+  sideChild:SetSize(searchWidth, 1)
+  sideScroll:SetScrollChild(sideChild)
+
+  local sideRows = {}
+  local function boundCategorySet()
+    local b = {}
+    for _, entry in ipairs(committed) do
+      if entry.kind == 'category' then
+        local binding = entry.binding
+        local exclude = binding:sub(1, 1) == '!'
+        local pat = binding:sub(exclude and 2 or 1)
+        local wildcard = pat:sub(-1) == '*' or pat:sub(-1) == '.'
+        local stem = (wildcard and pat:sub(1, -2) or pat):lower()
+        if wildcard then
+          for _, cn in ipairs(categoryList) do
+            if cn:lower():sub(1, #stem) == stem then b[cn] = true end
+          end
+        else
+          b[binding:gsub('^!', '')] = true
+        end
+      end
+    end
+    return b
+  end
+  refreshSideList = function()
+    local search = searchEdit:GetText():lower()
+    local bound = boundCategorySet()
+    local y = 0
+    local shown = {}
+    for _, catName in ipairs(categoryList) do
+      local matches = search == '' or catName:lower():find(search, 1, true)
+      if matches and not bound[catName] then
+        local row = sideRows[catName]
+        if not row then
+          row = CreateFrame('Button', nil, sideChild)
+          row:SetSize(searchWidth, 18)
+          row:EnableMouse(true)
+          local text = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+          text:SetPoint('LEFT', 4, 0)
+          text:SetJustifyH('LEFT')
+          row.text = text
+          row:SetScript('OnMouseUp', function(self, button)
+            if button == 'LeftButton' then
+              addEdit:SetText(catName)
+              addEdit:SetFocus()
+            end
+          end)
+          sideRows[catName] = row
+        end
+        row:ClearAllPoints()
+        row:SetPoint('TOPLEFT', 0, -y)
+        row:Show()
+        row.text:SetText(catName)
+        shown[catName] = true
+        y = y + 18
+      end
+    end
+    for catName, row in pairs(sideRows) do
+      if not shown[catName] then row:Hide() end
+    end
+    sideChild:SetHeight(math.max(y + 10, 1))
+    sideScroll:UpdateScrollChildRect()
+    hideScrollbarIfUnneeded(sideScroll)
+  end
+
+  searchEdit:SetScript('OnTextChanged', refreshSideList)
+  refreshSideList()
+
+  sectionEditFrame:SetScript('OnHide', function() end)
 
   -- Buttons
   local deleteBtn = CreateFrame('Button', nil, sectionEditFrame, 'UIPanelButtonTemplate')
@@ -153,7 +424,6 @@ function editModals.OpenSectionEdit(model, windowConfig)
   saveBtn:SetPoint('RIGHT', cancelBtn, 'LEFT', -10, 0)
   saveBtn:SetText('Save')
   saveBtn:SetScript('OnClick', function()
-    -- Find and update the section config
     local newName = nameEdit:GetText():trim()
     if newName == '' then
       print('|cff00ff00BagsOfSorting|r: Section name cannot be empty')
@@ -161,22 +431,32 @@ function editModals.OpenSectionEdit(model, windowConfig)
     end
 
     local newCategories = {}
-    for name, _ in pairs(selectedCategories) do
-      newCategories[#newCategories + 1] = name
+    local newItems = {}
+    local bad = false
+    for _, entry in ipairs(committed) do
+      if entry.kind == 'category' then
+        local ok = validateToken(entry.binding)
+        if ok then newCategories[#newCategories + 1] = entry.binding
+        else bad = true print('|cffff0000Invalid category binding:|r ' .. entry.binding) end
+      else
+        newItems[#newItems + 1] = entry.id
+      end
     end
-    if #newCategories == 0 then
-      print('|cff00ff00BagsOfSorting|r: Section must have at least one category')
+
+    if bad then
+      print('|cffff0000Fix the invalid bindings above before saving.')
+      return
+    end
+    if #newCategories == 0 and #newItems == 0 then
+      print('|cffff00ff00BagsOfSorting|r: Section must have at least one category or item')
       return
     end
 
-    for _, sectionConfig in ipairs(windowConfig.sections or {}) do
-      if sectionConfig.id == model.id then
-        sectionConfig.name = newName
-        sectionConfig.categories = newCategories
-        sectionConfig.priority = prioSlider.value or (sectionConfig.priority or 0)
-        break
-      end
-    end
+    sectionConfig.name = newName
+    sectionConfig.categories = newCategories
+    sectionConfig.items = newItems
+    sectionConfig.priority = prioSlider.value or (sectionConfig.priority or 0)
+    sectionConfig.duplicate = dupCheck:GetChecked() and true or nil
 
     db.NotifyModelChanged()
     pipeline.Refresh('section-edit')

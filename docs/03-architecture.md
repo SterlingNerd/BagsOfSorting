@@ -89,10 +89,11 @@ anything that needs tier 3.
 for _, cat in ipairs(categoriesByName) do   -- name order, `__catchall` last
   if cat:matches(item) then
     placements[cat.name][#placements[cat.name] + 1] = item
-    if not item.owner and not cat.duplicate then item.owner = cat.name end
+    if not item.owner then item.owner = cat.name end
   end
 end
--- sections, ranked by section priority, then compete for placements in pipeline.Assign
+-- sections, ranked by section priority, then compete for placements in pipeline.Assign.
+-- A `duplicate = true` section re-draws an item another section already placed.
 ```
 
 `trace` is kept per item for the current harvest only (not persisted). It is the single most
@@ -113,7 +114,6 @@ category = {
              }},
   dynamicField = nil,          -- "type" | "subtype" | "expansion" for kind = "dynamic"
   itemIDs  = nil,              -- for kind = "manual"
-  duplicate = false,           -- FR-15
   enabled  = true,
 }
 ```

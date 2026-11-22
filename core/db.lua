@@ -49,7 +49,7 @@ local function tradeskill(subtypes, bagFamily)
     anySubtype.children[#anySubtype.children + 1] = { field = 'subtype', cmp = '=', value = subtype }
   end
   return {
-    kind = 'rules', enabled = true, duplicate = false,
+    kind = 'rules', enabled = true,
     bagFamily = bagFamily,
     rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Trade Goods' }, anySubtype } },
   }
@@ -69,7 +69,7 @@ local DEFAULT_PROFILE = {
       compact = false,
       scale = 1.0,
       sections = {
-        { id = 's_new', name = 'New', categories = { 'New' } },
+        { id = 's_new', name = 'New', categories = { 'New' }, duplicate = true },
         { id = 's1', name = 'Junk', categories = { 'Junk' } },
         { id = 's2', name = 'Armor', categories = { 'Armor' } },
         { id = 's11', name = 'Keyring', categories = { 'Keyring' } },
@@ -252,19 +252,18 @@ local DEFAULT_PROFILE = {
   },
   categories = {
     -- Issue #39: the New section (docs/02 FR-21 lists `isNew` in the v1 field set). `duplicate = true`
-    -- so a new item stays in the category its own rules put it in -- the same slot is drawn in both
-    -- places (FR-15). The rule is the client's own flag as the harvest recorded it (data/harvest.lua);
-    -- this is a category with a real rule, not a code path.
+    -- lives on the section (w1/s_new), not the category: a new item stays in the category its own
+    -- rules put it in -- the same slot is drawn in both places (FR-15). The rule is the client's own
+    -- flag as the harvest recorded it (data/harvest.lua); this is a category with a real rule, not a
+    -- code path.
     ['New'] = {
       kind = 'rules',
       enabled = true,
-      duplicate = true,
       rules = { op = 'all', children = { { field = 'isNew', cmp = '=', value = true } } },
     },
     ['Quest Items'] = {
       kind = 'rules',
       enabled = true,
-      duplicate = false,
       -- The same flag the tooltip's red "Quest item" line comes from: the harvest reads it from
       -- C_Container.GetContainerItemQuestInfo, not from the tooltip.
       rules = { op = 'all', children = { { field = 'isQuestItem', cmp = '=', value = true } } },
@@ -272,13 +271,11 @@ local DEFAULT_PROFILE = {
     ['Tools'] = {
       kind = 'manual',
       enabled = true,
-      duplicate = false,
       itemIDs = { [2901] = true, [6948] = true },   -- Mining Pick, Hearthstone
     },
     ['Junk'] = {
       kind = 'rules',
       enabled = true,
-      duplicate = false,
       rules = { op = 'all', children = { { field = 'quality', cmp = '=', value = 0 } } },
     },
     -- Items the client keeps in the keyring (container index KEYRING_CONTAINER). The harvest
@@ -288,7 +285,6 @@ local DEFAULT_PROFILE = {
     ['Keyring'] = {
       kind = 'rules',
       enabled = true,
-      duplicate = false,
       rules = { op = 'all', children = { { field = 'containerKind', cmp = '=', value = 'keyring' } } },
     },
     -- Issue #41: Consumables owns every type "Consumable" / subtype "Potions", Refreshing Spring Water (159) "Food &
@@ -297,7 +293,6 @@ local DEFAULT_PROFILE = {
     ['Consumables'] = {
       kind = 'rules',
       enabled = true,
-      duplicate = false,
       rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Consumable' } } },
     },
     -- Every subtype here is measured. `/bos test 41` (2026-10-20, build 1.60.1 70450) dumped the
@@ -326,21 +321,18 @@ local DEFAULT_PROFILE = {
     ['Tradeskills.Fishing'] = {
       kind = 'manual',
       enabled = true,
-      duplicate = false,
       itemIDs = { [6256] = true, [6529] = true },   -- Fishing Pole, Shiny Bauble
       _showEmpty = true,
     },
     ['Armor'] = {
       kind = 'rules',
       enabled = true,
-      duplicate = false,
       rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Armor' } } },
     },
     -- FR-16: the catch-all is a real category, not a special-cased code path.
     ['__catchall'] = {
       kind = 'rules',
       enabled = true,
-      duplicate = false,
       rules = { op = 'all', children = { { field = 'none', cmp = '=', value = true } } },
     },
   },
@@ -472,7 +464,7 @@ local MIGRATIONS = {
         end
         if not hasNew then
           -- Insert at position 1 (top of backpack)
-          table.insert(window.sections, 1, { id = 's_new', name = 'New', categories = { 'New' }, collapsed = false })
+          table.insert(window.sections, 1, { id = 's_new', name = 'New', categories = { 'New' }, duplicate = true, collapsed = false })
         end
       end
     end
@@ -617,6 +609,30 @@ function db.SetCategoryEnabled(name, enabled)
   return true
 end
 
+--- `section.setDuplicate` (docs/05 §Interaction inventory): whether the section may draw an
+--- item another section already placed (FR-15). The shipped New section is the one duplicate
+--- section; everything else defaults to false.
+---@param windowID string
+---@param sectionID string
+---@param duplicate boolean
+---@return boolean changed
+function db.SetSectionDuplicate(windowID, sectionID, duplicate)
+  for _, window in ipairs(db.Windows()) do
+    if window.id == windowID then
+      for _, section in ipairs(window.sections or {}) do
+        if section.id == sectionID then
+          if (section.duplicate == true) == (duplicate == true) then return false end
+          section.duplicate = duplicate or nil
+          db.NotifyModelChanged()
+          return true
+        end
+      end
+      return false
+    end
+  end
+  return false
+end
+
 --- Add a manual item ID to a category (issue #71). Refuses rule-based categories and IDs the
 --- category already owns. Commits immediately via NotifyModelChanged; the caller triggers the
 --- repaint with pipeline.Refresh (db must not require Pipeline -- circular require risk).
@@ -658,7 +674,7 @@ function db.AddCategory(name, kind)
   name = name:trim()
   if cats[name] then return false end
   if kind ~= 'manual' and kind ~= 'rules' then kind = 'manual' end
-  local cat = { kind = kind, enabled = true, duplicate = false }
+  local cat = { kind = kind, enabled = true }
   if kind == 'manual' then cat.itemIDs = {} end
   cats[name] = cat
   db.NotifyModelChanged()

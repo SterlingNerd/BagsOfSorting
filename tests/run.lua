@@ -802,7 +802,7 @@ check('an empty window still consumes its slot in the column', empty[2].y, 95 + 
 local function testConsumablesBeatTradeskills()
   local db = addon.modules['DB']
   db.Categories()['Tradeskills.Alchemy'] = {
-    priority = 15, kind = 'manual', enabled = true, duplicate = false, itemIDs = { [118] = true },
+    priority = 15, kind = 'manual', enabled = true, itemIDs = { [118] = true },
   }
   table.insert(db.Windows()[4].sections,
     { id = 's15', name = 'Alchemy', categories = { 'Tradeskills.Alchemy' } })
@@ -838,6 +838,29 @@ local function testCategoryEnabled()
 end
 
 testCategoryEnabled()
+
+-- FR-15: duplicate is a section property, toggled through the section configuration interface.
+local function testSectionDuplicateToggle()
+  local db = addon.modules['DB']
+  check('unknown window is refused', db.SetSectionDuplicate('nope', 's1', true), false)
+  check('unknown section is refused', db.SetSectionDuplicate('w1', 's-nope', true), false)
+  local function junkSection()
+    for _, section in ipairs(db.Windows()[1].sections or {}) do
+      if section.id == 's1' then return section end
+    end
+    return nil
+  end
+  check('Junk section starts non-duplicate', junkSection().duplicate, nil)
+  -- Junk section (s1) starts non-duplicate; flipping it is a change.
+  check('turning duplicate on is a change', db.SetSectionDuplicate('w1', 's1', true), true)
+  check('the flag sticks on the section config', junkSection().duplicate, true)
+  check('turning it on again is not a change', db.SetSectionDuplicate('w1', 's1', true), false)
+  check('turning it off is a change', db.SetSectionDuplicate('w1', 's1', false), true)
+  check('the flag sticks off', junkSection().duplicate, nil)
+  pipeline.Refresh('section-dup-toggle')
+end
+
+testSectionDuplicateToggle()
 
 -- Issue #44's schema half. The pairing lives in the saved profile, so a profile written before it
 -- existed gets it from migration 2 — otherwise the per-section count is silently off for anyone
@@ -1176,7 +1199,7 @@ local function testEquipmentSetSections()
   local db = addon.modules['DB']
   local function set(name, itemIDs)
     db.Categories()['Equipment.' .. name] = {
-      priority = 14, kind = 'manual', enabled = true, duplicate = false,
+      priority = 14, kind = 'manual', enabled = true,
       itemIDs = itemIDs, _equipmentSetID = name,
     }
   end
@@ -1302,7 +1325,7 @@ testCombineStacks()
 
 
 
--- Issue #39. The New section is an ordinary duplicate category whose rule is the client's own
+-- Issue #39. The New section is an ordinary duplicate section whose rule is the client's own
 -- per-slot new flag as data/harvest.lua records it, so these are the acceptance criteria one at a
 -- time: a new item lands in the section, it ALSO stays in its own category, the section survives the
 -- hover that clears the client's flag, and closing the bags is what empties it. The negative half is
@@ -1553,7 +1576,7 @@ local function testEquipmentMultiCategory()
   -- Equipment.TestCat matches item 1006. The Equipment window binds Equipment.*
   -- which expands to all Equipment.* categories.
   db.Categories()['Equipment.TestCat'] = {
-    priority = 14, kind = 'manual', enabled = true, duplicate = false,
+    priority = 14, kind = 'manual', enabled = true,
     itemIDs = { [1006] = true }, _equipmentSetID = 1,
   }
 

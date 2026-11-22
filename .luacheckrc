@@ -75,6 +75,7 @@ globals = {
     "GetItemInfo",
     "issecure",
     "GetCursorInfo",
+    "ClearCursor",
     "GetCVar",
     "GetAddOnMemoryUsage",
     "GetMouseFocus",

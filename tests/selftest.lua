@@ -107,8 +107,10 @@ local function testPrecedence(state)
   check(state, 'category priority does not move ownership', ownerOf(items, 1002), 'Also Gear')
 
   -- duplicate = true adds a placement without consuming ownership (docs/04 §Precedence 3).
+  -- Duplicate lives on the section; classify marks every matching category's placement and the
+  -- first match is owner. pipeline.Assign decides whether the item is drawn twice.
   categories = baseCategories()
-  categories['Shown Twice'] = { kind = 'rules', enabled = true, duplicate = true,
+  categories['Shown Twice'] = { kind = 'rules', enabled = true,
     rules = { op = 'all', children = { { field = 'quality', cmp = '>=', value = 2 } } } }
   items = fixtures.Clone()
   local placements = classify.Run(items, categories)
@@ -262,6 +264,132 @@ end
 --- Run everything and return (checks, failures).
 ---@return number checks
 ---@return string[] failures
+--- pipeline.ResolveBindings: wildcard expansion, `!` excludes, dedup, case canonicalization.
+---@param state BoSTestState
+local function testResolveBindings(state)
+  local pipeline = addon:GetModule('Pipeline')
+  local db = addon:GetModule('DB')
+  db.Initialize()
+
+  local origCats = db.Profile().categories
+  db.Profile().categories = {
+    ['Armor'] = { kind = 'rules', enabled = true },
+    ['Equipment.Heals'] = { kind = 'rules', enabled = true },
+    ['Equipment.Herbalism'] = { kind = 'rules', enabled = true },
+    ['Equipment.Tank'] = { kind = 'rules', enabled = true },
+    ['Consumables.Potions'] = { kind = 'rules', enabled = true },
+    ['Consumables.Food'] = { kind = 'rules', enabled = true },
+    ['__catchall'] = { kind = 'rules', enabled = true },
+  }
+
+  -- Wildcard include expands to all prefixed categories
+  local inc, exc = pipeline.ResolveBindings({ 'Equipment.*' })
+  check(state, 'include wildcard expands to all prefixed categories', #inc, 3)
+  check(state, 'include wildcard has no excludes', #exc, 0)
+
+  -- Wildcard exclude
+  inc, exc = pipeline.ResolveBindings({ '!Equipment.*' })
+  check(state, 'exclude wildcard has no includes', #inc, 0)
+  check(state, 'exclude wildcard expands to all prefixed categories', #exc, 3)
+
+  -- Case canonicalization: lowercase wildcard matches same categories
+  inc, exc = pipeline.ResolveBindings({ '!equipment.*' })
+  check(state, 'lowercase exclude wildcard expands same', #exc, 3)
+
+  -- Mixed include + exclude
+  inc, exc = pipeline.ResolveBindings({ 'Armor', '!Equipment.*' })
+  check(state, 'include Armor only', #inc, 1)
+  check(state, 'include Armor is Armor', inc[1], 'Armor')
+  check(state, 'exclude expands all Equipment categories', #exc, 3)
+
+  -- Exact-match dedup
+  inc, exc = pipeline.ResolveBindings({ 'Armor', 'Armor' })
+  check(state, 'duplicate include deduped', #inc, 1)
+
+  -- Case-variant wildcard dedup: !equipment.* and !Equipment.* are the same binding
+  inc, exc = pipeline.ResolveBindings({ '!equipment.*', '!Equipment.*' })
+  check(state, 'case-variant wildcard deduped', #exc, 3)
+
+  -- Unknown category produces nothing
+  inc, exc = pipeline.ResolveBindings({ 'NoSuchCategory' })
+  check(state, 'unknown category produces no include', #inc, 0)
+  check(state, 'unknown category produces no exclude', #exc, 0)
+
+  db.Profile().categories = origCats
+end
+
+--- pipeline.Assign: item-level exclusion. `!Equipment.*` keeps items matching any
+--- Equipment.* category out of a section even if they also match an included category.
+---@param state BoSTestState
+local function testAssignItemExclusion(state)
+  local pipeline = addon:GetModule('Pipeline')
+  local classify = addon:GetModule('Classify')
+  local fixtures = addon:GetModule('Fixtures')
+  local db = addon:GetModule('DB')
+  db.Initialize()
+
+  local origCats = db.Profile().categories
+  db.Profile().categories = {
+    ['Armor'] = { kind = 'rules', enabled = true,
+      rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Armor' } } } },
+    ['Equipment.Heals'] = { kind = 'rules', enabled = true,
+      rules = { op = 'all', children = { { field = 'subtype', cmp = '=', value = 'Cloth' } } } },
+    ['__catchall'] = { kind = 'rules', enabled = true,
+      rules = { op = 'all', children = { { field = 'none', cmp = '=', value = true } } } },
+  }
+
+  local origWins = db.Profile().windows
+  db.Profile().windows = {
+    {
+      id = 'w1', name = 'Backpack', kind = 'backpack', columns = 5,
+      sections = {
+        { id = 's1', name = 'Armor No Heals', categories = { 'Armor', '!Equipment.*' }, priority = 0 },
+        { id = 's2', name = 'Catchall', categories = { '__catchall' }, priority = 0 },
+      },
+    },
+  }
+
+  local items = fixtures.Clone()
+  local placements = classify.Run(items, db.Profile().categories)
+
+  -- 1001 Rusty Chainmail: Armor + Mail → matches Armor only
+  -- 1003 Frayed Vestments: Armor + Cloth → matches Armor AND Equipment.Heals
+  -- 5411 Winterhoof Cleansing Totem: Armor + Miscellaneous → matches Armor only
+  -- 1007 Cracked Greaves: Armor + Mail → matches Armor only
+  check(state, '4 items match Armor', #(placements['Armor'] or {}), 4)
+  check(state, '3 items match Equipment.Heals', #(placements['Equipment.Heals'] or {}), 3)
+
+  local models = pipeline.Assign(placements)
+
+  -- Find the Armor No Heals section
+  local window = models[1]
+  local section
+  for _, s in ipairs(window.sections) do
+    if s.name == 'Armor No Heals' then section = s break end
+  end
+  check(state, 'Armor No Heals section found', section ~= nil, true)
+
+  if section then
+    -- 1001, 5411, 1007 (Armor only, not Cloth) should be in the section
+    -- 1003 matches both Armor and Equipment.Heals; !Equipment.* excludes it
+    local has1001, has5411, has1007, has1003 = false, false, false, false
+    for _, item in ipairs(section.items) do
+      if item.itemID == 1001 then has1001 = true end
+      if item.itemID == 5411 then has5411 = true end
+      if item.itemID == 1007 then has1007 = true end
+      if item.itemID == 1003 then has1003 = true end
+    end
+    check(state, '1001 (Armor only) in section', has1001, true)
+    check(state, '5411 (Armor only) in section', has5411, true)
+    check(state, '1007 (Armor only) in section', has1007, true)
+    -- 1003 matches both Armor and Equipment.Heals; !Equipment.* excludes it
+    check(state, '1003 (Armor + Cloth) excluded by !Equipment.*', has1003, false)
+  end
+
+  db.Profile().categories = origCats
+  db.Profile().windows = origWins
+end
+
 function selftest.Run()
   local state = newState()
 
@@ -272,6 +400,8 @@ function selftest.Run()
   testSort(state)
   testFlow(state)
   testContext(state)
+  testResolveBindings(state)
+  testAssignItemExclusion(state)
 
   return state.checks, state.failures
 end

@@ -73,7 +73,7 @@ local DEFAULT_PROFILE = {
         { id = 's1', name = 'Junk', categories = { 'Junk' } },
         { id = 's2', name = 'Armor', categories = { 'Armor' } },
         { id = 's11', name = 'Keyring', categories = { 'Keyring' } },
-        { id = 's3', name = 'Everything else', categories = { '__catchall' } },
+        { id = 's3', name = 'Everything else', categories = { 'Unmatched Items' } },
       },
     },
     {
@@ -173,7 +173,7 @@ local DEFAULT_PROFILE = {
         { id = 's16', name = 'Junk', categories = { 'Junk' } },
         { id = 's17', name = 'Armor', categories = { 'Armor' } },
         { id = 's31', name = 'Keyring', categories = { 'Keyring' } },
-        { id = 's18', name = 'Everything else', categories = { '__catchall' } },
+        { id = 's18', name = 'Everything else', categories = { 'Unmatched Items' } },
       },
     },
     {
@@ -330,7 +330,7 @@ local DEFAULT_PROFILE = {
       rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Armor' } } },
     },
     -- FR-16: the catch-all is a real category, not a special-cased code path.
-    ['__catchall'] = {
+    ['Unmatched Items'] = {
       kind = 'rules',
       enabled = true,
       rules = { op = 'all', children = { { field = 'none', cmp = '=', value = true } } },
@@ -681,13 +681,13 @@ function db.AddCategory(name, kind)
   return true
 end
 
---- Remove a category (issue #71). Refuses __catchall and unknown names. Commits immediately.
+--- Remove a category (issue #71). Refuses Unmatched Items and unknown names. Commits immediately.
 --- Items that belonged to it fall through to the catchall on the next classify.
 ---@param name string
 ---@return boolean removed
 function db.RemoveCategory(name)
   local cats = db.Categories()
-  if not name or name == '__catchall' then return false end
+  if not name or name == 'Unmatched Items' then return false end
   if not cats[name] then return false end
   cats[name] = nil
   db.NotifyModelChanged()

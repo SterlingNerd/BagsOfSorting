@@ -21,7 +21,7 @@ local function getCategoryList()
   local cats = db.Categories()
   local list = {}
   for name, cat in pairs(cats) do
-    if name ~= '__catchall' and cat.enabled ~= false then
+    if name ~= 'Unmatched Items' and cat.enabled ~= false then
       list[#list + 1] = name
     end
   end
@@ -574,12 +574,12 @@ function editModals.OpenWindowEdit(windowConfig)
 end
 
 --- Open the category editor dialog (issue #71). HUD Edit Mode style: a translucent dialog that
---- lists every enabled, non-__catchall category in a grid. Each row is one category:
+--- lists every enabled, non-Unmatched Items category in a grid. Each row is one category:
 --- rule-based (dynamic) categories show a read-only label; manual categories list their item IDs
 --- horizontally, each with a remove button, plus an inline Add input. Edits commit immediately
 --- and repaint the bags. db must not require Pipeline (circular require risk), so the refresh
 --- reason is passed in from here, the same way OpenSectionEdit passes 'section-edit'.
---- Open the category editor dialog (issue #71). Lists every enabled, non-__catchall category;
+--- Open the category editor dialog (issue #71). Lists every enabled, non-Unmatched Items category;
 --- rule-based categories are read-only, manual categories list their item IDs as clickable links
 --- (with remove buttons) plus an inline Add input placed last in the row. Edits commit immediately
 --- and repaint the bags. db must not require Pipeline (circular require risk), so the refresh
@@ -677,7 +677,7 @@ function editModals.OpenCategoryEditor()
       row.nameLabel:SetText(catName)
 
       -- Remove this whole category (X next to the name; manual categories only,
-      -- __catchall is never listed). Removing confirms via a popup so a misclick
+      -- Unmatched Items is never listed). Removing confirms via a popup so a misclick
       -- cannot wipe a category and its items.
       if isManual then
         if not row.removeCatBtn then
@@ -881,7 +881,7 @@ function editModals.OpenCategoryEditor()
   end
 
   StaticPopupDialogs['BOS_CONFIRM_REMOVE_CATEGORY'] = {
-    text = 'Remove category "%s"? Items in it will fall to __catchall.',
+    text = 'Remove category "%s"? Items in it will fall to Unmatched Items.',
     button1 = 'Remove',
     button2 = 'Cancel',
     OnAccept = function(self, data)
@@ -947,7 +947,7 @@ function editModals.AddSectionBelow(model, windowConfig)
   local newSection = {
     id = 's' .. (math.random(10000, 99999)),
     name = 'New Section',
-    categories = { '__catchall' },
+    categories = { 'Unmatched Items' },
     collapsed = false,
     priority = 0,
   }
@@ -972,7 +972,7 @@ function editModals.AddSectionToWindow(windowConfig)
   local newSection = {
     id = 's' .. (math.random(10000, 99999)),
     name = 'New Section',
-    categories = { '__catchall' },
+    categories = { 'Unmatched Items' },
     collapsed = false,
     priority = 0,
   }

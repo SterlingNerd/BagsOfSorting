@@ -58,7 +58,7 @@ BagsOfSortingDB = {
                                       -- the whole dotted group: every category under that prefix
                                       -- (FR-11b). Resolved at classify time from names, so renaming
                                       -- a category out of the prefix moves it out of the section.
-        { id="s4", categories={"__catchall"},    collapsed=true },
+        { id="s4", categories={"Unmatched Items"},    collapsed=true },
       },
     },
   },
@@ -84,7 +84,7 @@ BagsOfSortingDB = {
     -- item keeps the category its own rules gave it and is also drawn in New (FR-15).
     ["New"] = { kind = "rules",
       rules = { op="all", children={ {field="isNew", cmp="=", value=true} } } },
-    ["__catchall"] = { kind = "rules",
+    ["Unmatched Items"] = { kind = "rules",
       rules = { op="all", children={ {field="none", cmp="=", value=true} } } },
   },
 
@@ -144,7 +144,7 @@ Design notes:
   one action, and so a later *re-copy* can be offered. Nothing reads through it at runtime — runtime
   inheritance is how configs become spooky action at a distance. If real inheritance is ever wanted
   (`docs/07` Q11) it is a separate field with its own rules.
-- **`__catchall` is a real category**, not a special-cased code path. It is walked last at classify
+- **`Unmatched Items` is a real category**, not a special-cased code path. It is walked last at classify
   time and matches only items no other category owns. This keeps `FR-16` inside the normal model.
 - **No `hideduplicates` global.** `FR-15` is per-section `duplicate = false`, default false. A
   global tri-state is how Baggins got 57 profile keys.
@@ -182,11 +182,11 @@ Constraints enforced by `data/rules.lua` on load and on every command:
    section's sort rule. The first bound category whose tree matches an unclaimed item gets its
    cell.
 3. `duplicate = true` sections do not consume ownership: they add a second placement.
-   A category bound only to duplicate sections does not set `item.owner`, so `__catchall`
+   A category bound only to duplicate sections does not set `item.owner`, so `Unmatched Items`
    can still claim the item (issue #39's New section is the shipped example).
 4. `kind = "dynamic"` categories expand at classify time into one virtual category per distinct
    field value.
-5. `__catchall` matches only if no other category owned the item.
+5. `Unmatched Items` matches only if no other category owned the item.
 6. The full ordered list of categories tested, and each match/reject reason, is recorded in the
    per-harvest `trace` for the inspector (`FR-27`).
 7. Priority is a **section-level** concept. Categories carry no priority: two categories in one

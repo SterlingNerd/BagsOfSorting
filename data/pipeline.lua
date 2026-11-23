@@ -91,6 +91,48 @@ local function sectionFreeSlots(names, side)
   return total, first
 end
 
+--- Last section of the given window kind (backpack/bank), preferring the window named
+--- `name`. Used as the safety-valve home for unmatched items when Unmatched Items is bound
+--- to no section on that side, so those items still appear somewhere instead of vanishing.
+local function lastSectionOfKind(models, kind, name)
+  local byName, any = nil, nil
+  for _, window in ipairs(models) do
+    if window.kind == kind then
+      local sections = window.sections
+      if #sections > 0 then any = sections[#sections] end
+      if window.name == name then byName = sections[#sections] end
+    end
+  end
+  return byName or any
+end
+
+--- Last section of the backpack window in saved (display) order.
+local function lastBackpackSection(models)
+  return lastSectionOfKind(models, 'backpack', 'Backpack')
+end
+
+--- Last section of the bank window in saved (display) order.
+local function lastBankSection(models)
+  return lastSectionOfKind(models, 'bank', 'Bank')
+end
+
+--- The fallback home for unmatched backpack items: the last section of the Backpack
+--- window, created on demand when that window has no sections at all so unmatched
+--- items still appear instead of vanishing. We do not touch db.Windows(); this section
+--- lives only in the built model.
+local function backpackFallbackSection(models)
+  local window = nil
+  for _, w in ipairs(models) do
+    if w.kind == 'backpack' and w.name == 'Backpack' then window = w break end
+  end
+  if not window then return nil end
+  local sections = window.sections
+  if #sections > 0 then return sections[#sections] end
+  local section = { id = 's_safety_valve', name = 'Unmatched Items', categories = {}, excludes = {}, items = {}, itemIDSet = {}, collapsed = false, priority = 0 }
+  window.sections[#window.sections + 1] = section
+  return section
+end
+
 --- Phase 4: category -> section -> window, applying the duplicate policy (FR-15).
 --- An item is drawn once unless its owning category opted into duplication.
 ---@param placements table<string, BoSItem[]>
@@ -209,9 +251,9 @@ function pipeline.Assign(placements)
     end
   end
 
-  -- Phase A: claim items from specific (non-__catchall) category placements.
+  -- Phase A: claim items from specific (non-Unmatched Items) category placements.
   -- Sections ranked by section priority (higher wins), ties broken by saved array order
-  -- (window order, then section index). __catchall is excluded: it is the fallback for
+  -- (window order, then section index). Unmatched Items is excluded: it is the fallback for
   -- items that match no specific category, handled in phase B.
   table.sort(allSections, function(a, b)
     if a.priority ~= b.priority then return a.priority > b.priority end
@@ -250,11 +292,11 @@ function pipeline.Assign(placements)
       end
 
       for _, categoryName in ipairs(entry.names) do
-        if categoryName ~= '__catchall' then
+        if categoryName ~= 'Unmatched Items' then
           for _, item in ipairs(placements[categoryName] or {}) do
             -- Item-level exclusion: an item matching any excluded category is kept out of
             -- this section even if it also matches an included category. `!Equipment.*` keeps
-            -- Equipment items out of an `Armor`-bound section; __catchall may still claim it.
+            -- Equipment items out of an `Armor`-bound section; Unmatched Items may still claim it.
             if not excludedItems[item]
               and (item.containerKind == 'bank') == entry.isBank
               and (not placedByNonDuplicate[item] or entry.section.duplicate) then
@@ -280,14 +322,14 @@ function pipeline.Assign(placements)
     end
   end
 
-  -- Phase B: claim __catchall items (items that matched no specific category). These go
-  -- to __catchall sections in saved array order (window order, then section index), never
+  -- Phase B: claim Unmatched Items items (items that matched no specific category). These go
+  -- to Unmatched Items sections in saved array order (window order, then section index), never
   -- by section priority -- so a high-priority section can't sweep every unmatched item just
-  -- because it also binds __catchall.
+  -- because it also binds Unmatched Items.
   local catchallSections = {}
   for _, entry in ipairs(allSections) do
     for _, cn in ipairs(entry.names) do
-      if cn == '__catchall' then
+      if cn == 'Unmatched Items' then
         catchallSections[#catchallSections + 1] = entry
         break
       end
@@ -299,13 +341,42 @@ function pipeline.Assign(placements)
   end)
   for _, entry in ipairs(catchallSections) do
     local section = entry.section
-    local category = db.Categories()['__catchall']
-    for _, item in ipairs(placements['__catchall'] or {}) do
+    for _, item in ipairs(placements['Unmatched Items'] or {}) do
       if (item.containerKind == 'bank') == entry.isBank and not placedByNonDuplicate[item] then
         placedByNonDuplicate[item] = true
         section.items[#section.items + 1] = item
       end
     end
+  end
+
+  -- Safety valve: pretend Unmatched Items is bound so items that matched nothing still
+  -- appear instead of vanishing. If no section on a side binds it, route that side's
+  -- unmatched items to that side's last section. We do not add the category to any section
+  -- binding list -- just act as if one section claims it.
+  local function hasCatchallOnSide(entries, isBank)
+    for _, entry in ipairs(entries) do
+      if entry.isBank == isBank then return true end
+    end
+    return false
+  end
+
+  local function routeUnmatchedTo(fallback, items, wantBank)
+    if not fallback then return end
+    for _, item in ipairs(items) do
+      if (item.containerKind == 'bank') == wantBank and not placedByNonDuplicate[item] then
+        placedByNonDuplicate[item] = true
+        fallback.items[#fallback.items + 1] = item
+      end
+    end
+  end
+
+  local unmatched = placements['Unmatched Items'] or {}
+
+  if not hasCatchallOnSide(catchallSections, false) then
+    routeUnmatchedTo(backpackFallbackSection(models), unmatched, false)
+  end
+  if not hasCatchallOnSide(catchallSections, true) then
+    routeUnmatchedTo(lastBankSection(models), unmatched, true)
   end
 
   -- Issue #44: free-slot count and the show/hide decision, now that all items are placed.
@@ -392,7 +463,7 @@ end
 ---@param items BoSItem[]
 --- Returns a predicate: true if a category consumes ownership (is bound to at least one
 -- non-duplicate section). Categories bound only to duplicate sections -- or to none -- add
--- a placement without consuming it, so `__catchall` can still claim the item.
+-- a placement without consuming it, so `Unmatched Items` can still claim the item.
 local function sectionConsumesOwnership()
   local boundToSection, boundToNonDup = {}, {}
   for _, config in ipairs(db.Windows()) do

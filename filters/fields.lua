@@ -7,7 +7,7 @@
 -- Plus two the model needs to be expressible at all:
 --   itemID  — `itemID in {…}` is a leaf inside a rule tree (FR-24) and the most-used rule
 --             type in the measured configs (docs/01)
---   none    — makes `__catchall` a real category instead of a code path (docs/04)
+--   none    — makes `Unmatched Items` a real category instead of a code path (docs/04)
 --   isNew   — the client's per-slot new-item flag, what the New category binds (issue #39)
 
 local _, addon = ...

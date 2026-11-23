@@ -80,7 +80,7 @@ Opening it creates/reuses a `BasicFrameTemplateWithInset` DIALOG frame
 **Contents:**
 
 - Title: `Edit Categories`.
-- A scrollable list, one row per category (enabled, non-`__catchall`
+- A scrollable list, one row per category (enabled, non-`Unmatched Items`
   categories, matching `getCategoryList()` in `frames/editmodals.lua`).
 - Each row shows:
   - category name (label)

@@ -15,7 +15,7 @@ A section's `categories` list stays an array of strings (docs/04); each string i
 | `Consumables.*` or `Consumables.` | Bind the whole dotted group — every category whose name starts with `Consumables.` (`Consumables.Food`, `Consumables.Water`, …). Resolved at classify time from live category names, so a category added later is bound automatically; renaming a category out of the prefix moves it out of the section. |
 | `!Consumables.Potions` | Exclude: keep `Consumables` in the section but keep potions out of it. Excludes subtract from includes. |
 
-Matching is case-insensitive while typing; bindings are stored canonically (real category name/case). `__catchall` can be bound or excluded like any other category.
+Matching is case-insensitive while typing; bindings are stored canonically (real category name/case). `Unmatched Items` can be bound or excluded like any other category.
 
 ## Screen 4 — Section editor (revised)
 
@@ -71,7 +71,7 @@ Name/priority/delete behave as before. Priority slider spans the full left-colum
 deduped; a `*`/`.` trailing binding expands to the prefix group).
 
 - Phase A claims items for include categories that are not in the exclude set.
-- Phase B (`__catchall`) counts only when `__catchall` is included and not excluded.
+- Phase B (`Unmatched Items`) counts only when `Unmatched Items` is included and not excluded.
 - Specialty-bag free slots (`sectionFreeSlots`) are counted from the effective set only, so an
   excluded tradeskill category does not add its bag family to the section.
 - A section flagged `duplicate = true` may claim an item another section already placed, so an

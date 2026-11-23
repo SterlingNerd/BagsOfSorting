@@ -57,7 +57,7 @@ local function baseCategories()
       rules = { op = 'all', children = { { field = 'isQuestItem', cmp = '=', value = true } } } },
     ['Good Gear'] = { kind = 'rules', enabled = true, rules = GEAR },
     ['Linens'] = { kind = 'manual', enabled = true, itemIDs = { [26042] = true } },
-    ['__catchall'] = catchall()
+    ['Unmatched Items'] = catchall()
   }
 end
 
@@ -70,11 +70,11 @@ local function testOwnership(state)
 
   check(state, 'grey armour is junk', ownerOf(items, 1001), 'Junk')
   check(state, 'epic weapon is gear', ownerOf(items, 1002), 'Good Gear')
-  check(state, 'EXCEPT row excludes the item', ownerOf(items, 1003), '__catchall')
+  check(state, 'EXCEPT row excludes the item', ownerOf(items, 1003), 'Unmatched Items')
   check(state, 'manual ID list owns its ID', ownerOf(items, 26042), 'Linens')
   check(state, 'quest item wins its category', ownerOf(items, 1004), 'Quests')
-  check(state, 'unmatched item lands in catch-all', ownerOf(items, 1006), '__catchall')
-  check(state, 'item with no data lands in catch-all (FR-103)', ownerOf(items, 1005), '__catchall')
+  check(state, 'unmatched item lands in catch-all', ownerOf(items, 1006), 'Unmatched Items')
+  check(state, 'item with no data lands in catch-all (FR-103)', ownerOf(items, 1005), 'Unmatched Items')
 
   -- FR-27: the trace names what was tested and what matched.
   local item = fixtures.Find(items, 1002)
@@ -279,7 +279,7 @@ local function testResolveBindings(state)
     ['Equipment.Tank'] = { kind = 'rules', enabled = true },
     ['Consumables.Potions'] = { kind = 'rules', enabled = true },
     ['Consumables.Food'] = { kind = 'rules', enabled = true },
-    ['__catchall'] = { kind = 'rules', enabled = true },
+    ['Unmatched Items'] = { kind = 'rules', enabled = true },
   }
 
   -- Wildcard include expands to all prefixed categories
@@ -334,7 +334,7 @@ local function testAssignItemExclusion(state)
       rules = { op = 'all', children = { { field = 'type', cmp = '=', value = 'Armor' } } } },
     ['Equipment.Heals'] = { kind = 'rules', enabled = true,
       rules = { op = 'all', children = { { field = 'subtype', cmp = '=', value = 'Cloth' } } } },
-    ['__catchall'] = { kind = 'rules', enabled = true,
+    ['Unmatched Items'] = { kind = 'rules', enabled = true,
       rules = { op = 'all', children = { { field = 'none', cmp = '=', value = true } } } },
   }
 
@@ -344,7 +344,7 @@ local function testAssignItemExclusion(state)
       id = 'w1', name = 'Backpack', kind = 'backpack', columns = 5,
       sections = {
         { id = 's1', name = 'Armor No Heals', categories = { 'Armor', '!Equipment.*' }, priority = 0 },
-        { id = 's2', name = 'Catchall', categories = { '__catchall' }, priority = 0 },
+        { id = 's2', name = 'Catchall', categories = { 'Unmatched Items' }, priority = 0 },
       },
     },
   }

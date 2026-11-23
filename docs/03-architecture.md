@@ -86,7 +86,7 @@ anything that needs tier 3.
 
 ```lua
 -- data/classify.lua
-for _, cat in ipairs(categoriesByName) do   -- name order, `__catchall` last
+for _, cat in ipairs(categoriesByName) do   -- name order, `Unmatched Items` last
   if cat:matches(item) then
     placements[cat.name][#placements[cat.name] + 1] = item
     if not item.owner then item.owner = cat.name end

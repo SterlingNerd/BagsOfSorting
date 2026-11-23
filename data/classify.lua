@@ -52,7 +52,7 @@ end
 
 --- Categories walked in name order for determinism. Category priority no longer decides
 --- ownership: priority is a section-level concept, and sections compete for an item in
---- pipeline.Assign (docs/04 §Precedence). `__catchall` is always walked last so it stays
+--- pipeline.Assign (docs/04 §Precedence). `Unmatched Items` is always walked last so it stays
 --- the fallback for items no category matched.
 ---@param categories table<string, BoSCategory>
 ---@return BoSCategoryEntry[]
@@ -67,8 +67,8 @@ function classify.Ordered(categories)
     end
   end
   table.sort(ordered, function(a, b)
-    if a.name == '__catchall' then return false end
-    if b.name == '__catchall' then return true end
+    if a.name == 'Unmatched Items' then return false end
+    if b.name == 'Unmatched Items' then return true end
     return a.name < b.name
   end)
   return ordered
@@ -90,7 +90,7 @@ end
 ---
 -- A category consumes ownership when it is bound to at least one non-duplicate section;
 -- categories bound only to duplicate sections (or to none) add a placement without
--- consuming it, so `__catchall` can still claim the item (docs/04 §Precedence 3).
+-- consuming it, so `Unmatched Items` can still claim the item (docs/04 §Precedence 3).
 ---@param items BoSItem[]
 ---@param categories table<string, BoSCategory>
 ---@param consumesOwnership fun(name: string): boolean  -- true if the category claims ownership; defaults to always true

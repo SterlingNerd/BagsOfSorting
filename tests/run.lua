@@ -331,7 +331,7 @@ local tools = windowIn(model, 'Tools')
 check('Backpack keeps its four sections', #backpack.sections, 4)
 check('Quests is one section', #quests.sections, 1)
 check('Tools is one section', #tools.sections, 1)
-check('Backpack binds neither moved category', binds(backpack), 'Junk,Armor,Keyring,__catchall')
+check('Backpack binds neither moved category', binds(backpack), 'Junk,Armor,Keyring,Unmatched Items')
 check('Quests binds Quest Items', binds(quests), 'Quest Items')
 check('Tools binds Tools', binds(tools), 'Tools')
 
@@ -1110,7 +1110,7 @@ local function testBankWindows()
     (configBinds(db.Windows(), 'Backpack'):gsub('^New,', '')))
   check('the bank Tradeskills window copies the backpack one',
     configBinds(db.Windows(), 'Bank Tradeskills'), configBinds(db.Windows(), 'Tradeskills'))
-  check('and draws only the sections the bank has content for', binds(bank), 'Junk,__catchall')
+  check('and draws only the sections the bank has content for', binds(bank), 'Junk,Unmatched Items')
 
   check('bank junk lands in the bank window', placeIn(models, 1007), 'Bank/Junk')
   check('a bank weapon falls to the bank window catch-all', placeIn(models, 1009), 'Bank/Everything else')
@@ -1540,25 +1540,25 @@ end
 
 testSectionPriorityClaims()
 
---- __catchall items are claimed by __catchall sections in saved array order,
---- never by section priority. A high-priority __catchall section cannot sweep
---- an item away from an earlier __catchall section.
+--- Unmatched Items items are claimed by Unmatched Items sections in saved array order,
+--- never by section priority. A high-priority Unmatched Items section cannot sweep
+--- an item away from an earlier Unmatched Items section.
 local function testCatchallArrayOrder()
   local db = addon.modules['DB']
   local pipeline = addon.modules['Pipeline']
 
   -- Item 1005 (never seen) lives in the keyring, so it lands in the Keyring section, not
-  -- __catchall. Everything else holds the rest. Add a high-priority __catchall section after it.
+  -- Unmatched Items. Everything else holds the rest. Add a high-priority Unmatched Items section after it.
   local before = countSection(windowIn(pipeline.Model(), 'Backpack'), 'Everything else')
   table.insert(db.Windows()[1].sections,
-    { id = 's_cc_high', name = 'High Catch', categories = { '__catchall' }, collapsed = false, priority = 10 })
+    { id = 's_cc_high', name = 'High Catch', categories = { 'Unmatched Items' }, collapsed = false, priority = 10 })
 
   pipeline.Refresh('catchall-array-order')
   local models = pipeline.Model()
   local backpack = windowIn(models, 'Backpack')
-  check('high-priority __catchall does not sweep from array-order section',
+  check('high-priority Unmatched Items does not sweep from array-order section',
     countSection(backpack, 'High Catch'), 0)
-  check('array-order __catchall section keeps its item',
+  check('array-order Unmatched Items section keeps its item',
     countSection(backpack, 'Everything else'), before)
 
   table.remove(db.Windows()[1].sections)
@@ -1566,6 +1566,134 @@ local function testCatchallArrayOrder()
 end
 
 testCatchallArrayOrder()
+
+--- Safety valve: when Unmatched Items is bound to no section, unmatched items still land in
+--- the last backpack section instead of vanishing off the windows entirely.
+local function testCatchallSafetyValve()
+  local db = addon.modules['DB']
+  local pipeline = addon.modules['Pipeline']
+
+  local function backpackPlaced()
+    local window = windowIn(pipeline.Model(), 'Backpack')
+    local n = 0
+    for _, section in ipairs(window.sections) do n = n + #section.items end
+    return n
+  end
+
+  local model = pipeline.Model()
+  local before = backpackPlaced()
+  local backpackWindow = windowIn(model, 'Backpack')
+  local last = backpackWindow.sections[#backpackWindow.sections]
+  check('baseline: the last backpack section holds unmatched items', #last.items > 0, true)
+
+  -- Unbind Unmatched Items from every backpack section so nothing claims it.
+  local cfg = db.Windows()[1]
+  local originals = {}
+  for i, section in ipairs(cfg.sections) do
+    originals[i] = section.categories
+    local kept = {}
+    for _, name in ipairs(section.categories or {}) do
+      if name ~= 'Unmatched Items' then kept[#kept + 1] = name end
+    end
+    section.categories = kept
+  end
+
+  pipeline.Refresh('catchall-safety-valve')
+
+  check('safety valve: nothing vanishes when Unmatched Items is unbound', backpackPlaced(), before)
+
+  -- Restore the shipped bindings so later tests see the default config.
+  for i, section in ipairs(cfg.sections) do section.categories = originals[i] end
+  pipeline.Refresh('catchall-safety-cleanup')
+end
+
+testCatchallSafetyValve()
+
+--- Safety valve (bank): when Unmatched Items is bound to no bank section, bank items that
+--- matched nothing still land in the last bank section instead of vanishing.
+local function testCatchallSafetyValveBank()
+  local db = addon.modules['DB']
+  local pipeline = addon.modules['Pipeline']
+  local harvest = addon.modules['Harvest']
+
+  -- Open the bank so bank windows exist in the model; close it again when done so later
+  -- tests see the default (bank closed) state.
+  harvest.SetBankOpen(true)
+  harvest.Invalidate()
+  pipeline.Refresh('catchall-safety-valve-bank-open')
+
+  local function bankPlaced()
+    local n = 0
+    for _, window in ipairs(pipeline.Model()) do
+      if window.kind == 'bank' then
+        for _, section in ipairs(window.sections) do n = n + #section.items end
+      end
+    end
+    return n
+  end
+
+  local before = bankPlaced()
+
+  -- Unbind Unmatched Items from every bank section so nothing claims it. Save originals
+  -- so the shipped config is restored for later tests.
+  local originals = {}
+  for _, config in ipairs(db.Windows()) do
+    if config.kind == 'bank' then
+      originals[config] = {}
+      for i, section in ipairs(config.sections) do
+        originals[config][i] = section.categories
+        local kept = {}
+        for _, name in ipairs(section.categories or {}) do
+          if name ~= 'Unmatched Items' then kept[#kept + 1] = name end
+        end
+        section.categories = kept
+      end
+    end
+  end
+
+  pipeline.Refresh('catchall-safety-valve-bank')
+
+  check('safety valve: nothing vanishes when Unmatched Items is unbound from bank', bankPlaced(), before)
+
+  -- Restore bindings and close the bank so later tests see default state.
+  for _, config in ipairs(db.Windows()) do
+    if config.kind == 'bank' and originals[config] then
+      for i, section in ipairs(config.sections) do
+        section.categories = originals[config][i]
+      end
+    end
+  end
+  harvest.SetBankOpen(false)
+  harvest.Invalidate()
+  pipeline.Refresh('catchall-safety-cleanup-bank')
+end
+
+testCatchallSafetyValveBank()
+
+--- Safety valve (create section): when the Backpack window has no sections at all, the
+--- pipeline manufactures one so unmatched items still appear instead of vanishing.
+local function testCatchallCreatesSection()
+  local db = addon.modules['DB']
+  local pipeline = addon.modules['Pipeline']
+
+  local cfg = db.Windows()[1] -- the shipped Backpack window
+  local originalSections = {}
+  for i, section in ipairs(cfg.sections) do originalSections[i] = section end
+  cfg.sections = {}
+
+  pipeline.Refresh('catchall-creates-section')
+
+  local window = windowIn(pipeline.Model(), 'Backpack')
+  local safety = sectionIn(window, 'Unmatched Items')
+  check('safety valve created a section when Backpack had none', safety ~= nil, true)
+  check('safety valve section holds unmatched items', (safety and #safety.items or 0) > 0, true)
+
+  -- Restore the shipped sections so later tests see the default config.
+  cfg.sections = originalSections
+  pipeline.Refresh('catchall-creates-section-cleanup')
+end
+
+testCatchallCreatesSection()
 
 --- Equipment claiming checks every bound category name, not just names[1].
 --- An item matching any equipment category the section binds is claimed.

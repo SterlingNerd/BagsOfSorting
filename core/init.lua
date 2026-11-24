@@ -68,6 +68,8 @@ function init.Start()
   -- copy only when the client holds none (issue #13).
   keybinds.Restore()
   harvest.Discover()
+  -- Prime the in-memory item cache with items currently in bags (issue #72).
+  addon:GetModule('ItemCache').PrimeFromInventory(harvest.Items())
   -- Pre-warm the button pool from the real inventory so a combat loot event does not have to
   -- create a secure button (agents.md hard rule 3).
   itemFrames.Warm(math.min(200, #harvest.Items() + 20))
@@ -77,6 +79,8 @@ function init.Start()
 
   listen()
   pipeline.Refresh('login')
+  -- Item-cache A/B test telemetry (debug only): cache-on vs cache-off login cost.
+  if db.Settings().debug then diag.RecordItemCacheTelemetry() end
 end
 
 --- Plain-frame deferral, never an AceEvent-mediated one (the `debugging-wow-addons` skill).
@@ -121,7 +125,7 @@ local HELP = {
   '/bos test          pending manual tests, then the helper names',
   '/bos test <id>     the numbered run sheet for one test (one action per step)',
   '/bos test <id><l>  run one captured step of that test, e.g. /bos test 15b',
-  '/bos test <name>   a helper on its own: dump · log · flags · keybind · newitem · clock · expansion · windows · freeslots',
+  '/bos test <name>   a helper on its own: dump · log · flags · keybind · newitem · clock · expansion · windows · freeslots · itemcache',
   '/bos find <id>     which container index holds that item',
   '/bos refresh       re-run the pipeline',
   '/bos show|hide     show or hide the sorting windows',

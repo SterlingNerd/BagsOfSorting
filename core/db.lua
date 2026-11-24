@@ -33,6 +33,10 @@ local DEFAULT_SETTINGS = {
   -- section. false leaves the hover as the only thing that takes an item out of it.
   display = { clearNewOnClose = true, showEmptySections = false },
   debug = false,
+  -- Tier-2 persisted item cache (FR-97). Gated so it can be switched off to
+  -- measure what a cold-cache login costs in tier-3 `RequestLoadItemDataByID`
+  -- requests (AC-97 is the cache-on baseline: zero requests on 2nd login).
+  itemCache = { enabled = true },
 }
 
 --- One tradeskill category: `type = "Trade Goods"` and one of these `subtype` strings. They all
@@ -576,6 +580,15 @@ end
 ---@return table<number, any>
 function db.ItemCache()
   return db.sv.itemCache
+end
+
+--- One-time handoff: returns the persisted cache table and clears the SV reference so
+--- the 230 KB can be GC'd. Called by ItemCache module on first load.
+---@return table<number, any>
+function db.DetachItemCache()
+  local cache = db.sv.itemCache
+  db.sv.itemCache = nil
+  return cache
 end
 
 --- Open or close every window. A closed window is out of the model, so no refresh reopens it;

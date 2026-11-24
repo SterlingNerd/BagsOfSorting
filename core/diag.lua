@@ -962,6 +962,37 @@ tests[39] = {
   },
 }
 
+tests[72] = {
+  issue = 72,
+  what = 'tier-2 item cache A/B: measure whether the persisted cache saves tier-3 '
+    .. 'RequestLoadItemDataByID requests at login. AC-97 baseline: enabled=true with '
+    .. 'tier3_requested=0 on second login.',
+  needs = 'client open and logged in; under 60 items in the bag so the login refresh '
+    .. 'finishes before the telemetry lines are written; itemCache.enabled defaults '
+    .. 'to true (no settings UI yet - flip it by editing SavedVariables while the '
+    .. 'client is closed)',
+  steps = {
+    { text = 'capture: precondition - setting value, cache count, tier-3 request count',
+      run = function()
+        local enrich = addon:GetModule('Enrich')
+        local s = enrich.ItemCacheStats()
+        record('itemcache', 'precondition', 'build', tostring(select(2, GetBuildInfo())),
+          'enabled', tostring(s.enabled), 'count', s.count,
+          'requested', s.requested, 'resolved', s.resolved)
+        record('itemcache', 'baseline_ac97', 'enabled=true means tier3_requested should be 0')
+      end },
+    { text = 'run /bos test itemcache: capture cache ON baseline (expect tier3_requested=0)',
+      run = recordItemCacheTelemetry },
+    { text = 'client closed: edit SavedVariables/BagsOfSorting.lua, set '
+      .. 'profiles.Default.settings.itemCache.enabled = false', run = nil },
+    { text = 'log in and run /bos test itemcache again: capture cache OFF',
+      run = recordItemCacheTelemetry },
+    { text = 'retrieve SavedVariables, diff BagsOfSortingDB.diag[72] between the two '
+      .. 'captures (ON tier3_requested vs OFF tier3_requested), paste to issue #72',
+      run = nil },
+  },
+}
+
 -- ---------------------------------------------------------------------------
 -- The pending list. `/bos test` prints these; `/bos test <id>` prints one run sheet.
 -- ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 -- SavedVariables + our own profile store (docs/04). No library.
 --
--- Rule of the schema: config is persisted, derived state is not. The only derived thing we
--- write is the item cache (FR-109), and it lives in its own table.
+-- Rule of the schema: config is persisted, derived state is not. Nothing derived is written
+-- to SavedVariables (FR-109): no item cache, no bank snapshot, no alt snapshot.
 --
 -- shortcut: only the shared Default profile is read in the prototype; FR-91 per-character
 -- overrides (Default + differences) arrive with the profiles UI at M5. The `profiles` table
@@ -33,10 +33,6 @@ local DEFAULT_SETTINGS = {
   -- section. false leaves the hover as the only thing that takes an item out of it.
   display = { clearNewOnClose = true, showEmptySections = false },
   debug = false,
-  -- Tier-2 persisted item cache (FR-97). Gated so it can be switched off to
-  -- measure what a cold-cache login costs in tier-3 `RequestLoadItemDataByID`
-  -- requests (AC-97 is the cache-on baseline: zero requests on 2nd login).
-  itemCache = { enabled = true },
 }
 
 --- One tradeskill category: `type = "Trade Goods"` and one of these `subtype` strings. They all
@@ -541,7 +537,6 @@ function db.Initialize()
   db.sv.version = db.sv.version or db.CURRENT_VERSION
   db.sv.global = db.sv.global or {}
   db.sv.profiles = db.sv.profiles or {}
-  db.sv.itemCache = db.sv.itemCache or {}
 
   if not db.sv.profiles.Default then
     db.sv.profiles.Default = deepCopy(DEFAULT_PROFILE)
@@ -575,20 +570,6 @@ end
 ---@return any[]
 function db.Windows()
   return db.Profile().windows
-end
-
----@return table<number, any>
-function db.ItemCache()
-  return db.sv.itemCache
-end
-
---- One-time handoff: returns the persisted cache table and clears the SV reference so
---- the 230 KB can be GC'd. Called by ItemCache module on first load.
----@return table<number, any>
-function db.DetachItemCache()
-  local cache = db.sv.itemCache
-  db.sv.itemCache = nil
-  return cache
 end
 
 --- Open or close every window. A closed window is out of the model, so no refresh reopens it;

@@ -10,7 +10,7 @@ log rather than an option tree.
 
 ```
 core/      boot, client, constants, context, events, db, async, pool, log
-data/      harvest, enrich, itemcache, classify, rules, stacks, sort, layoutmodel, windows,
+data/      harvest, enrich, classify, rules, stacks, sort, layoutmodel, windows,
           sections, categories
 layout/    flow (river packing), sizing, anchors
 frames/    window, section, item, header, chips, menu, inspector, money, emptyslot, movemode,
@@ -73,7 +73,7 @@ three-tier lookup, never a single call:
 | Tier | API | Gives | Cost |
 |---|---|---|---|
 | 1 | `C_Item.GetItemInfoInstant(itemID)` | icon, itemType, itemSubType, itemEquipLoc, classID, subClassID | local, safe in a loop |
-| 2 | `data/itemcache.lua` (persisted, bounded) | name, quality, ilvl, bind, expansion for IDs we have resolved before | free, and it is what makes a 40-ID manual category usable |
+| 2 | `C_Item.GetItemInfo(itemID)` | name, quality, ilvl, bind, expansion — free when the client knows the item |
 | 3 | `C_Item.RequestLoadItemDataByID(itemID)` → `ITEM_DATA_LOAD_RESULT` | the rest, asynchronously | one request per unknown ID, batched; Blizzard's own `AsyncCallbackSystemMixin` (`ASYNC_ITEM`) is the reference implementation and is available on camelot |
 
 Consequences: the classifier may run on tier-1 data and produce a *provisional* placement; a
@@ -315,7 +315,7 @@ BagsOfSorting/
 ├── LICENSE                     # WTFPL
 ├── Media/Icon.png              # 256×256: ## IconTexture + CurseForge project icon
 ├── core/{boot,client,constants,context,events,db,async,pool,log}.lua + README.md
-├── data/{harvest,enrich,itemcache,classify,rules,stacks,sort,layoutmodel,windows,sections,categories}.lua + README.md
+├── data/{harvest,enrich,classify,rules,stacks,sort,layoutmodel,windows,sections,categories}.lua + README.md
 ├── layout/{flow,sizing,anchors}.lua
 ├── frames/{window,section,item,header,chips,menu,inspector,money,emptyslot,movemode,bagbar,modals}.lua + README.md
 ├── config/{commands,undo,configuremode,categoryeditor,itemlisteditor,importexport,presets,keybinds,help,settingspanel}.lua

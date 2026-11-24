@@ -56,28 +56,6 @@ local function fresh(name)
   db.sv.diag[name] = {}
 end
 
---- Startup telemetry for the item-cache A/B test. Records whether the tier-2
---- persisted cache is enabled, how many IDs it holds, and how many tier-3
---- requests this session issued/resolved. Run once with the cache on, once
---- with it off, and diff the two captures to decide whether the cache earns
---- its keep (AC-97 is the cache-on baseline: zero requests on 2nd login).
-local function recordItemCacheTelemetry()
-  local enrich = addon:GetModule('Enrich')
-  local s = enrich.ItemCacheStats()
-  record('itemcache', 'enabled', tostring(s.enabled),
-    'count', s.count,
-    'tier3_requested', s.requested,
-    'tier3_resolved', s.resolved,
-    'tier3_pending', s.pending)
-end
-
---- Write a fresh itemcache telemetry bucket. Called at startup when debug is
---- on, and on demand via `/bos test itemcache`.
-function diag.RecordItemCacheTelemetry()
-  fresh('itemcache')
-  recordItemCacheTelemetry()
-end
-
 --- dump — the bank arithmetic issue #9 is blocked on. Stand at an open bank with bank bags equipped.
 probes[2] = function()
   -- Run it twice standalone — once with the bank open, once closed — and the two runs land in two
@@ -547,11 +525,6 @@ probes[17] = function()
   end
 end
 
---- itemcache — startup telemetry for the tier-2 cache A/B test.
-probes[23] = function()
-  if inTest then recordItemCacheTelemetry() else diag.RecordItemCacheTelemetry() end
-end
-
 --- bags — who is showing bags right now (issue #38). Blizzard's bag windows, ours, the two
 --- interaction windows, and whether the suppression rule is currently active. Read-only.
 probes[22] = function()
@@ -836,7 +809,6 @@ local HELPERS = {
   clock = probes[13], expansion = probes[14], flags = flagsScan, windows = probes[16],
   freeslots = probes[17], newitems = probes[18], portrait = probes[19],
   subclasses = probes[20], owners = probes[21], bags = probes[22],
-  itemcache = probes[23],
 }
 
 -- ---------------------------------------------------------------------------
@@ -962,37 +934,6 @@ tests[39] = {
   },
 }
 
-tests[72] = {
-  issue = 72,
-  what = 'tier-2 item cache A/B: measure whether the persisted cache saves tier-3 '
-    .. 'RequestLoadItemDataByID requests at login. AC-97 baseline: enabled=true with '
-    .. 'tier3_requested=0 on second login.',
-  needs = 'client open and logged in; under 60 items in the bag so the login refresh '
-    .. 'finishes before the telemetry lines are written; itemCache.enabled defaults '
-    .. 'to true (no settings UI yet - flip it by editing SavedVariables while the '
-    .. 'client is closed)',
-  steps = {
-    { text = 'capture: precondition - setting value, cache count, tier-3 request count',
-      run = function()
-        local enrich = addon:GetModule('Enrich')
-        local s = enrich.ItemCacheStats()
-        record('itemcache', 'precondition', 'build', tostring(select(2, GetBuildInfo())),
-          'enabled', tostring(s.enabled), 'count', s.count,
-          'requested', s.requested, 'resolved', s.resolved)
-        record('itemcache', 'baseline_ac97', 'enabled=true means tier3_requested should be 0')
-      end },
-    { text = 'run /bos test itemcache: capture cache ON baseline (expect tier3_requested=0)',
-      run = recordItemCacheTelemetry },
-    { text = 'client closed: edit SavedVariables/BagsOfSorting.lua, set '
-      .. 'profiles.Default.settings.itemCache.enabled = false', run = nil },
-    { text = 'log in and run /bos test itemcache again: capture cache OFF',
-      run = recordItemCacheTelemetry },
-    { text = 'retrieve SavedVariables, diff BagsOfSortingDB.diag[72] between the two '
-      .. 'captures (ON tier3_requested vs OFF tier3_requested), paste to issue #72',
-      run = nil },
-  },
-}
-
 -- ---------------------------------------------------------------------------
 -- The pending list. `/bos test` prints these; `/bos test <id>` prints one run sheet.
 -- ---------------------------------------------------------------------------
@@ -1104,69 +1045,7 @@ function diag.Command(rest)
     print(string.format('  %d  %s  —  %s', t.id, t.what, t.needs))
   end
   print('helpers: dump · log · flags · keybind · newitem · newitems · clock · expansion · windows · '
-    .. 'freeslots · portrait · subclasses · owners · bags · itemcache')
+    .. 'freeslots · portrait · subclasses · owners · bags')
 end
-
--- /bos test 72: in-memory item cache timing (issue #72)
-local cacheStats = {}
-diag.Add(72, {
-  issue = 72,
-  what = 'in-memory item cache timing',
-  needs = 'login with items in bags; run step a on cold login, step b after play, step c after /reload',
-  steps = {
-    { text = 'cold login: measure time to first quality/ilvl/expansion sort', run = function()
-      local started = GetTime()
-      local enrich = addon:GetModule('Enrich')
-      local harvest = addon:GetModule('Harvest')
-      local itemcache = addon:GetModule('ItemCache')
-      local items = harvest.Items()
-      local withQuality = 0
-      for _, item in ipairs(items) do
-        local enriched = enrich.Enrich({ itemID = item.itemID })
-        if enriched.quality then withQuality = withQuality + 1 end
-      end
-      local ms = (GetTime() - started) * 1000
-      cacheStats.coldLoginMs = ms
-      cacheStats.coldLoginItems = #items
-      cacheStats.coldLoginWithQuality = withQuality
-      cacheStats.cacheSize = itemcache.Count()
-      record(string.format('cold login: %.2fms enrich %d items, %d with quality, cache=%d',
-        ms, #items, withQuality, itemcache.Count()))
-    end },
-    { text = 'after play: measure cache hit rate and tier-3 requests', run = function()
-      local enrich = addon:GetModule('Enrich')
-      local itemcache = addon:GetModule('ItemCache')
-      local memBefore = collectgarbage('count')
-      local stats = enrich.Stats()
-      local memAfter = collectgarbage('count')
-      cacheStats.playMemKb = memAfter
-      cacheStats.playStats = stats
-      record(string.format('after play: mem=%.1f KB, %s', memAfter, stats))
-    end },
-    { text = '/reload: measure re-population time', run = function()
-      local started = GetTime()
-      local enrich = addon:GetModule('Enrich')
-      local harvest = addon:GetModule('Harvest')
-      local itemcache = addon:GetModule('ItemCache')
-      local items = harvest.Items()
-      local withQuality = 0
-      for _, item in ipairs(items) do
-        local enriched = enrich.Enrich({ itemID = item.itemID })
-        if enriched.quality then withQuality = withQuality + 1 end
-      end
-      local ms = (GetTime() - started) * 1000
-      cacheStats.reloadMs = ms
-      cacheStats.reloadItems = #items
-      cacheStats.reloadWithQuality = withQuality
-      cacheStats.reloadCacheSize = itemcache.Count()
-      record(string.format('reload: %.2fms enrich %d items, %d with quality, cache=%d',
-        ms, #items, withQuality, itemcache.Count()))
-      -- Summary comparison
-      record(string.format('SUMMARY: cold=%.2fms reload=%.2fms cache_cold=%d cache_reload=%d',
-        cacheStats.coldLoginMs or -1, cacheStats.reloadMs or -1,
-        cacheStats.cacheSize or -1, cacheStats.reloadCacheSize or -1))
-    end },
-  },
-})
 
 return diag

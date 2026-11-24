@@ -133,7 +133,6 @@ local ORDER = {
   'filters/registry.lua',
   'filters/fields.lua',
   'data/harvest.lua',
-  'data/itemcache.lua',
   'data/enrich.lua',
   'data/rules.lua',
   'data/classify.lua',

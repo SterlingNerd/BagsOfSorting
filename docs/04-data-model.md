@@ -221,12 +221,7 @@ one inverse.
 - Anything character-specific that belongs in per-character state lives in the per-character
   profile, not in `global`.
 
-**Two deliberate exceptions**, both because the alternative is a worse product:
-
-| Persisted | Why | Bound |
-|---|---|---|
-| `itemCache` (`itemID → name, quality, type, subtype, ilvl, icon`) | the client only knows items it has seen (`FR-103`); without this, a 40-ID manual category re-requests every ID at every login and the category editor is blank for a minute | bounded (≤ ~4000 entries, LRU), debounced, rebuildable, safe to delete |
-| ~~`snapshot`~~ — **deleted** | every earlier draft of this spec carried a persisted bank/alt item list. It has no reason to exist: `C_Bank` exposes no item-reading API, so bank contents arrive through the same container API as backpack contents and the harvest loop is already the only reader. Offline search — closed bank, alts, guild bank — is out of the product (`docs/07` Q15) | **`FR-109`: the item cache is the only derived state we persist.** Nothing else here is derived, cached or stored |
+No exceptions: nothing derived is persisted to SavedVariables (`FR-109`). The item cache was removed — it saved no tier-3 requests (issue #72 A/B test: `tier3_requested` is 0 with or without it). Only windows, sections, categories and settings are persisted. |
 
 ## Export / import (`FR-92`)
 

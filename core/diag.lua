@@ -959,7 +959,7 @@ function diag.Command(rest)
     print(string.format('  %d  %s  —  %s', t.id, t.what, t.needs))
   end
   print('helpers: dump · log · flags · keybind · newitem · newitems · clock · expansion · windows · '
-    .. 'freeslots · portrait · subclasses · owners · bags')
+    .. 'freeslots · portrait · subclasses · owners · bags · itemcache')
 end
 
 -- /bos test 72: in-memory item cache timing (issue #72)

@@ -56,6 +56,28 @@ local function fresh(name)
   db.sv.diag[name] = {}
 end
 
+--- Startup telemetry for the item-cache A/B test. Records whether the tier-2
+--- persisted cache is enabled, how many IDs it holds, and how many tier-3
+--- requests this session issued/resolved. Run once with the cache on, once
+--- with it off, and diff the two captures to decide whether the cache earns
+--- its keep (AC-97 is the cache-on baseline: zero requests on 2nd login).
+local function recordItemCacheTelemetry()
+  local enrich = addon:GetModule('Enrich')
+  local s = enrich.ItemCacheStats()
+  record('itemcache', 'enabled', tostring(s.enabled),
+    'count', s.count,
+    'tier3_requested', s.requested,
+    'tier3_resolved', s.resolved,
+    'tier3_pending', s.pending)
+end
+
+--- Write a fresh itemcache telemetry bucket. Called at startup when debug is
+--- on, and on demand via `/bos test itemcache`.
+function diag.RecordItemCacheTelemetry()
+  fresh('itemcache')
+  recordItemCacheTelemetry()
+end
+
 --- dump — the bank arithmetic issue #9 is blocked on. Stand at an open bank with bank bags equipped.
 probes[2] = function()
   -- Run it twice standalone — once with the bank open, once closed — and the two runs land in two
@@ -525,6 +547,11 @@ probes[17] = function()
   end
 end
 
+--- itemcache — startup telemetry for the tier-2 cache A/B test.
+probes[23] = function()
+  if inTest then recordItemCacheTelemetry() else diag.RecordItemCacheTelemetry() end
+end
+
 --- bags — who is showing bags right now (issue #38). Blizzard's bag windows, ours, the two
 --- interaction windows, and whether the suppression rule is currently active. Read-only.
 probes[22] = function()
@@ -809,6 +836,7 @@ local HELPERS = {
   clock = probes[13], expansion = probes[14], flags = flagsScan, windows = probes[16],
   freeslots = probes[17], newitems = probes[18], portrait = probes[19],
   subclasses = probes[20], owners = probes[21], bags = probes[22],
+  itemcache = probes[23],
 }
 
 -- ---------------------------------------------------------------------------

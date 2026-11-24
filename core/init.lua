@@ -78,6 +78,8 @@ function init.Start()
 
   listen()
   pipeline.Refresh('login')
+  -- Item-cache A/B test telemetry (debug only): cache-on vs cache-off login cost.
+  if db.Settings().debug then diag.RecordItemCacheTelemetry() end
 end
 
 --- Plain-frame deferral, never an AceEvent-mediated one (the `debugging-wow-addons` skill).

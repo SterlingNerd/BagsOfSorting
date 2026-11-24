@@ -30,6 +30,10 @@ local DEFAULT_SETTINGS = {
   -- 'session' and 'vendor' (docs/04) arrive with the mode picker, not before it.
   stacking = { showStacks = 'merged' },
   debug = false,
+  -- Tier-2 persisted item cache (FR-97). Gated so it can be switched off to
+  -- measure what a cold-cache login costs in tier-3 `RequestLoadItemDataByID`
+  -- requests (AC-97 is the cache-on baseline: zero requests on 2nd login).
+  itemCache = { enabled = true },
 }
 
 --- One tradeskill category: `type = "Trade Goods"` and one of these `subtype` strings. They all

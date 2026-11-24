@@ -33,10 +33,6 @@ local DEFAULT_SETTINGS = {
   -- section. false leaves the hover as the only thing that takes an item out of it.
   display = { clearNewOnClose = true, showEmptySections = false },
   debug = false,
-  -- Tier-2 persisted item cache (FR-97). Gated so it can be switched off to
-  -- measure what a cold-cache login costs in tier-3 `RequestLoadItemDataByID`
-  -- requests (AC-97 is the cache-on baseline: zero requests on 2nd login).
-  itemCache = { enabled = true },
 }
 
 --- One tradeskill category: `type = "Trade Goods"` and one of these `subtype` strings. They all

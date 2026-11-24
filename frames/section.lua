@@ -16,26 +16,6 @@ local editModals = addon:GetModule('EditModals')
 
 local CELL = constants.BUTTON_SIZE + constants.BUTTON_GAP
 
--- True when two records point at the same physical slot: same bag, same slot,
--- same item id. A button already showing that slot in the same cell can be
--- left untouched across a refresh: re-anchoring, Hide or Initialize mid
--- right-click cancels the click, because Blizzard runs UseContainerItem on
--- RightButtonUp and the button must still exist under the cursor to receive it.
-local function sameItemSlot(a, b)
-  return a and b and a.bagID == b.bagID and a.slot == b.slot and a.itemID == b.itemID
-end
-
--- Refresh a button's display without touching its visibility, parent, anchor
--- or slot id: texture, count, quality and new-item glow are all input-safe.
-local function refreshItemDisplay(entry, item)
-  entry.item = item
-  local shown = item.stackedCount or item.stackCount
-  SetItemButtonTexture(entry.button, item.icon or 0)
-  SetItemButtonQuality(entry.button, item.quality, item.link, false, item.isBound)
-  SetItemButtonCount(entry.button, shown > 1 and shown or nil)
-  entry.button:UpdateNewItem(item.quality)
-end
-
 ---@class BoSSectionFrame
 ---@field frame Frame
 ---@field title FontString
@@ -115,6 +95,8 @@ end
 ---@param offsetY number distance down from the window's content top
 ---@param windowConfig any
 function sectionFrames.Render(section, model, parent, offsetY, windowConfig)
+  clearItems(section)
+
   -- Guard: offsetY can be nil if flow.Layout hasn't run or section was added late
   offsetY = offsetY or 0
   -- Defensive defaults if flow.Layout didn't set them (e.g. section added after layout)
@@ -142,37 +124,18 @@ function sectionFrames.Render(section, model, parent, offsetY, windowConfig)
   -- Collapsed section: only show header, no items
   if model.collapsed then
     section.frame:SetHeight(constants.SECTION_TITLE_HEIGHT)
-    clearItems(section)
     return section
   end
 
-  local items = model.items
-  local old = section.items
-  section.items = {}
+  for i, item in ipairs(model.items) do
+    local entry = itemFrames.Acquire()
+    section.items[#section.items + 1] = entry
+    itemFrames.Paint(entry, item, section.frame)
 
-  for i, item in ipairs(items) do
-    local entry = old[i]
-    if entry and sameItemSlot(entry.item, item) then
-      -- Same slot in the same cell: leave the button exactly as it is so an
-      -- in-progress right-click is not cancelled by a mid-click Hide,
-      -- Initialize or re-anchor.
-      section.items[i] = entry
-      refreshItemDisplay(entry, item)
-    else
-      if entry then itemFrames.Release(entry) end
-      entry = itemFrames.Acquire()
-      itemFrames.Paint(entry, item, section.frame)
-      section.items[i] = entry
-      local col = (i - 1) % model.cols
-      local row = math.floor((i - 1) / model.cols)
-      entry.parent:ClearAllPoints()
-      entry.parent:SetPoint('TOPLEFT', section.frame, 'TOPLEFT', col * CELL, -(constants.SECTION_TITLE_HEIGHT + row * CELL))
-    end
-  end
-
-  -- Release leftover old entries that no longer have a cell.
-  for i = #items + 1, #old do
-    itemFrames.Release(old[i])
+    local col = (i - 1) % model.cols
+    local row = math.floor((i - 1) / model.cols)
+    entry.parent:ClearAllPoints()
+    entry.parent:SetPoint('TOPLEFT', section.frame, 'TOPLEFT', col * CELL, -(constants.SECTION_TITLE_HEIGHT + row * CELL))
   end
 
   -- The section's own free-slot cell (issue #44): the same empty slot the window-level indicator
@@ -180,17 +143,11 @@ function sectionFrames.Render(section, model, parent, offsetY, windowConfig)
   -- this section's category pairs with. It sits on the section frame the way the window's indicator
   -- sits on the window shell, so /bos test reads the drawn state, not the model's claim about it.
   if model.emptyOffsetY then
-    if not section.empty then
-      section.empty = itemFrames.Acquire()
-    end
+    section.empty = itemFrames.Acquire()
     itemFrames.PaintEmpty(section.empty, model.emptySlot, model.emptySlots, section.frame)
     section.empty.parent:ClearAllPoints()
     section.empty.parent:SetPoint('TOPLEFT', section.frame, 'TOPLEFT', 0, -model.emptyOffsetY)
     section.frame.EmptySlot = section.empty.button
-  elseif section.empty then
-    itemFrames.Release(section.empty)
-    section.empty = nil
-    section.frame.EmptySlot = nil
   end
 
   return section

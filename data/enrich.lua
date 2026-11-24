@@ -3,7 +3,7 @@
 -- Three tiers (docs/03 §Item data is not always there). C_Item.GetItemInfo is
 -- MayReturnNothing on Forever: the client only knows items it has seen this session.
 --   tier 1  C_Item.GetItemInfoInstant  local, safe in a loop: type/subtype/equipLoc/icon/classIDs
---   tier 2  data/itemcache             persisted: name/quality/ilvl/expansion for known IDs
+--   tier 2  C_Item.GetItemInfo        free when the client knows the item (name/quality/ilvl/expansion)
 --   tier 3  RequestLoadItemDataByID    one request per unknown ID, answered by ITEM_DATA_LOAD_RESULT
 --
 -- Nothing here blocks a refresh (FR-103): an item with no tier-3 answer yet classifies on
@@ -14,19 +14,10 @@ local _, addon = ...
 ---@class Enrich: BoSModule
 local enrich = addon:NewModule('Enrich')
 
-local itemcache = addon:GetModule('ItemCache')
-local db = addon:GetModule('DB')
-
 ---@type table<number, boolean>
 local requested = {}   -- session-only: never re-ask for an ID we already asked for
 local requestedCount = 0
 local resolved = 0
-
---- The tier-2 persisted cache is gated behind a setting so it can be switched
---- off to measure what a cold-cache login costs in tier-3 requests.
-local function cacheEnabled()
-  return db.Settings().itemCache.enabled
-end
 
 --- Tier 1 + tier 2, merged onto the harvested record.
 ---@param item BoSItem
@@ -42,26 +33,12 @@ function enrich.Enrich(item)
     item.icon = item.icon or icon
   end
 
-  if cacheEnabled() then
-    local cached = itemcache.Get(item.itemID)
-    if cached then
-      item.name = item.name or cached.name
-      item.quality = item.quality or cached.quality
-      item.ilvl = cached.ilvl
-      item.expansion = cached.expansion
-      item.icon = item.icon or cached.icon
-      item.type = item.type or cached.type
-      item.subtype = item.subtype or cached.subtype
-    end
-  end
-
   -- The tier-3 *read* is free when the client already knows the item; only IDs it has never
   -- seen fall through to a request. That is what makes AC-97 (zero requests on the second
   -- login for cached IDs) true rather than aspirational.
   if item.ilvl == nil and item.expansion == nil then
     local full = enrich.ReadFull(item.itemID)
     if full then
-      if cacheEnabled() then itemcache.Put(item.itemID, full) end
       item.name = item.name or full.name
       item.quality = item.quality or full.quality
       item.ilvl = full.ilvl
@@ -119,7 +96,6 @@ function enrich.OnItemDataLoaded(itemID, success)
   local full = enrich.ReadFull(itemID)
   if not full then return false end
 
-  if cacheEnabled() then itemcache.Put(itemID, full) end
   -- ITEM_DATA_LOAD_RESULT is a global event: Blizzard and other addons request data too. Only an
   -- ID we asked for counts against the tier-3 accounting, otherwise `pending` goes negative.
   if requested[itemID] then resolved = resolved + 1 end
@@ -127,20 +103,9 @@ function enrich.OnItemDataLoaded(itemID, success)
 end
 
 ---@return string
----@return table  -- enabled, count, requested, resolved, pending
-function enrich.ItemCacheStats()
-  return {
-    enabled = db.Settings().itemCache.enabled,
-    count = itemcache.Count(),
-    requested = requestedCount,
-    resolved = resolved,
-    pending = requestedCount - resolved,
-  }
-end
-
 function enrich.Stats()
-  return string.format('item cache=%d, tier3 requested=%d resolved=%d pending=%d',
-    itemcache.Count(), requestedCount, resolved, requestedCount - resolved)
+  return string.format('tier3 requested=%d resolved=%d pending=%d',
+    requestedCount, resolved, requestedCount - resolved)
 end
 
 return enrich

@@ -92,11 +92,11 @@ onboarding work later in the plan, and the bank-tab `ItemLocation` check moved t
 
 
 Deliverables
-- `data/harvest.lua`, `data/enrich.lua`, `data/itemcache.lua`, `data/classify.lua`, `data/rules.lua`,
+- `data/harvest.lua`, `data/enrich.lua`, `data/classify.lua`, `data/rules.lua`,
   `data/sort.lua`
-- the three-tier item lookup from `docs/03` §Item data is not always there: tier-1
-  `GetItemInfoInstant`, tier-2 persisted cache, tier-3 `RequestLoadItemDataByID` +
-  `ITEM_DATA_LOAD_RESULT`, batched and cancellable (`AsyncCallbackSystemMixin` as the reference)
+- the two-tier item lookup from `docs/03` §Item data is not always there: tier-1
+  `GetItemInfoInstant`, tier-2 `C_Item.GetItemInfo` (free when the client knows the item),
+  tier-3 `RequestLoadItemDataByID` + `ITEM_DATA_LOAD_RESULT`, batched and cancellable (`AsyncCallbackSystemMixin` as the reference)
 - `filters/registry.lua` + 7 fields: `type`, `subtype`, `quality`, `ilvl`, `name`, `equipSlot`,
   `isQuestItem` (`expansion` measured out of the v1 set — see Risks below)
 - `frames/window.lua`, `frames/item.lua` (pooled, `ItemButton` type), `frames/section.lua`

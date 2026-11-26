@@ -7,8 +7,7 @@ category editor's live match list cheap.
 | File | Phase | What it does |
 |---|---|---|
 | `harvest.lua` | 1 | discovers the container list by probing (never `Enum.BagIndex`), reads every slot: the items, the free-slot count and the per-family counts (issue #36, #44) all come out of the same pass |
-| `enrich.lua` | 2 | tier 1 (`GetItemInfoInstant`) + tier 2 (cache) + tier 3 (`RequestLoadItemDataByID`) |
-| `itemcache.lua` | 2 | the persisted, bounded item cache — the only derived state we store (FR-97, FR-109) |
+| `enrich.lua` | 2 | tier 1 (`GetItemInfoInstant`) + tier 2 (`C_Item.GetItemInfo`) + tier 3 (`RequestLoadItemDataByID`) |
 | `rules.lua` | 3 | `any/all/none` tree: validate, evaluate, render as one sentence |
 | `classify.lua` | 3 | categories by priority, first match owns the item, per-item `trace` for the inspector |
 | `sort.lua` | 6 | item order within a section (FR-46) |

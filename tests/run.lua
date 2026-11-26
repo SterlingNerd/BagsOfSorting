@@ -563,16 +563,23 @@ for _, t in ipairs(diag.Tests()) do
   _G.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
   diag.Test(t.id)
   _G.print = realPrint
+  local captureLines = 0
   local captures = 0
   for _, line in ipairs(lines) do
     -- numbered step lines only: the pre-conditions line of a sheet can say anything
     if line:match('^%d+%. .*capture') then
+      captureLines = captureLines + 1
       check('test ' .. t.id .. ' promises a real captured step: ' .. line,
         line:match('/bos test ' .. t.id .. '%a') and true or nil, true)
       captures = captures + 1
     end
   end
-  check('test ' .. t.id .. ' has captured steps', captures > 0, true)
+  -- A client-only test (login + reload, like issue #72's timing run) promises no headless
+  -- captures, so it isn't required to have any; only tests that promise captures must carry
+  -- real command letters (checked per line above).
+  if captureLines > 0 then
+    check('test ' .. t.id .. ' has captured steps', captures > 0, true)
+  end
 end
 
 -- The keybind mirror (issue #13): the client writes our action to bindings-cache.wtf and it

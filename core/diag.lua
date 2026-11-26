@@ -803,10 +803,39 @@ local function flagsScan()
   for index = grid, grid + (NUM_CHARACTER_BANK_SLOTS or 9) - 1 do flagsOne(index) end
 end
 
+--- Diagnose why IconQuestTexture (the quest "!") is not drawn on our buttons.
+--- For each visible button: reports bag/slot, GetContainerItemQuestInfo result,
+--- and IconQuestTexture state before/after UpdateQuestItem().
+local function questIconDiagnose()
+  fresh('questicon')
+  for i = 1, 400 do
+    local button = _G['BagsOfSortingItemButton' .. i]
+    if button and button:IsShown() then
+      local parent = button:GetParent()
+      local bagID = button:GetBagID() or (parent and parent:GetID()) or 0
+      local slotID = button:GetID()
+      local ok, questID, isQuestItem = pcall(C_Container.GetContainerItemQuestInfo, bagID, slotID)
+      local tex = button.IconQuestTexture
+      local before = tex and (tex:GetAtlas() or tex:GetTexture()) or nil
+      local beforeShown = tex and tex:IsShown() or false
+      local beforeAlpha = tex and tex:GetAlpha() or 0
+      button:UpdateQuestItem()
+      local after = tex and (tex:GetAtlas() or tex:GetTexture()) or nil
+      local afterShown = tex and tex:IsShown() or false
+      local afterAlpha = tex and tex:GetAlpha() or 0
+      record(string.format('btn%d bag=%d slot=%d qID=%s ok=%s isQI=%s before=[%s shown=%s a=%.2f] after=[%s shown=%s a=%.2f]',
+        i, bagID, slotID, tostring(questID), tostring(ok),
+        tostring(isQuestItem),
+        tostring(before), tostring(beforeShown), beforeAlpha or 0,
+        tostring(after), tostring(afterShown), afterAlpha or 0))
+    end
+  end
+end
+
 -- The names you type. A test step calls the same functions.
 local HELPERS = {
   dump = probes[2], log = probes[3], keybind = probes[7], newitem = probes[11],
-  clock = probes[13], expansion = probes[14], flags = flagsScan, windows = probes[16],
+  clock = probes[13], expansion = probes[14], flags = flagsScan, questicon = questIconDiagnose, windows = probes[16],
   freeslots = probes[17], newitems = probes[18], portrait = probes[19],
   subclasses = probes[20], owners = probes[21], bags = probes[22],
 }

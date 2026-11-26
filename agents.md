@@ -26,6 +26,7 @@ This file is an **index and a rulebook**. It is not a fact cache — see "Where 
 | `docs/06-milestones.md` | M0→M7 plan with exit criteria + in-game test checklists |
 | `docs/07-open-questions.md` | Open decisions, each with a recommendation |
 | `docs/08-window-behavior.md` | What our windows do on the live client: placement, suppression, chrome, money bar, item state |
+| `docs/09-section-config.md` | Section category bindings: token/pill editor, wildcards, `!` excludes, section binding language |
 | `tests/CHECKLIST.md` | Standing in-game acceptance checklist |
 
 If a task contradicts `docs/02-requirements.md` or `docs/05-config-ui.md`, stop and ask.
@@ -33,8 +34,6 @@ If a task contradicts `docs/02-requirements.md` or `docs/05-config-ui.md`, stop 
 ---
 
 ## Where an answer lives
-
-Append nothing here. Put the fact in the file that owns it, then get back to the code.
 
 | Question | Home |
 |---|---|

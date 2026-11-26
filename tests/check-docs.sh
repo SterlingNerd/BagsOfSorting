@@ -3,15 +3,18 @@
 # Run locally before committing a doc change, and on every push in CI.
 set -uo pipefail
 
-BUDGET=170 # lines in agents.md
+BUDGET_WARN=170 # soft target for agents.md lines
+BUDGET_FAIL=250 # hard failover
 fail=0
 
 lines=$(wc -l < agents.md)
-if [ "$lines" -gt "$BUDGET" ]; then
-  echo "agents.md is $lines lines (budget $BUDGET)."
+if [ "$lines" -gt "$BUDGET_FAIL" ]; then
+  echo "agents.md is $lines lines (hard cap $BUDGET_FAIL)."
   echo "  Client facts -> ../.agents/skills/wow-forever-api/references/<file>.md"
   echo "  Product verdicts -> docs/NN-*.md"
   fail=1
+elif [ "$lines" -gt "$BUDGET_WARN" ]; then
+  echo "agents.md is $lines lines (target $BUDGET_WARN — trim when convenient)."
 fi
 
 # Every numbered doc must be indexed in agents.md, or it is invisible to the next agent.

@@ -48,6 +48,7 @@ local constants = addon:GetModule('Constants')
 ---@field isLocked boolean?
 ---@field hasLoot boolean?
 ---@field isQuestItem boolean?
+---@field questID number?
 ---@field type string?
 ---@field subtype string?
 ---@field equipSlot string?
@@ -191,6 +192,7 @@ function harvest.Items()
           isLocked = info.isLocked,
           hasLoot = info.hasLoot,
           isQuestItem = (questOK and quest and quest.isQuestItem) or false,
+          questID = (questOK and quest and quest.questID) or nil,
           containerName = container.name,
           containerKind = container.kind,
           dataReady = false,

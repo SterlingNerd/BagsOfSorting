@@ -112,6 +112,7 @@ function itemFrames.Paint(entry, item, parent)
   -- `bad argument #1 to 'SetID'` at ContainerFrame.lua:1861 reported. BetterBags reaches the same
   -- conclusion on the same build (frames/item.lua:1393 initializeSlotButton).
   entry.button:Initialize(entry.parent, item.bagID, item.slot)
+  entry.button:SetID(item.slot)
   -- Store reference for the Ctrl+Right-click handler
   entry.parent._entry = entry
 
@@ -137,6 +138,9 @@ function itemFrames.Paint(entry, item, parent)
 
   entry.parent:Show()
   entry.button:Show()
+  -- Blizzard's own quest overlay: fills IconQuestTexture (the "!") when the slot's item starts a quest.
+  -- Must run after Show(): UpdateQuestItem bails if the button is not yet shown.
+  entry.button:UpdateQuestItem()
 end
 
 --- The free-slot indicator (issue #36): the same pooled button, drawn as an empty slot with the

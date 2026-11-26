@@ -139,8 +139,9 @@ function itemFrames.Paint(entry, item, parent)
   entry.parent:Show()
   entry.button:Show()
   -- Blizzard's own quest overlay: fills IconQuestTexture (the "!") when the slot's item starts a quest.
-  -- Must run after Show(): UpdateQuestItem bails if the button is not yet shown.
-  entry.button:UpdateQuestItem()
+  -- Forever signature: UpdateQuestItem(isQuestItem, questID, isActive). Pass our harvest fields;
+  -- isActive (nil) means the quest is not active, so a truthy questID draws the bang.
+  entry.button:UpdateQuestItem(item.isQuestItem, item.questID)
 end
 
 --- The free-slot indicator (issue #36): the same pooled button, drawn as an empty slot with the

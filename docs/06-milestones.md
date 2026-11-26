@@ -83,7 +83,7 @@ client:
   1.60.1 build 70450.
 - **AC-103** — a looted item the client had never seen lands in the catch-all and classifies correctly
   once its data arrives.
-- **AC-97** — `/exit` then a fresh login: `item cache=113, tier3 requested=0 resolved=0 pending=0`.
+- **AC-97** — `/exit` then a fresh login: `tier3 requested=0 resolved=0 pending=0` (the persisted item cache was removed in issue #72 — Forever's own `C_Item.GetItemInfo` already answers tier-2 free for seen items, so `/bos perf` no longer reports an `item cache` stat).
 - **Section priority** — sections classify as designed once schema version 2 ran, which puts
   5411 Winterhoof Cleansing Totem (Armor *and* a quest item) in Quest Items, not Armor.
 
@@ -122,7 +122,7 @@ Exit criteria
   `_classic_beta_` 1.60.1 build **70450** (`.build.info`), level-1 character, 14 harvested items, 113
   cached: `/bos test clock` → `bench: 1000 refreshes over 10 frames, 2204ms total, 2.20ms per refresh`,
   of which at least 160ms is frame time, not pipeline. `/bos perf` alongside it:
-  `itemButton: created=34 idle=20`, `section: created=2 idle=0`, `item cache=113, tier3 requested=0`.
+  `itemButton: created=34 idle=20`, `section: created=2 idle=0`, `tier3 requested=0 resolved=0 pending=0` (the persisted `item cache` stat was removed in issue #72).
 - **AC-103** loot an item never seen by the client; it lands in catch-all, then re-sorts when info
   arrives. Then `C_Item.RequestLoadItemDataByID` on a cold ID and confirm it resolves without a
   reload (issue #1).

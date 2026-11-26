@@ -122,8 +122,7 @@ Measured against Baggins as it exists today:
 - **A published config API.** We keep the model publishable (`FR-113`) because that is good engineering
   we want regardless; shipping an API, a LibDataBroker feed or any other transport is a later decision
   for when a consumer and an interaction design both exist (`docs/07` Q22).
-- **Persisting any inventory beyond the item cache** (`FR-109`). No bank snapshot, no alt snapshot, no
-  inventory store.
+- **Persisting any inventory** (`FR-109`). No bank snapshot, no alt snapshot, no inventory store, no item cache.
 - **Auctioning, mail, crafting queue integration.**
 - **Tooltip replacement.**
 - **Localization beyond enUS.**

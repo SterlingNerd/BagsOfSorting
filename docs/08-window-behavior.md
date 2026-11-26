@@ -169,3 +169,23 @@ fact (issue #39). What differs is which half of the character it draws and how i
 - **A bank window cannot be labelled after the bag it holds**: `GetBagName` returns `Bank` for the grid and
   for every purchased bag. The bank is one paged view over indices 6..14 (issue #25).
 - Refresh keys on `BAG_UPDATE(containerID)`; `ITEM_LOCK_CHANGED` is detail, not the trigger (issue #27).
+
+## WoW UI measurement gotchas
+
+These are client behaviors that cost rounds of trial-and-error; they are recorded here so the next
+agent does not repeat them.
+
+- **`GetStringWidth()` returns 0 on hidden/unpositioned font strings.** You cannot measure a label's
+  rendered width before it has been shown and positioned by the client. Always `Show()` + `SetPoint()`
+  first, then call `GetStringWidth()`; fall back to a `textWidth()` estimate only when it returns 0.
+  (Issue #71 category editor item links: `max(GetStringWidth(), textWidth())` measured before show
+  caused item collisions; fixed by measuring after `Show`+`SetPoint`.)
+- **`BasicFrameTemplateWithInset` gives `TitleText` and a NineSlice border for free.**
+  `DialogBorderTranslucentTemplate` requires a manual title font string and a separate child border
+  frame — more error-prone, no benefit for a standard dialog. (Issue #71: HUD Edit Mode template was
+  tried and reverted to `BasicFrameTemplateWithInset`.)
+- **`textWidth()` is a conservative estimate, not exact.** `GetStringWidth()` is exact for the loaded
+  font but only after layout. Use `GetStringWidth()` post-show, with `textWidth()` as the fallback.
+  (Issue #71: six rounds on item-link width before the Show-before-measure pattern stuck.)
+
+Record new gotchas here as they are found, with the issue that taught them.

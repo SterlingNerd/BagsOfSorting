@@ -146,6 +146,15 @@ lua5.1 -e "loadfile('X.lua')"   # syntax-only smoke
 # API questions: the `spike` issues, and the wow-forever-api skill before writing any code path
 ```
 
+## Premise-first for performance features
+
+Before building a feature justified by an acceptance criterion (e.g. AC-97 zero tier-3 requests on
+repeat login), run a `/bos test` capture that validates the premise **first**. The issue #72 item
+cache was built, merged, A/B-tested, then removed because `tier3_requested` is 0 with or without it —
+Forever's `C_Item.GetItemInfo` already answers tier-2 free for seen items. Measuring before building
+saves the build, the telemetry, the settings toggle, and the removal. If the premise fails, the
+feature does not exist; record the negative result on the issue and move on.
+
 The harness in `tests/` is the smallest one M0 calls for: `luacheck` plus `lua5.1 tests/run.lua`, which
 loads the real modules against a stubbed container API. `tests/` is **not in the TOC**, so the addon loads
 no test code in a dev checkout or in a release zip. It proves the classifier and the pipeline wiring — not

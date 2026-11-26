@@ -716,8 +716,8 @@ probes[19] = function()
 end
 
 --- The client's own item class and subclass names: the exact strings a `type`/`subtype` rule has to
---- match. Forever is a Vanilla-ruleset client, so they are not retail's — the persisted item cache
---- already reads "Trade Goods" (not "Tradeskill") and "Consumable" (not "Potion" or "Food"). This
+--- match. Forever is a Vanilla-ruleset client, so they are not retail's — the client's item data
+--- (C_Item.GetItemInfo) already reads "Trade Goods" (not "Tradeskill") and "Consumable" (not "Potion" or "Food"). This
 --- asks the DBC directly, so it answers for the subtypes the character carries nothing of.
 probes[20] = function()
   if inTest then record('classes') else fresh('subclasses') end

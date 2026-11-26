@@ -116,8 +116,7 @@ BagsOfSortingDB = {
                     sellSections=false, sellableCategories={},  -- FR-65: bulk sell is opt-in per category
                     upgradeArrow=false, emptyBagConfirm=true },
     bagBar    = { mode="sorting"|"vanilla", showVanillaToggle=true },
-    search    = { inBag=true, dsl=true },   -- no bankSnapshot key: nothing is persisted but the
-                                            -- item cache (FR-109)
+    search    = { inBag=true, dsl=true },   -- no bankSnapshot key: nothing derived is persisted (FR-109)
     undo      = { depth=50 },
     debug     = false,
   },
@@ -282,8 +281,7 @@ what was dropped. Silent migration is worse than no migration.
 
 Rough, from a real heavy config (`docs/01`): dozens of categories, a few hundred rules, ~12 windows,
 over a hundred sections, hundreds of manual item IDs. At ~120 bytes/rule and ~40 bytes/ID that is
-still trivial — SavedVariables size is not a design driver, and the item cache is the only blob worth
-watching.
+still trivial — SavedVariables size is not a design driver; nothing derived is persisted.
 
 - The expensive thing is **classification cost**: `categories × items × leaves`. At that size —
   ~70 categories × ~120 items × ~2.5 leaves — call it **~20k leaf evaluations per full refresh**.

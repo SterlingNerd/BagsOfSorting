@@ -216,7 +216,7 @@ and our keybinds appear in the client's Key Bindings panel.
 | FR-94 | W | Migrate a Baggins profile. **Deferred** (`docs/07` Q5): ship two sensible default profiles instead. The migration table in `docs/04` stays in the spec as the answer to "if we ever do it", and if anything is migrated the target is Bagnon/AdiBags-shaped data, which has the users. |
 | FR-95 | S | "Reset this category / window" without resetting the whole profile. |
 | FR-96 | C | Share string includes item IDs for manual categories but not character-specific state. |
-| FR-97 | M | A **persistent item-info cache** (`itemID → name, quality, type, subtype, ilvl, icon`), bounded and debounced. Without it, a category holding 40 pasted item IDs re-requests every one of them at every login (`FR-103`). This is the one piece of derived state we do persist, and `docs/04` says so explicitly. |
+| FR-97 | M | Manual item-ID categories issue zero tier-3 requests on repeat logins (`FR-103`). Forever's `C_Item.GetItemInfo` answers tier-2 (`name`/`quality`/`ilvl`/`expansion`) free for items the client has seen, so no persistent item cache is needed (`docs/03` §Item data is not always there; issue #72 A/B: `tier3_requested` is 0 with or without a persisted cache). Nothing derived is persisted (`FR-109`). |
 
 **AC-92** export from character A, import on character B, layout matches. **AC-93** open/close a
 full backpack 20×, then diff the SavedVariables file: no growth from render churn. **AC-97** log out
@@ -247,7 +247,7 @@ never-seen item and confirm it lands in the catch-all first and moves to the cor
 
 | ID | P | Requirement |
 |---|---|---|
-| FR-109 | M | **Nothing derived is persisted except the item cache (`FR-97`).** No bank snapshot, no alt snapshot, no inventory store. This is a rule, not an absence: earlier drafts of this spec carried a `snapshot` table and a closed-bank search feature, and both are deleted. |
+| FR-109 | M | **Nothing derived is persisted.** No bank snapshot, no alt snapshot, no inventory store, no item cache. This is a rule, not an absence: earlier drafts of this spec carried a `snapshot` table and a closed-bank search feature, and both are deleted. |
 | FR-113 | M | **The model stays clean enough that an API would be possible.** Categories, rule trees, windows and sections remain plain data with stable names and a version marker — no Lua closures in the schema, no classifier logic entangled with storage, no profile-specific hacks in the rule grammar. This is an internal hygiene requirement, **not** a shipped API: `BagsOfSortingAPI`, a LibDataBroker feed, or any other transport is a later decision made by whoever needs it, and it is explicitly not our problem now. What is ours is making it *possible* without a rewrite — which we want for our own reasons (export/import, migration, tests) whether or not anyone else ever reads it. |
 
 **Why offline search left this addon.** Three reasons, each sufficient on its own:

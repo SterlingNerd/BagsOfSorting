@@ -66,9 +66,6 @@ constants.WINDOW_CHROME_HEIGHT = 95
 constants.ASYNC_ITEM_THRESHOLD = 60
 constants.ASYNC_ITEMS_PER_FRAME = 40
 
--- docs/04: the item cache is bounded (FR-97).
-constants.MAX_ITEM_CACHE = 4000
-
 -- docs/04 §Rule tree.
 constants.MAX_RULE_DEPTH = 2
 

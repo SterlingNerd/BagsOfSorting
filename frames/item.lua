@@ -43,22 +43,7 @@ local function create()
   -- The mixin's own OnLoad already registers LeftButtonUp/RightButtonUp and LeftButton drag
   -- (Mainline/ContainerFrame.lua ContainerFrameItemButtonMixin:OnLoad); re-registering here only
   -- changes what Blizzard's handler sees.
-  --
-  -- Hook, never replace, the click handler. Pickup, use, modifier clicks and stack split all end
-  -- in UseContainerItem / PickupContainerItem, which are protected: Blizzard may call them, an
-  -- addon whose script sits in the call chain may not (issue #65's ADDON_ACTION_FORBIDDEN came
-  -- from calling the template's handler ourselves). HookScript leaves the frame's own handler
-  -- Blizzard's, so the protected call runs in Blizzard's context and ours runs after it — which is
-  -- also BetterBags' pattern on this client (frames/item.lua:1287, which hooks only decoration).
-  button:HookScript('OnClick', function(self, buttonName)
-    -- Ctrl+Right is the modifier the client's item handlers leave free (wow-forever-api).
-    if buttonName == 'RightButton' and IsControlKeyDown() then
-      local entry = self:GetParent()._entry
-      if entry and entry.item then
-        ShowItemMenu(self, entry.item)
-      end
-    end
-  end)
+
 
   return { parent = parent, button = button }
 end
@@ -75,6 +60,26 @@ end
 itemFrames.pool = pool.Named('itemButton', create, reset)
 
 ---@return BoSItemEntry
+-- Ctrl+Right-click on one of our item buttons opens the item menu (manual-category membership).
+-- hooksecurefunc, never HookScript on the button: HookScript wraps the button's OnClick script
+-- (it re-sets the script via SetScript), which puts our closure between the click and Blizzard's
+-- UseContainerItem call and draws ADDON_ACTION_FORBIDDEN on our addon. hooksecurefunc lets
+-- Blizzard's handler run first with a clean stack and runs our code after it — the same observe,
+-- never-replace pattern interactions.lua uses for OpenAllBags / ToggleAllBags / CloseAllBags.
+-- shortcut: we match our buttons by the wrapper frame's _entry, set in Paint; Blizzard's own
+-- buttons carry no such field, so their clicks pass through untouched.
+if type(ContainerFrameItemButton_OnClick) == 'function' then
+  hooksecurefunc('ContainerFrameItemButton_OnClick', function(self, button)
+    -- Ctrl+Right is the modifier the client's item handlers leave free (wow-forever-api).
+    if button == 'RightButton' and IsControlKeyDown() then
+      local entry = self:GetParent()._entry
+      if entry and entry.item then
+        ShowItemMenu(self, entry.item)
+      end
+    end
+  end)
+end
+
 function itemFrames.Acquire()
   return itemFrames.pool:Acquire()
 end

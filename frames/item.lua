@@ -137,9 +137,19 @@ function itemFrames.Paint(entry, item, parent)
   -- refresh only: a client-side expiry that fires no BAG_UPDATE leaves the glow until the next paint,
   -- and BAG_NEW_ITEMS_UPDATED is the event to key a refresh on if that ever matters.
   entry.button:UpdateNewItem(item.quality)
-  -- shortcut: Blizzard's UpdateContainerButtonInfo also runs UpdateQuestItem, UpdateJunkItem,
-  -- UpdateItemContextMatching, UpdateCooldown and SetReadable on its own buttons. Those overlays
-  -- arrive with the milestone that owns each one (FR-45 quest, FR-65 junk).
+  -- The ! and quest border (FR-45): Blizzard draws them in UpdateContainerButtonInfo via
+  -- UpdateQuestItem(isQuestItem, questID, isActive), reading C_Container.GetContainerItemQuestInfo
+  -- for the slot. Our pooled buttons never run UpdateContainerButtonInfo, so we ask the client for
+  -- the same info and draw it ourselves — a quest starter the player hasn't begun gets the !,
+  -- an active quest item gets the border. Same read the harvest already does (harvest.lua).
+  local questInfo = C_Container.GetContainerItemQuestInfo(item.bagID, item.slot)
+  entry.button:UpdateQuestItem(
+    questInfo and questInfo.isQuestItem,
+    questInfo and questInfo.questID,
+    questInfo and questInfo.isActive)
+  -- shortcut: the remaining overlays Blizzard runs in UpdateContainerButtonInfo — UpdateJunkItem,
+  -- UpdateItemContextMatching, UpdateCooldown, SetReadable — arrive with the milestone that owns
+  -- each one (FR-65 junk).
 
   entry.parent:Show()
   entry.button:Show()

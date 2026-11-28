@@ -49,6 +49,7 @@ globals = {
     "ItemButtonUtil",
     "ContainerFrameSettingsManager",
     "ContainerFrameCombinedBags",
+    "ContainerFrameItemButton_OnClick",
     "ContainerFrameItemButton_OnEnter",
     "OpenAllBags",
     "ToggleAllBags",
